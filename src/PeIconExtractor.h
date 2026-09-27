@@ -13,4 +13,8 @@
 class PeIconExtractor {
 public:
     static QIcon extractIcon(const QString &exePath);
+
+    // Reads a standalone .ico file. Same image payloads as the icons
+    // embedded in an executable, just a different container around them.
+    static QIcon extractIcoFile(const QString &icoPath);
 };

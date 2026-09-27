@@ -517,6 +517,66 @@ QImage extractNeIconImage(const Reader &r, const uchar *d, qint64 size, qint64 n
 
 } // namespace
 
+QIcon PeIconExtractor::extractIcoFile(const QString &icoPath) {
+    QFile file(icoPath);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    QByteArray bytes = file.readAll();
+    file.close();
+
+    const uchar *d = reinterpret_cast<const uchar *>(bytes.constData());
+    qint64 size = bytes.size();
+    Reader r{d, size};
+
+    quint16 reserved, type, count;
+    if (!r.u16(0, reserved) || !r.u16(2, type) || !r.u16(4, count)) return {};
+    // type 1 is an icon, 2 a cursor; anything else is not an .ico at all.
+    if (reserved != 0 || (type != 1 && type != 2) || count == 0) return {};
+
+    // An .ico directory entry is like a PE group-icon entry, except the
+    // trailing field is a 4-byte file offset instead of a 2-byte resource id.
+    struct IcoEntry {
+        quint8 width;
+        quint16 bitCount;
+        quint32 offset;
+        quint32 length;
+    };
+
+    QVector<IcoEntry> entries;
+    for (int i = 0; i < count; ++i) {
+        qint64 o = 6 + qint64(i) * 16;
+        if (!r.bytes(o, 16)) break;
+        IcoEntry e;
+        e.width = d[o];
+        quint16 bitCount;
+        r.u16(o + 6, bitCount);
+        e.bitCount = bitCount;
+        quint32 length, offset;
+        r.u32(o + 8, length);
+        r.u32(o + 12, offset);
+        e.length = length;
+        e.offset = offset;
+        entries.append(e);
+    }
+    if (entries.isEmpty()) return {};
+
+    auto score = [](const IcoEntry &e) {
+        int w = e.width ? e.width : 256;
+        int exact32 = (w == 32) ? 1000 : 0;
+        return exact32 + w * 10 + e.bitCount;
+    };
+    IcoEntry best = entries.first();
+    for (const IcoEntry &e : entries) {
+        if (score(e) > score(best)) best = e;
+    }
+
+    if (!r.bytes(best.offset, best.length)) return {};
+    QByteArray raw(reinterpret_cast<const char *>(d + best.offset), int(best.length));
+    QImage img = decodeIconImage(raw);
+    if (img.isNull()) return {};
+
+    return QIcon(QPixmap::fromImage(img));
+}
+
 QIcon PeIconExtractor::extractIcon(const QString &exePath) {
     QFile file(exePath);
     if (!file.open(QIODevice::ReadOnly)) return {};

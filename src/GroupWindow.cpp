@@ -4,14 +4,78 @@
 #include "PeIconExtractor.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
 #include <QStyle>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 #include <algorithm>
+
+namespace {
+
+bool isDosBoxConfig(const QString &path) {
+    return path.endsWith(QLatin1String(".conf"), Qt::CaseInsensitive);
+}
+
+bool isLaunchable(const QString &path) {
+    return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path);
+}
+
+// The optional [ui] section a dosbox conf may carry, naming the entry and
+// pointing at an icon relative to the conf itself.
+struct DosBoxUi {
+    QString title;
+    QString iconPath;
+};
+
+DosBoxUi readDosBoxUi(const QString &confPath) {
+    DosBoxUi ui;
+    QFile file(confPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return ui;
+
+    QTextStream in(&file);
+    bool inUiSection = false;
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+
+        if (line.startsWith(QLatin1Char('['))) {
+            inUiSection = line.compare(QLatin1String("[ui]"), Qt::CaseInsensitive) == 0;
+            continue;
+        }
+        if (!inUiSection) continue;
+
+        const int eq = line.indexOf(QLatin1Char('='));
+        if (eq < 0) continue;
+        const QString key = line.left(eq).trimmed().toLower();
+        const QString value = line.mid(eq + 1).trimmed();
+        if (key == QLatin1String("title")) {
+            ui.title = value;
+        } else if (key == QLatin1String("icon")) {
+            ui.iconPath = value;
+        }
+    }
+    return ui;
+}
+
+QIcon loadIconFile(const QString &path) {
+    if (path.endsWith(QLatin1String(".ico"), Qt::CaseInsensitive)) {
+        QIcon icon = PeIconExtractor::extractIcoFile(path);
+        if (!icon.isNull()) return icon;
+    }
+    if (path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) {
+        return PeIconExtractor::extractIcon(path);
+    }
+    QImage image(path);
+    return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
+}
+
+} // namespace
 
 GroupWindow::GroupWindow(const QString &title, QWidget *parent)
     : QWidget(parent), m_title(title) {
@@ -39,11 +103,28 @@ void GroupWindow::setTitle(const QString &title) {
 
 void GroupWindow::addProgramItem(const ProgramItem &item) {
     ProgramItem it = item;
-    if (it.icon.isNull()) {
+    if (isDosBoxConfig(it.command)) {
+        const DosBoxUi ui = readDosBoxUi(it.command);
+        // A [ui] title names the entry, but never overrides a name the user
+        // typed in the properties dialog.
+        if (!ui.title.isEmpty() &&
+            (it.name.isEmpty() || it.name == QFileInfo(it.command).completeBaseName())) {
+            it.name = ui.title;
+        }
+        if (it.icon.isNull() && !ui.iconPath.isEmpty()) {
+            const QString resolved =
+                QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
+            it.icon = loadIconFile(resolved);
+        }
+    } else if (it.icon.isNull()) {
         it.icon = PeIconExtractor::extractIcon(it.command);
     }
+    if (it.icon.isNull() && isDosBoxConfig(it.command)) {
+        it.icon = QIcon::fromTheme(QStringLiteral("dosbox"));
+    }
     if (it.icon.isNull()) {
-        it.icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+        it.icon = QApplication::style()->standardIcon(
+            isDosBoxConfig(it.command) ? QStyle::SP_DriveHDIcon : QStyle::SP_ComputerIcon);
     }
     if (it.workingDir.isEmpty()) {
         it.workingDir = QFileInfo(it.command).absolutePath();
@@ -79,19 +160,37 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
 }
 
 void GroupWindow::launch(const ProgramItem &item) {
-    QStringList args = QProcess::splitCommand(item.arguments);
-    args.prepend(item.command);
-    QString workDir = item.workingDir.isEmpty() ? QFileInfo(item.command).absolutePath()
-                                                 : item.workingDir;
-    if (!QProcess::startDetached("wine", args, workDir)) {
-        QMessageBox::warning(this, tr("Run"),
-                              tr("Could not launch '%1' with wine.").arg(item.command));
+    const QStringList extraArgs = QProcess::splitCommand(item.arguments);
+    const QString workDir = item.workingDir.isEmpty() ? QFileInfo(item.command).absolutePath()
+                                                       : item.workingDir;
+
+    QString program;
+    QStringList args;
+    QString failureHint;
+
+    if (isDosBoxConfig(item.command)) {
+        // `db` is a shell alias, so it exists only in an interactive bash.
+        // The path goes through as a positional argument so names with
+        // spaces survive and nothing is re-parsed by the shell.
+        program = QStringLiteral("bash");
+        args = QStringList{QStringLiteral("-ic"), QStringLiteral("db -conf \"$@\""),
+                           QStringLiteral("_"), item.command};
+        args += extraArgs;
+        failureHint = tr("Could not launch '%1' with dosbox (the 'db' alias).").arg(item.command);
+    } else {
+        program = QStringLiteral("wine");
+        args = QStringList{item.command} + extraArgs;
+        failureHint = tr("Could not launch '%1' with wine.").arg(item.command);
+    }
+
+    if (!QProcess::startDetached(program, args, workDir)) {
+        QMessageBox::warning(this, tr("Run"), failureHint);
     }
 }
 
 void GroupWindow::onFilesDropped(const QStringList &paths) {
     for (const QString &path : paths) {
-        if (!path.endsWith(".exe", Qt::CaseInsensitive)) continue;
+        if (!isLaunchable(path)) continue;
         ProgramItem item;
         item.name = QFileInfo(path).completeBaseName();
         item.command = path;
