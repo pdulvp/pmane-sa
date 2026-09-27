@@ -42,6 +42,9 @@ void MainWindow::buildMenus() {
 
     QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
+    m_xpIconsAction = optionsMenu->addAction(tr("&XP Style Icons"));
+    m_xpIconsAction->setCheckable(true);
+    connect(m_xpIconsAction, &QAction::toggled, this, &MainWindow::applyXpStyleIcons);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
@@ -159,6 +162,14 @@ void MainWindow::applyTheme(const QString &themeName) {
     }
 }
 
+void MainWindow::applyXpStyleIcons(bool enabled) {
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) {
+            group->setXpStyleIcons(enabled);
+        }
+    }
+}
+
 void MainWindow::chooseColors() {
     const QString previous = m_themeName;
     ThemeDialog dialog(m_themeName, this);
@@ -235,12 +246,16 @@ void MainWindow::load() {
     settings.endArray();
 
     if (groupCount == 0) createDefaultGroups();
+
+    // After the groups exist, so each one picks the setting up.
+    m_xpIconsAction->setChecked(settings.value("xpStyleIcons", false).toBool());
 }
 
 void MainWindow::save() {
     QSettings settings(configFilePath(), QSettings::IniFormat);
     settings.clear();
     settings.setValue("theme", m_themeName);
+    settings.setValue("xpStyleIcons", m_xpIconsAction->isChecked());
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();
     settings.beginWriteArray("Groups");

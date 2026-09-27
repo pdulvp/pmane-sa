@@ -31,6 +31,12 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override {
+        // The view's own icon size, captured before initStyleOption clamps it
+        // down to whatever the individual icon happens to offer. Using the
+        // clamped value would give short icons a shorter cell, floating their
+        // labels above their neighbours'.
+        const QSize iconSize = option.decorationSize;
+
         QStyleOptionViewItem opt = option;
         initStyleOption(&opt, index);
 
@@ -41,10 +47,11 @@ public:
 
         painter->save();
 
-        const QSize iconSize = opt.decorationSize;
         const QRect iconRect(cell.x() + (cell.width() - iconSize.width()) / 2,
                              cell.y() + kTopPadding, iconSize.width(), iconSize.height());
-        icon.paint(painter, iconRect, Qt::AlignCenter,
+        // Bottom alignment gives every icon the same ground line just above
+        // its label, whatever its own size.
+        icon.paint(painter, iconRect, Qt::AlignHCenter | Qt::AlignBottom,
                    selected ? QIcon::Selected : QIcon::Normal);
 
         const int textTop = iconRect.bottom() + kIconTextGap;

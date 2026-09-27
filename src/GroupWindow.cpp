@@ -1,4 +1,5 @@
 #include "GroupWindow.h"
+#include "IconEffect.h"
 #include "IconListWidget.h"
 #include "ItemPropertiesDialog.h"
 #include "PeIconExtractor.h"
@@ -63,13 +64,21 @@ DosBoxUi readDosBoxUi(const QString &confPath) {
     return ui;
 }
 
-QIcon loadIconFile(const QString &path) {
+QIcon loadIconFile(const QString &path, bool *legacy) {
+    if (legacy) *legacy = false;
+
     if (path.endsWith(QLatin1String(".ico"), Qt::CaseInsensitive)) {
         QIcon icon = PeIconExtractor::extractIcoFile(path);
-        if (!icon.isNull()) return icon;
+        if (!icon.isNull()) {
+            if (legacy) *legacy = true;
+            return icon;
+        }
     }
     if (path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) {
-        return PeIconExtractor::extractIcon(path);
+        PeIconExtractor::Source source = PeIconExtractor::Source::None;
+        QIcon icon = PeIconExtractor::extractIcon(path, &source);
+        if (legacy) *legacy = source == PeIconExtractor::Source::Ne;
+        return icon;
     }
     QImage image(path);
     return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
@@ -114,10 +123,12 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
         if (it.icon.isNull() && !ui.iconPath.isEmpty()) {
             const QString resolved =
                 QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
-            it.icon = loadIconFile(resolved);
+            it.icon = loadIconFile(resolved, &it.legacyIcon);
         }
     } else if (it.icon.isNull()) {
-        it.icon = PeIconExtractor::extractIcon(it.command);
+        PeIconExtractor::Source source = PeIconExtractor::Source::None;
+        it.icon = PeIconExtractor::extractIcon(it.command, &source);
+        it.legacyIcon = source == PeIconExtractor::Source::Ne;
     }
     if (it.icon.isNull() && isDosBoxConfig(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("dosbox"));
@@ -134,11 +145,19 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
     emit modified();
 }
 
+void GroupWindow::setXpStyleIcons(bool enabled) {
+    if (m_xpStyleIcons == enabled) return;
+    m_xpStyleIcons = enabled;
+    rebuildList();
+}
+
 void GroupWindow::rebuildList() {
     m_list->clear();
     for (int i = 0; i < m_items.size(); ++i) {
         const ProgramItem &it = m_items[i];
-        auto *listItem = new QListWidgetItem(it.icon, it.name);
+        const QIcon shown =
+            (m_xpStyleIcons && it.legacyIcon) ? xpStyleIcon(it.icon) : it.icon;
+        auto *listItem = new QListWidgetItem(shown, it.name);
         listItem->setData(IconListWidget::IndexRole, i);
         listItem->setData(IconListWidget::NameRole, it.name);
         listItem->setData(IconListWidget::CommandRole, it.command);

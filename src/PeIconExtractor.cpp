@@ -577,7 +577,9 @@ QIcon PeIconExtractor::extractIcoFile(const QString &icoPath) {
     return QIcon(QPixmap::fromImage(img));
 }
 
-QIcon PeIconExtractor::extractIcon(const QString &exePath) {
+QIcon PeIconExtractor::extractIcon(const QString &exePath, Source *source) {
+    if (source) *source = Source::None;
+
     QFile file(exePath);
     if (!file.open(QIODevice::ReadOnly)) return {};
     QByteArray bytes = file.readAll();
@@ -594,15 +596,19 @@ QIcon PeIconExtractor::extractIcon(const QString &exePath) {
     if (!r.bytes(newHeaderOffset, 4)) return {};
 
     QImage img;
+    Source found = Source::None;
     if (d[newHeaderOffset] == 'P' && d[newHeaderOffset + 1] == 'E' &&
         d[newHeaderOffset + 2] == 0 && d[newHeaderOffset + 3] == 0) {
         img = extractPeIconImage(r, d, size, newHeaderOffset);
+        found = Source::Pe;
     } else if (d[newHeaderOffset] == 'N' && d[newHeaderOffset + 1] == 'E') {
         img = extractNeIconImage(r, d, size, newHeaderOffset);
+        found = Source::Ne;
     } else {
         return {}; // unrecognized executable format (e.g. OS/2 LE/LX)
     }
 
     if (img.isNull()) return {};
+    if (source) *source = found;
     return QIcon(QPixmap::fromImage(img));
 }

@@ -11,4 +11,5 @@ struct ProgramItem {
     QString arguments;     // Extra command line arguments
     QString workingDir;    // Working directory when launched
     QIcon icon;            // Icon extracted from the executable
+    bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork
 };

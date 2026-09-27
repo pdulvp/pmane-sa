@@ -21,6 +21,9 @@ public:
     void addProgramItem(const ProgramItem &item);
     void newItemDialog() { showPropertiesDialog(-1); }
 
+    // Renders legacy (16-bit / .ico) icons in the Windows XP manner.
+    void setXpStyleIcons(bool enabled);
+
 signals:
     void titleChanged(const QString &title);
     void modified();
@@ -42,4 +45,5 @@ private:
     QString m_title;
     IconListWidget *m_list;
     QVector<ProgramItem> m_items;
+    bool m_xpStyleIcons = false;
 };

@@ -23,6 +23,7 @@ private slots:
     void deleteGroup();
     void updateWindowMenu();
     void chooseColors();
+    void applyXpStyleIcons(bool enabled);
     void about();
 
 private:
@@ -38,5 +39,6 @@ private:
     QMdiArea *m_mdiArea;
     QMenu *m_windowMenu;
     QAction *m_saveOnExitAction;
+    QAction *m_xpIconsAction;
     QString m_themeName;
 };
