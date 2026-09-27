@@ -22,6 +22,10 @@ add_executable(progman-linux
     src/PeIconExtractor.h
     src/ItemPropertiesDialog.cpp
     src/ItemPropertiesDialog.h
+    src/Theme.cpp
+    src/Theme.h
+    src/ThemeDialog.cpp
+    src/ThemeDialog.h
 )
 
 target_link_libraries(progman-linux PRIVATE Qt6::Widgets)

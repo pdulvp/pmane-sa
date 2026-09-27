@@ -22,6 +22,7 @@ private slots:
     void newItem();
     void deleteGroup();
     void updateWindowMenu();
+    void chooseColors();
     void about();
 
 private:
@@ -32,8 +33,10 @@ private:
     void load();
     void save();
     void createDefaultGroups();
+    void applyTheme(const QString &themeName);
 
     QMdiArea *m_mdiArea;
     QMenu *m_windowMenu;
     QAction *m_saveOnExitAction;
+    QString m_themeName;
 };

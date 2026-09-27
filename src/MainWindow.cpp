@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 #include "GroupWindow.h"
+#include "Theme.h"
+#include "ThemeDialog.h"
 
 #include <QAction>
 #include <QCloseEvent>
@@ -20,11 +22,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
 
     m_mdiArea = new QMdiArea(this);
-    m_mdiArea->setBackground(QBrush(QColor(0, 128, 128)));
     m_mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
     setCentralWidget(m_mdiArea);
 
     buildMenus();
+    applyTheme(builtinThemes().first().name);
     load();
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
@@ -39,6 +41,8 @@ void MainWindow::buildMenus() {
     fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
 
     QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
+    optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
+    optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
     m_saveOnExitAction->setChecked(true);
@@ -61,6 +65,14 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     sub->setWindowTitle(group->title());
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
+
+    const Theme &theme = themeByName(m_themeName);
+    QPalette subPal = sub->palette();
+    subPal.setColor(QPalette::Highlight, theme.titleActive);
+    subPal.setColor(QPalette::HighlightedText, theme.titleActiveText);
+    subPal.setColor(QPalette::Dark, theme.titleInactive);
+    sub->setPalette(subPal);
+
     sub->show();
     return sub;
 }
@@ -116,6 +128,50 @@ void MainWindow::updateWindowMenu() {
     }
 }
 
+void MainWindow::applyTheme(const QString &themeName) {
+    const Theme &theme = themeByName(themeName);
+    m_themeName = theme.name;
+
+    m_mdiArea->setBackground(QBrush(theme.desktop));
+
+    QPalette pal;
+    pal.setColor(QPalette::Window, theme.buttonFace);
+    pal.setColor(QPalette::WindowText, theme.windowText);
+    pal.setColor(QPalette::Base, theme.windowBg);
+    pal.setColor(QPalette::AlternateBase, theme.buttonFace);
+    pal.setColor(QPalette::Text, theme.windowText);
+    pal.setColor(QPalette::Button, theme.buttonFace);
+    pal.setColor(QPalette::ButtonText, theme.buttonText);
+    pal.setColor(QPalette::Highlight, theme.highlight);
+    pal.setColor(QPalette::HighlightedText, theme.highlightText);
+    pal.setColor(QPalette::ToolTipBase, theme.windowBg);
+    pal.setColor(QPalette::ToolTipText, theme.windowText);
+    qApp->setPalette(pal);
+
+    // Styles draw the MDI child captions from the subwindow's own
+    // Highlight/HighlightedText roles.
+    QPalette subPal = pal;
+    subPal.setColor(QPalette::Highlight, theme.titleActive);
+    subPal.setColor(QPalette::HighlightedText, theme.titleActiveText);
+    subPal.setColor(QPalette::Dark, theme.titleInactive);
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        sub->setPalette(subPal);
+    }
+}
+
+void MainWindow::chooseColors() {
+    const QString previous = m_themeName;
+    ThemeDialog dialog(m_themeName, this);
+    // Live preview on the real window, like the Control Panel did.
+    connect(&dialog, &ThemeDialog::themePreviewed, this, &MainWindow::applyTheme);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        applyTheme(dialog.selectedTheme());
+    } else {
+        applyTheme(previous);
+    }
+}
+
 void MainWindow::about() {
     QMessageBox::about(
         this, tr("About Program Manager"),
@@ -147,6 +203,8 @@ void MainWindow::load() {
     }
 
     QSettings settings(path, QSettings::IniFormat);
+    applyTheme(settings.value("theme", m_themeName).toString());
+
     int groupCount = settings.beginReadArray("Groups");
     for (int i = 0; i < groupCount; ++i) {
         settings.setArrayIndex(i);
@@ -182,6 +240,7 @@ void MainWindow::load() {
 void MainWindow::save() {
     QSettings settings(configFilePath(), QSettings::IniFormat);
     settings.clear();
+    settings.setValue("theme", m_themeName);
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();
     settings.beginWriteArray("Groups");
