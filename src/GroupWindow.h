@@ -30,6 +30,9 @@ public:
 
 signals:
     void titleChanged(const QString &title);
+    // One of this group's icons was clicked, so nothing else on the desktop
+    // should stay selected.
+    void itemSelected();
     void modified();
 
 private slots:

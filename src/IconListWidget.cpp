@@ -7,6 +7,7 @@
 #include <QDropEvent>
 #include <QFontMetrics>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QUrl>
@@ -22,6 +23,8 @@ constexpr int kIconPadding = 24;
 constexpr int kMaxCellWidth = 180;
 constexpr int kTopPadding = 6;
 constexpr int kIconTextGap = 4;
+// Dead space between cells, so a click that lands between icons hits no item.
+constexpr int kCellGap = 8;
 // How far past the layout box an icon may be drawn at its native size. It
 // covers the spare pixel an XP-styled icon carries for its shadow; anything
 // larger is real artwork and gets scaled down instead.
@@ -126,14 +129,30 @@ void IconListWidget::updateGridSize() {
 
     int cellWidth = std::max(widestText + kTextPadding, iconSize().width() + kIconPadding);
     cellWidth = std::min(cellWidth, kMaxCellWidth);
-    const int cellHeight = iconSize().height() + metrics.height() * 2 + kIconPadding;
-    const QSize cell(cellWidth, cellHeight);
 
-    setGridSize(cell);
+    // Reserve only as many label lines as some name actually needs, rather
+    // than always two: unused lines would be dead space that still counts as
+    // part of the item and keeps it selected when clicked.
+    const int textWidth = cellWidth - kTextPadding;
+    int labelLines = 1;
+    for (int i = 0; i < count(); ++i) {
+        const QRect bounds =
+            metrics.boundingRect(QRect(0, 0, textWidth, 0),
+                                 Qt::AlignHCenter | Qt::TextWordWrap, item(i)->text());
+        labelLines = std::max(labelLines, bounds.height() / std::max(1, metrics.height()));
+    }
+
+    const int contentHeight =
+        kTopPadding + iconSize().height() + kIconTextGap + labelLines * metrics.height();
+
+    // The grid is a cell bigger than the item in each direction, so the strip
+    // between neighbours belongs to no item and a click there deselects.
+    setGridSize(QSize(cellWidth + kCellGap, contentHeight + kCellGap));
     // Every row reports the same hint so the cells stay uniform at the
     // widest label's width rather than collapsing to the narrowest.
+    const QSize itemSize(cellWidth, contentHeight);
     for (int i = 0; i < count(); ++i) {
-        item(i)->setSizeHint(cell);
+        item(i)->setSizeHint(itemSize);
     }
 }
 
@@ -189,6 +208,16 @@ void IconListWidget::startDrag(Qt::DropActions supportedActions) {
 // auto-arranged, so a drop onto the originating group has nothing to do.
 static bool isSelfDrag(const QMimeData *mime, const QObject *source, const QObject *self) {
     return mime->hasFormat(kProgramItemMimeType) && source == self;
+}
+
+void IconListWidget::mousePressEvent(QMouseEvent *event) {
+    // A press in the gap between icons, or below a label, belongs to no item.
+    // The view does not drop the selection on its own, so do it here.
+    if (!indexAt(event->pos()).isValid()) {
+        clearSelection();
+        setCurrentItem(nullptr);
+    }
+    QListWidget::mousePressEvent(event);
 }
 
 void IconListWidget::dragEnterEvent(QDragEnterEvent *event) {

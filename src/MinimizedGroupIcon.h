@@ -21,11 +21,14 @@ public:
     explicit MinimizedGroupIcon(const QString &title, QWidget *parent = nullptr);
 
     void setTitle(const QString &title);
+    void setSelected(bool selected);
+    bool isSelected() const { return m_selected; }
     void setDesktopColor(const QColor &color);
     void setPreviewIcons(const QVector<QIcon> &icons);
 
 signals:
     void restoreRequested();
+    void clicked();
 
 protected:
     void paintEvent(QPaintEvent *event) override;

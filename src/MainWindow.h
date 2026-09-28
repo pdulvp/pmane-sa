@@ -46,6 +46,8 @@ private:
     void minimizeToIcon(QMdiSubWindow *sub);
     void restoreFromIcon(QMdiSubWindow *sub);
     void arrangeMinimizedIcons();
+    void clearMinimizedIconSelection();
+    void clearGroupSelections();
 
     QMdiArea *m_mdiArea;
     QMenu *m_windowMenu;

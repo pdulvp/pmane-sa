@@ -194,6 +194,7 @@ GroupWindow::GroupWindow(const QString &title, QWidget *parent)
     layout->addWidget(m_list);
 
     connect(m_list, &QListWidget::itemActivated, this, &GroupWindow::onItemActivated);
+    connect(m_list, &QListWidget::itemPressed, this, &GroupWindow::itemSelected);
     connect(m_list, &IconListWidget::filesDropped, this, &GroupWindow::onFilesDropped);
     connect(m_list, &IconListWidget::programItemsDropped, this,
             &GroupWindow::onProgramItemsDropped);

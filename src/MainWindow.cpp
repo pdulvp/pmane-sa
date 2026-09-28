@@ -78,6 +78,7 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     sub->setWindowTitle(group->title());
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
+    connect(group, &GroupWindow::itemSelected, this, &MainWindow::clearMinimizedIconSelection);
 
     sub->setPalette(captionPalette(sub->palette()));
 
@@ -176,6 +177,13 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     icon->setPreviewIcons(preview);
     connect(icon, &MinimizedGroupIcon::restoreRequested, this,
             [this, sub]() { restoreFromIcon(sub); });
+    connect(icon, &MinimizedGroupIcon::clicked, this, [this, icon]() {
+        // Only the icon just clicked stays selected, here or in any group.
+        clearGroupSelections();
+        for (MinimizedGroupIcon *other : m_minimizedIcons) {
+            if (other != icon) other->setSelected(false);
+        }
+    });
     connect(group, &GroupWindow::titleChanged, icon, &MinimizedGroupIcon::setTitle);
 
     m_minimizedIcons.insert(sub, icon);
@@ -228,9 +236,25 @@ void MainWindow::arrangeMinimizedIcons() {
     }
 }
 
+void MainWindow::clearMinimizedIconSelection() {
+    for (MinimizedGroupIcon *icon : m_minimizedIcons) icon->setSelected(false);
+}
+
+void MainWindow::clearGroupSelections() {
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) group->clearSelection();
+    }
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
-    if (watched == m_mdiArea->viewport() && event->type() == QEvent::Resize) {
-        arrangeMinimizedIcons();
+    if (watched == m_mdiArea->viewport()) {
+        if (event->type() == QEvent::Resize) arrangeMinimizedIcons();
+        // A press that reaches the viewport landed on bare desktop; one on an
+        // icon is consumed by the icon itself.
+        if (event->type() == QEvent::MouseButtonPress) {
+            clearMinimizedIconSelection();
+            clearGroupSelections();
+        }
     }
 
     if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
@@ -253,6 +277,7 @@ void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
             group->clearSelection();
         }
     }
+    if (active) clearMinimizedIconSelection();
 }
 
 void MainWindow::applyTheme(const QString &themeName) {

@@ -61,6 +61,12 @@ void MinimizedGroupIcon::setTitle(const QString &title) {
     update();
 }
 
+void MinimizedGroupIcon::setSelected(bool selected) {
+    if (m_selected == selected) return;
+    m_selected = selected;
+    update();
+}
+
 void MinimizedGroupIcon::setDesktopColor(const QColor &color) {
     m_desktop = color;
     update();
@@ -96,9 +102,12 @@ void MinimizedGroupIcon::paintEvent(QPaintEvent *) {
 }
 
 void MinimizedGroupIcon::mousePressEvent(QMouseEvent *event) {
-    m_selected = true;
-    update();
-    QWidget::mousePressEvent(event);
+    setSelected(true);
+    emit clicked();
+    // Accept it here: letting it propagate would reach the desktop behind us,
+    // which treats a press as a click on bare background and clears this
+    // very selection.
+    event->accept();
 }
 
 void MinimizedGroupIcon::mouseDoubleClickEvent(QMouseEvent *event) {

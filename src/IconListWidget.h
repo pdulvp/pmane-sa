@@ -33,6 +33,7 @@ signals:
     void programItemsMovedOut(const QVector<int> &indices);
 
 protected:
+    void mousePressEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
