@@ -30,9 +30,66 @@ bool isScummVmGame(const QString &path) {
     return path.endsWith(QLatin1String(".trs"), Qt::CaseInsensitive);
 }
 
+// Console ROMs and disc images RetroArch plays.
+bool isRetroArchRom(const QString &path) {
+    static const QStringList extensions = {
+        QStringLiteral(".nes"), QStringLiteral(".z64"), QStringLiteral(".n64"),
+        QStringLiteral(".sfc"), QStringLiteral(".gb"),  QStringLiteral(".gba"),
+        QStringLiteral(".gcm"), QStringLiteral(".iso"),
+    };
+    for (const QString &extension : extensions) {
+        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
+    }
+    return false;
+}
+
 bool isLaunchable(const QString &path) {
     return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path) ||
-           isScummVmGame(path);
+           isScummVmGame(path) || isRetroArchRom(path);
+}
+
+// RetroArch does not pick a core from the content on its own, and ignores a
+// bare core name, so the full path to one has to be passed. Rather than
+// hard-coding where the cores live, read it back out of the retroarch alias
+// and cache it for the session.
+QString retroArchCoresDir() {
+    static const QString dir = []() -> QString {
+        QProcess probe;
+        probe.start(QStringLiteral("bash"), {QStringLiteral("-ic"), QStringLiteral("alias retroarch")});
+        if (!probe.waitForFinished(3000)) return {};
+
+        const QString definition = QString::fromLocal8Bit(probe.readAllStandardOutput());
+        static const QRegularExpression binary(QStringLiteral("(/[^\\s'\"]+)/retroarch\\b"));
+        const QRegularExpressionMatch match = binary.match(definition);
+        if (!match.hasMatch()) return {};
+
+        const QString cores = match.captured(1) + QStringLiteral("/cores");
+        return QDir(cores).exists() ? cores : QString();
+    }();
+    return dir;
+}
+
+// The libretro core for a ROM, by extension. Core file names are standard
+// across libretro installs; only the directory is site-specific.
+QString retroArchCoreFor(const QString &romPath) {
+    static const QHash<QString, QString> coreByExtension = {
+        {QStringLiteral("nes"), QStringLiteral("mesen_libretro.so")},
+        {QStringLiteral("gba"), QStringLiteral("vba_next_libretro.so")},
+        {QStringLiteral("sfc"), QStringLiteral("snes9x_libretro.so")},
+        {QStringLiteral("smc"), QStringLiteral("snes9x_libretro.so")},
+        {QStringLiteral("n64"), QStringLiteral("mupen64plus_next_libretro.so")},
+        {QStringLiteral("z64"), QStringLiteral("mupen64plus_next_libretro.so")},
+        {QStringLiteral("v64"), QStringLiteral("mupen64plus_next_libretro.so")},
+    };
+
+    const QString core = coreByExtension.value(QFileInfo(romPath).suffix().toLower());
+    if (core.isEmpty()) return {};
+
+    const QString dir = retroArchCoresDir();
+    if (dir.isEmpty()) return {};
+
+    const QString path = QDir(dir).filePath(core);
+    return QFile::exists(path) ? path : QString();
 }
 
 // A .trs installer script may name its game, as a resource definition
@@ -185,10 +242,14 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
     if (it.icon.isNull() && isScummVmGame(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("scummvm"));
     }
+    if (it.icon.isNull() && isRetroArchRom(it.command)) {
+        it.icon = QIcon::fromTheme(QStringLiteral("retroarch"));
+    }
     if (it.icon.isNull()) {
         QStyle::StandardPixmap fallback = QStyle::SP_ComputerIcon;
         if (isDosBoxConfig(it.command)) fallback = QStyle::SP_DriveHDIcon;
         if (isScummVmGame(it.command)) fallback = QStyle::SP_DirIcon;
+        if (isRetroArchRom(it.command)) fallback = QStyle::SP_DriveFDIcon;
         it.icon = QApplication::style()->standardIcon(fallback);
     }
     if (it.workingDir.isEmpty()) {
@@ -266,6 +327,22 @@ void GroupWindow::launch(const ProgramItem &item) {
         args += extraArgs;
         failureHint =
             tr("Could not launch '%1' with ScummVM (the 'scm' alias).").arg(item.command);
+    } else if (isRetroArchRom(item.command)) {
+        // Another shell alias, taking the ROM itself. The alias pins one
+        // core, so pass the right one for this ROM when we can identify it;
+        // a later -L overrides the alias's own --libretro.
+        program = QStringLiteral("bash");
+        const QString core = retroArchCoreFor(item.command);
+        if (core.isEmpty()) {
+            args = QStringList{QStringLiteral("-ic"), QStringLiteral("retroarch \"$@\""),
+                               QStringLiteral("_"), item.command};
+        } else {
+            args = QStringList{QStringLiteral("-ic"), QStringLiteral("retroarch -L \"$1\" \"$2\""),
+                               QStringLiteral("_"), core, item.command};
+        }
+        args += extraArgs;
+        failureHint =
+            tr("Could not launch '%1' with RetroArch (the 'retroarch' alias).").arg(item.command);
     } else {
         program = QStringLiteral("wine");
         args = QStringList{item.command} + extraArgs;
