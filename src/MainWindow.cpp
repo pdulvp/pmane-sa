@@ -341,6 +341,11 @@ void MainWindow::load() {
     QSettings settings(path, QSettings::IniFormat);
     applyTheme(settings.value("theme", m_themeName).toString());
 
+    // Where the Program Manager window itself was last left. saveGeometry
+    // carries the screen and the maximized state, not just a rectangle.
+    const QByteArray windowGeometry = settings.value("windowGeometry").toByteArray();
+    if (!windowGeometry.isEmpty()) restoreGeometry(windowGeometry);
+
     int groupCount = settings.beginReadArray("Groups");
     for (int i = 0; i < groupCount; ++i) {
         settings.setArrayIndex(i);
@@ -381,6 +386,7 @@ void MainWindow::save() {
     QSettings settings(configFilePath(), QSettings::IniFormat);
     settings.clear();
     settings.setValue("theme", m_themeName);
+    settings.setValue("windowGeometry", saveGeometry());
     settings.setValue("xpStyleIcons", m_xpIconsAction->isChecked());
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();
