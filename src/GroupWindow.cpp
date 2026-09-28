@@ -145,6 +145,13 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
     emit modified();
 }
 
+void GroupWindow::clearSelection() {
+    m_list->clearSelection();
+    // Also drop the current item, or the style still marks it with a focus
+    // rectangle.
+    m_list->setCurrentItem(nullptr);
+}
+
 void GroupWindow::setXpStyleIcons(bool enabled) {
     if (m_xpStyleIcons == enabled) return;
     m_xpStyleIcons = enabled;

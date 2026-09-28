@@ -24,6 +24,10 @@ public:
     // Renders legacy (16-bit / .ico) icons in the Windows XP manner.
     void setXpStyleIcons(bool enabled);
 
+    // Drops this group's highlighted icon, so only the active group carries
+    // a selection.
+    void clearSelection();
+
 signals:
     void titleChanged(const QString &title);
     void modified();

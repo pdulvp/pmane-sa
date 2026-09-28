@@ -22,6 +22,10 @@ constexpr int kIconPadding = 24;
 constexpr int kMaxCellWidth = 180;
 constexpr int kTopPadding = 6;
 constexpr int kIconTextGap = 4;
+// How far past the layout box an icon may be drawn at its native size. It
+// covers the spare pixel an XP-styled icon carries for its shadow; anything
+// larger is real artwork and gets scaled down instead.
+constexpr int kNativeDrawSlack = 4;
 
 // Draws an icon centred over its label, with the selection highlight
 // hugging the text the way Progman did, rather than filling the cell.
@@ -49,10 +53,27 @@ public:
 
         const QRect iconRect(cell.x() + (cell.width() - iconSize.width()) / 2,
                              cell.y() + kTopPadding, iconSize.width(), iconSize.height());
-        // Bottom alignment gives every icon the same ground line just above
-        // its label, whatever its own size.
-        icon.paint(painter, iconRect, Qt::AlignHCenter | Qt::AlignBottom,
-                   selected ? QIcon::Selected : QIcon::Normal);
+        const QIcon::Mode mode = selected ? QIcon::Selected : QIcon::Normal;
+
+        const QSize native = icon.actualSize(QSize(512, 512));
+        const bool overflowsSlightly =
+            native.height() > iconRect.height() || native.width() > iconRect.width();
+        const bool withinSlack = native.height() <= iconRect.height() + kNativeDrawSlack &&
+                                 native.width() <= iconRect.width() + kNativeDrawSlack;
+        if (overflowsSlightly && withinSlack) {
+            // A styled icon carries a spare pixel for its shadow. Draw it at
+            // native size with the artwork flush to the top of the layout box
+            // so the shadow spills into the gap; the box, and therefore the
+            // label below it, stays exactly where it was.
+            const QRect nativeRect(cell.x() + (cell.width() - native.width()) / 2,
+                                   iconRect.top(), native.width(), native.height());
+            painter->drawPixmap(nativeRect, icon.pixmap(native, mode));
+        } else {
+            // Bottom alignment gives every icon the same ground line just
+            // above its label. Modern executables ship artwork as large as
+            // 256px, which this scales down to the box.
+            icon.paint(painter, iconRect, Qt::AlignHCenter | Qt::AlignBottom, mode);
+        }
 
         const int textTop = iconRect.bottom() + kIconTextGap;
         const QRect textArea(cell.left() + 2, textTop, cell.width() - 4,

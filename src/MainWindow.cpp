@@ -30,6 +30,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     load();
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
+    connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
+}
+
+MainWindow::~MainWindow() {
+    // Child widgets are destroyed after this body runs but before QObject
+    // severs connections, so the area can still emit subWindowActivated into
+    // a half-destroyed MainWindow. Cut it loose first.
+    disconnect(m_mdiArea, nullptr, this, nullptr);
 }
 
 void MainWindow::buildMenus() {
@@ -128,6 +136,17 @@ void MainWindow::updateWindowMenu() {
             m_mdiArea->setActiveSubWindow(sub);
             sub->showNormal();
         });
+    }
+}
+
+void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
+    // Only the active group keeps its highlighted icon, so there is never
+    // more than one selection on screen.
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (sub == active) continue;
+        if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) {
+            group->clearSelection();
+        }
     }
 }
 

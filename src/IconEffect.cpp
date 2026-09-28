@@ -9,7 +9,10 @@
 
 namespace {
 
-constexpr int kCanvas = 32;        // final icon size, matching un-styled icons
+// One pixel taller than the 32px layout box: the artwork keeps its full 32px
+// and the spare pixel is where the shadow goes, rather than the shadow eating
+// into the art.
+constexpr int kCanvas = 33;
 constexpr qreal kRecedeX = 0.13;   // how far the right edge pulls in
 constexpr qreal kRecedeY = 0.10;   // and how much it shortens
 constexpr int kShadowDx = 1;
@@ -23,11 +26,10 @@ constexpr int kShadowAlpha = 140;
 // crisp.
 constexpr int kSupersample = 4;
 
-// The art claims the whole canvas apart from the room the shadow needs, and
-// sits flush with the top of it. Centring it instead would float the icon
-// below its un-styled neighbours in the same grid row. Only the faintest
-// outer edge of the blur falls outside, which does not read.
-constexpr int kArt = kCanvas - kShadowDy - kShadowBlur;
+// Full size, flush with the top of the canvas, so a styled icon's artwork
+// matches an un-styled 32px one exactly and only the shadow occupies the
+// extra pixel below it.
+constexpr int kArt = 32;
 
 // Separable box blur over the alpha channel only; the shadow is flat black,
 // so the colour channels never change.

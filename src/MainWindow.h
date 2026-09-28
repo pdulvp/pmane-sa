@@ -13,6 +13,7 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -22,6 +23,7 @@ private slots:
     void newItem();
     void deleteGroup();
     void updateWindowMenu();
+    void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();
     void applyXpStyleIcons(bool enabled);
     void about();
