@@ -1,11 +1,14 @@
 #pragma once
 
+#include <QHash>
+#include <QList>
 #include <QMainWindow>
 
 class QMdiArea;
 class QMdiSubWindow;
 class QMenu;
 class GroupWindow;
+class MinimizedGroupIcon;
 
 // The main "Program Manager" window: an MDI desktop holding Program
 // Group windows, with progman.ini-style persistence.
@@ -17,6 +20,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void newGroup();
@@ -38,9 +42,18 @@ private:
     void createDefaultGroups();
     void applyTheme(const QString &themeName);
 
+    void minimizeToIcon(QMdiSubWindow *sub);
+    void restoreFromIcon(QMdiSubWindow *sub);
+    void arrangeMinimizedIcons();
+
     QMdiArea *m_mdiArea;
     QMenu *m_windowMenu;
     QAction *m_saveOnExitAction;
     QAction *m_xpIconsAction;
     QString m_themeName;
+
+    // Groups shown as desktop icons instead of stub title bars, in the order
+    // they were minimized.
+    QHash<QMdiSubWindow *, MinimizedGroupIcon *> m_minimizedIcons;
+    QList<QMdiSubWindow *> m_minimizedOrder;
 };

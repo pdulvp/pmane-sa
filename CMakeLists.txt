@@ -22,6 +22,8 @@ add_executable(progman-linux
     src/PeIconExtractor.h
     src/ItemPropertiesDialog.cpp
     src/ItemPropertiesDialog.h
+    src/MinimizedGroupIcon.cpp
+    src/MinimizedGroupIcon.h
     src/IconEffect.cpp
     src/IconEffect.h
     src/Theme.cpp

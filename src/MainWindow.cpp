@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "GroupWindow.h"
+#include "MinimizedGroupIcon.h"
 #include "Theme.h"
 #include "ThemeDialog.h"
 
@@ -31,6 +32,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
+    m_mdiArea->viewport()->installEventFilter(this);
 }
 
 MainWindow::~MainWindow() {
@@ -84,6 +86,11 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     subPal.setColor(QPalette::Dark, theme.titleInactive);
     sub->setPalette(subPal);
 
+    connect(sub, &QMdiSubWindow::windowStateChanged, this,
+            [this, sub](Qt::WindowStates, Qt::WindowStates newState) {
+                if (newState & Qt::WindowMinimized) minimizeToIcon(sub);
+            });
+
     sub->show();
     return sub;
 }
@@ -133,10 +140,82 @@ void MainWindow::updateWindowMenu() {
         act->setCheckable(true);
         act->setChecked(sub == m_mdiArea->activeSubWindow());
         connect(act, &QAction::triggered, this, [this, sub]() {
+            if (m_minimizedIcons.contains(sub)) {
+                restoreFromIcon(sub);
+                return;
+            }
             m_mdiArea->setActiveSubWindow(sub);
             sub->showNormal();
         });
     }
+}
+
+void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
+    if (m_minimizedIcons.contains(sub)) return;
+
+    auto *group = qobject_cast<GroupWindow *>(sub->widget());
+    if (!group) return;
+
+    auto *icon = new MinimizedGroupIcon(group->title(), m_mdiArea->viewport());
+    icon->setDesktopColor(themeByName(m_themeName).desktop);
+    connect(icon, &MinimizedGroupIcon::restoreRequested, this,
+            [this, sub]() { restoreFromIcon(sub); });
+    connect(group, &GroupWindow::titleChanged, icon, &MinimizedGroupIcon::setTitle);
+
+    m_minimizedIcons.insert(sub, icon);
+    m_minimizedOrder.append(sub);
+
+    // Hiding has to wait a turn: this runs from within showMinimized(), which
+    // would show the stub again straight after we hid it. The window stays in
+    // its minimized state while hidden, so showNormal() later brings back the
+    // geometry it had before.
+    QMetaObject::invokeMethod(
+        sub, [sub]() { sub->hide(); }, Qt::QueuedConnection);
+    arrangeMinimizedIcons();
+}
+
+void MainWindow::restoreFromIcon(QMdiSubWindow *sub) {
+    MinimizedGroupIcon *icon = m_minimizedIcons.take(sub);
+    if (!icon) return;
+    m_minimizedOrder.removeAll(sub);
+    icon->deleteLater();
+
+    // Clear the minimized flag before showing. show() on a still-minimized
+    // window puts the stub back and re-fires windowStateChanged, which would
+    // turn it straight back into a desktop icon.
+    sub->setWindowState(sub->windowState() & ~Qt::WindowMinimized);
+    sub->show();
+    m_mdiArea->setActiveSubWindow(sub);
+    arrangeMinimizedIcons();
+}
+
+void MainWindow::arrangeMinimizedIcons() {
+    const int cellW = MinimizedGroupIcon::kCellWidth;
+    const int cellH = MinimizedGroupIcon::kCellHeight;
+    const QRect area = m_mdiArea->viewport()->rect();
+
+    // Filled left to right along the bottom, stacking upwards, like Progman.
+    int x = 4;
+    int y = area.height() - cellH - 4;
+    for (QMdiSubWindow *sub : m_minimizedOrder) {
+        MinimizedGroupIcon *icon = m_minimizedIcons.value(sub);
+        if (!icon) continue;
+        if (x + cellW > area.width() && x > 4) {
+            x = 4;
+            y -= cellH;
+        }
+        icon->move(x, y);
+        icon->show();
+        icon->raise();
+        x += cellW;
+    }
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == m_mdiArea->viewport() && event->type() == QEvent::Resize) {
+        arrangeMinimizedIcons();
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
@@ -178,6 +257,10 @@ void MainWindow::applyTheme(const QString &themeName) {
     subPal.setColor(QPalette::Dark, theme.titleInactive);
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
         sub->setPalette(subPal);
+    }
+    for (MinimizedGroupIcon *icon : m_minimizedIcons) {
+        icon->setPalette(subPal);
+        icon->setDesktopColor(theme.desktop);
     }
 }
 
@@ -260,7 +343,7 @@ void MainWindow::load() {
 
         QMdiSubWindow *sub = addGroupWindow(group);
         sub->setGeometry(x, y, w, h);
-        if (minimized) sub->showMinimized();
+        if (minimized) minimizeToIcon(sub);
     }
     settings.endArray();
 
@@ -285,12 +368,15 @@ void MainWindow::save() {
 
         settings.setArrayIndex(idx++);
         settings.setValue("title", gw->title());
-        QRect geo = sub->geometry();
+        // A minimized window's geometry() is the stub it collapsed to, so
+        // persist the size it will actually reopen at.
+        QRect geo = m_minimizedIcons.contains(sub) ? sub->normalGeometry() : sub->geometry();
+        if (!geo.isValid()) geo = sub->geometry();
         settings.setValue("x", geo.x());
         settings.setValue("y", geo.y());
         settings.setValue("w", geo.width());
         settings.setValue("h", geo.height());
-        settings.setValue("minimized", sub->isMinimized());
+        settings.setValue("minimized", m_minimizedIcons.contains(sub) || sub->isMinimized());
 
         const auto &items = gw->items();
         settings.beginWriteArray("Items");
