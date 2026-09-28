@@ -6,32 +6,43 @@
 
 namespace {
 
-constexpr int kGlyph = 32;
-constexpr int kGlyphTop = 4;
+constexpr int kGlyphWidth = 46;
+// Height drops with the caption so the client area, and therefore the
+// preview icons in it, keep the size they were tuned to.
+constexpr int kGlyphHeight = 34;
+constexpr int kGlyphTop = 3;
+constexpr int kCaptionHeight = 5;
 
-// Progman's group icon: a little window with a caption bar and a couple of
-// program icons inside it.
-void paintGroupGlyph(QPainter &p, const QRect &r, const QPalette &pal) {
-    const QColor face = pal.button().color();
-    const QColor caption = pal.highlight().color();
+// A miniature of the group window itself: caption bar in the scheme's title
+// colour, with the group's own program icons laid out inside.
+void paintGroupGlyph(QPainter &p, const QRect &r, const QPalette &pal,
+                     const QVector<QIcon> &preview) {
     const QColor line = pal.buttonText().color();
 
-    p.fillRect(r, face);
+    p.fillRect(r, pal.button());
     p.setPen(line);
     p.drawRect(r.adjusted(0, 0, -1, -1));
 
-    const QRect captionBar(r.x() + 2, r.y() + 2, r.width() - 4, 6);
-    p.fillRect(captionBar, caption);
+    const QRect caption(r.x() + 2, r.y() + 2, r.width() - 4, kCaptionHeight);
+    p.fillRect(caption, pal.highlight());
 
-    // Two miniature program icons sitting in the group.
-    const int size = 7;
-    const int top = captionBar.bottom() + 4;
-    const QRect a(r.x() + 5, top, size, size);
-    const QRect b(r.x() + 17, top, size, size);
-    for (const QRect &icon : {a, b}) {
-        p.fillRect(icon, pal.base().color());
-        p.setPen(line);
-        p.drawRect(icon);
+    const QRect client(r.x() + 2, caption.bottom() + 1, r.width() - 4,
+                       r.bottom() - caption.bottom() - 3);
+    p.fillRect(client, pal.base());
+
+    if (preview.isEmpty()) return;
+
+    const int cellW = client.width() / MinimizedGroupIcon::kPreviewColumns;
+    const int cellH = client.height() / MinimizedGroupIcon::kPreviewRows;
+    const int iconSize = qMax(4, qMin(cellW, cellH) - 3);
+
+    for (int i = 0; i < preview.size() && i < MinimizedGroupIcon::kMaxPreviewIcons; ++i) {
+        const int col = i % MinimizedGroupIcon::kPreviewColumns;
+        const int row = i / MinimizedGroupIcon::kPreviewColumns;
+        const QRect cell(client.x() + col * cellW, client.y() + row * cellH, cellW, cellH);
+        const QRect target(cell.x() + (cell.width() - iconSize) / 2,
+                           cell.y() + (cell.height() - iconSize) / 2, iconSize, iconSize);
+        preview[i].paint(&p, target, Qt::AlignCenter);
     }
 }
 
@@ -55,11 +66,16 @@ void MinimizedGroupIcon::setDesktopColor(const QColor &color) {
     update();
 }
 
+void MinimizedGroupIcon::setPreviewIcons(const QVector<QIcon> &icons) {
+    m_preview = icons;
+    update();
+}
+
 void MinimizedGroupIcon::paintEvent(QPaintEvent *) {
     QPainter p(this);
 
-    const QRect glyph((width() - kGlyph) / 2, kGlyphTop, kGlyph, kGlyph);
-    paintGroupGlyph(p, glyph, palette());
+    const QRect glyph((width() - kGlyphWidth) / 2, kGlyphTop, kGlyphWidth, kGlyphHeight);
+    paintGroupGlyph(p, glyph, palette(), m_preview);
 
     // The label has to stay readable against whatever colour the desktop is,
     // so pick black or white from its luminance rather than a fixed colour.

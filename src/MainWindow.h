@@ -42,6 +42,7 @@ private:
     void createDefaultGroups();
     void applyTheme(const QString &themeName);
 
+    QPalette captionPalette(const QPalette &base) const;
     void minimizeToIcon(QMdiSubWindow *sub);
     void restoreFromIcon(QMdiSubWindow *sub);
     void arrangeMinimizedIcons();

@@ -79,12 +79,7 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
 
-    const Theme &theme = themeByName(m_themeName);
-    QPalette subPal = sub->palette();
-    subPal.setColor(QPalette::Highlight, theme.titleActive);
-    subPal.setColor(QPalette::HighlightedText, theme.titleActiveText);
-    subPal.setColor(QPalette::Dark, theme.titleInactive);
-    sub->setPalette(subPal);
+    sub->setPalette(captionPalette(sub->palette()));
 
     connect(sub, &QMdiSubWindow::windowStateChanged, this,
             [this, sub](Qt::WindowStates, Qt::WindowStates newState) {
@@ -150,6 +145,15 @@ void MainWindow::updateWindowMenu() {
     }
 }
 
+QPalette MainWindow::captionPalette(const QPalette &base) const {
+    const Theme &theme = themeByName(m_themeName);
+    QPalette pal = base;
+    pal.setColor(QPalette::Highlight, theme.titleActive);
+    pal.setColor(QPalette::HighlightedText, theme.titleActiveText);
+    pal.setColor(QPalette::Dark, theme.titleInactive);
+    return pal;
+}
+
 void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     if (m_minimizedIcons.contains(sub)) return;
 
@@ -157,7 +161,16 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     if (!group) return;
 
     auto *icon = new MinimizedGroupIcon(group->title(), m_mdiArea->viewport());
+    icon->setPalette(captionPalette(palette()));
     icon->setDesktopColor(themeByName(m_themeName).desktop);
+
+    // Preview the group by its first few program icons.
+    QVector<QIcon> preview;
+    for (const ProgramItem &item : group->items()) {
+        if (preview.size() >= MinimizedGroupIcon::kMaxPreviewIcons) break;
+        preview.append(item.icon);
+    }
+    icon->setPreviewIcons(preview);
     connect(icon, &MinimizedGroupIcon::restoreRequested, this,
             [this, sub]() { restoreFromIcon(sub); });
     connect(group, &GroupWindow::titleChanged, icon, &MinimizedGroupIcon::setTitle);
@@ -251,10 +264,7 @@ void MainWindow::applyTheme(const QString &themeName) {
 
     // Styles draw the MDI child captions from the subwindow's own
     // Highlight/HighlightedText roles.
-    QPalette subPal = pal;
-    subPal.setColor(QPalette::Highlight, theme.titleActive);
-    subPal.setColor(QPalette::HighlightedText, theme.titleActiveText);
-    subPal.setColor(QPalette::Dark, theme.titleInactive);
+    const QPalette subPal = captionPalette(pal);
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
         sub->setPalette(subPal);
     }
