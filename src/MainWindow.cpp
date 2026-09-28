@@ -81,6 +81,8 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
 
     sub->setPalette(captionPalette(sub->palette()));
 
+    sub->installEventFilter(this);
+
     connect(sub, &QMdiSubWindow::windowStateChanged, this,
             [this, sub](Qt::WindowStates, Qt::WindowStates newState) {
                 if (newState & Qt::WindowMinimized) minimizeToIcon(sub);
@@ -117,6 +119,7 @@ void MainWindow::deleteGroup() {
         this, tr("Delete"), tr("Delete group '%1' and all its items?").arg(gw->title()));
     if (reply != QMessageBox::Yes) return;
 
+    m_normalGeometry.remove(sub);
     delete sub; // owns and deletes the GroupWindow child widget too
 }
 
@@ -198,6 +201,7 @@ void MainWindow::restoreFromIcon(QMdiSubWindow *sub) {
     // turn it straight back into a desktop icon.
     sub->setWindowState(sub->windowState() & ~Qt::WindowMinimized);
     sub->show();
+    if (m_normalGeometry.contains(sub)) sub->setGeometry(m_normalGeometry.value(sub));
     m_mdiArea->setActiveSubWindow(sub);
     arrangeMinimizedIcons();
 }
@@ -227,6 +231,15 @@ void MainWindow::arrangeMinimizedIcons() {
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_mdiArea->viewport() && event->type() == QEvent::Resize) {
         arrangeMinimizedIcons();
+    }
+
+    if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
+        if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
+            const bool collapsed = sub->isMinimized() || m_minimizedIcons.contains(sub);
+            if (!collapsed && sub->isVisible()) {
+                m_normalGeometry[sub] = sub->geometry();
+            }
+        }
     }
     return QMainWindow::eventFilter(watched, event);
 }
@@ -353,6 +366,7 @@ void MainWindow::load() {
 
         QMdiSubWindow *sub = addGroupWindow(group);
         sub->setGeometry(x, y, w, h);
+        m_normalGeometry[sub] = QRect(x, y, w, h);
         if (minimized) minimizeToIcon(sub);
     }
     settings.endArray();
@@ -378,10 +392,9 @@ void MainWindow::save() {
 
         settings.setArrayIndex(idx++);
         settings.setValue("title", gw->title());
-        // A minimized window's geometry() is the stub it collapsed to, so
-        // persist the size it will actually reopen at.
-        QRect geo = m_minimizedIcons.contains(sub) ? sub->normalGeometry() : sub->geometry();
-        if (!geo.isValid()) geo = sub->geometry();
+        // Never the stub a minimized window collapsed to: save the rect it
+        // will actually reopen at.
+        const QRect geo = m_normalGeometry.value(sub, sub->geometry());
         settings.setValue("x", geo.x());
         settings.setValue("y", geo.y());
         settings.setValue("w", geo.width());

@@ -57,4 +57,9 @@ private:
     // they were minimized.
     QHash<QMdiSubWindow *, MinimizedGroupIcon *> m_minimizedIcons;
     QList<QMdiSubWindow *> m_minimizedOrder;
+
+    // Each group's geometry while open. Qt collapses a minimized window to
+    // its stub and normalGeometry() does not survive hiding it, so the real
+    // rect has to be remembered as the window is moved and resized.
+    QHash<QMdiSubWindow *, QRect> m_normalGeometry;
 };
