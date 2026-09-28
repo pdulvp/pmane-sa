@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QStyle>
 #include <QTextStream>
 #include <QVBoxLayout>
@@ -23,8 +24,48 @@ bool isDosBoxConfig(const QString &path) {
     return path.endsWith(QLatin1String(".conf"), Qt::CaseInsensitive);
 }
 
+// A ScummVM game, identified by one of its data files. ScummVM is pointed at
+// the folder that holds it, not the file itself.
+bool isScummVmGame(const QString &path) {
+    return path.endsWith(QLatin1String(".trs"), Qt::CaseInsensitive);
+}
+
 bool isLaunchable(const QString &path) {
-    return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path);
+    return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path) ||
+           isScummVmGame(path);
+}
+
+// A .trs installer script may name its game, as a resource definition
+// followed by the string on the next line:
+//
+//   #define TRS_BANNER_TITLE            225
+//   //^f02Full Throttle
+//
+// The leading ^fNN is a font code, not part of the title. These are DOS-era
+// files: CRLF line endings and 8-bit Latin-1 text.
+QString readTrsBannerTitle(const QString &trsPath) {
+    QFile file(trsPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::Latin1);
+
+    bool titleIsNext = false;
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (titleIsNext) {
+            if (!line.startsWith(QLatin1String("//"))) return {};
+            QString value = line.mid(2).trimmed();
+            static const QRegularExpression fontCode(QStringLiteral("^\\^[A-Za-z]\\d*"));
+            value.remove(fontCode);
+            return value.trimmed();
+        }
+        if (line.startsWith(QLatin1String("#define")) &&
+            line.contains(QLatin1String("TRS_BANNER_TITLE"))) {
+            titleIsNext = true;
+        }
+    }
+    return {};
 }
 
 // The optional [ui] section a dosbox conf may carry, naming the entry and
@@ -125,6 +166,14 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
                 QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
             it.icon = loadIconFile(resolved, &it.legacyIcon);
         }
+    } else if (isScummVmGame(it.command)) {
+        // Prefer the title the .trs names itself, falling back to the folder
+        // holding it ("The Dig", not "DIG"). Never override a name the user
+        // typed in the properties dialog.
+        if (it.name.isEmpty() || it.name == QFileInfo(it.command).completeBaseName()) {
+            const QString banner = readTrsBannerTitle(it.command);
+            it.name = banner.isEmpty() ? QFileInfo(it.command).absoluteDir().dirName() : banner;
+        }
     } else if (it.icon.isNull()) {
         PeIconExtractor::Source source = PeIconExtractor::Source::None;
         it.icon = PeIconExtractor::extractIcon(it.command, &source);
@@ -133,9 +182,14 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
     if (it.icon.isNull() && isDosBoxConfig(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("dosbox"));
     }
+    if (it.icon.isNull() && isScummVmGame(it.command)) {
+        it.icon = QIcon::fromTheme(QStringLiteral("scummvm"));
+    }
     if (it.icon.isNull()) {
-        it.icon = QApplication::style()->standardIcon(
-            isDosBoxConfig(it.command) ? QStyle::SP_DriveHDIcon : QStyle::SP_ComputerIcon);
+        QStyle::StandardPixmap fallback = QStyle::SP_ComputerIcon;
+        if (isDosBoxConfig(it.command)) fallback = QStyle::SP_DriveHDIcon;
+        if (isScummVmGame(it.command)) fallback = QStyle::SP_DirIcon;
+        it.icon = QApplication::style()->standardIcon(fallback);
     }
     if (it.workingDir.isEmpty()) {
         it.workingDir = QFileInfo(it.command).absolutePath();
@@ -203,6 +257,15 @@ void GroupWindow::launch(const ProgramItem &item) {
                            QStringLiteral("_"), item.command};
         args += extraArgs;
         failureHint = tr("Could not launch '%1' with dosbox (the 'db' alias).").arg(item.command);
+    } else if (isScummVmGame(item.command)) {
+        // `scm` is a shell alias too, and it wants the folder holding the game
+        // data rather than the file itself.
+        program = QStringLiteral("bash");
+        args = QStringList{QStringLiteral("-ic"), QStringLiteral("scm -p \"$1\" \"${@:2}\""),
+                           QStringLiteral("_"), QFileInfo(item.command).absolutePath()};
+        args += extraArgs;
+        failureHint =
+            tr("Could not launch '%1' with ScummVM (the 'scm' alias).").arg(item.command);
     } else {
         program = QStringLiteral("wine");
         args = QStringList{item.command} + extraArgs;
