@@ -85,10 +85,15 @@ QIcon xpStyleIcon(const QIcon &source) {
 
     // Nearest-neighbour on the way up: it preserves the hard pixel edges of
     // the original artwork instead of pre-blurring them. The single smooth
-    // downscale at the end is what does the antialiasing.
+    // downscale at the end is what does the antialiasing. Artwork bigger than
+    // the working size is coming down rather than up, though -- a 256px icon
+    // the user asked to style -- and nearest-neighbour would drop every other
+    // pixel of it.
+    const int working = kArt * kSupersample;
     art = art.convertToFormat(QImage::Format_ARGB32)
-              .scaled(kArt * kSupersample, kArt * kSupersample, Qt::KeepAspectRatio,
-                      Qt::FastTransformation);
+              .scaled(working, working, Qt::KeepAspectRatio,
+                      art.width() > working ? Qt::SmoothTransformation
+                                            : Qt::FastTransformation);
 
     // Pull the right-hand edge in and shorten it: the eye reads the result
     // as a square tipped away from the viewer.

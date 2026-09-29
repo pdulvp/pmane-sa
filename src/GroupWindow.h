@@ -22,8 +22,10 @@ public:
     void insertProgramItem(const ProgramItem &item, int row);
     void newItemDialog() { showPropertiesDialog(-1); }
 
-    // Renders legacy (16-bit / .ico) icons in the Windows XP manner.
-    void setXpStyleIcons(bool enabled);
+    // Migration for desktops saved when XP icon styling was one switch for
+    // the whole Program Manager: what that switch actually restyled was the
+    // legacy-artwork items, and each item now carries the setting itself.
+    void adoptGlobalXpStyleIcons();
 
     // Drops this group's highlighted icon, so only the active group carries
     // a selection.
@@ -54,5 +56,4 @@ private:
     QString m_title;
     IconListWidget *m_list;
     QVector<ProgramItem> m_items;
-    bool m_xpStyleIcons = false;
 };

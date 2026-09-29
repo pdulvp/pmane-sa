@@ -59,9 +59,6 @@ void MainWindow::buildMenus() {
 
     QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
-    m_xpIconsAction = optionsMenu->addAction(tr("&XP Style Icons"));
-    m_xpIconsAction->setCheckable(true);
-    connect(m_xpIconsAction, &QAction::toggled, this, &MainWindow::applyXpStyleIcons);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
@@ -466,14 +463,6 @@ void MainWindow::applyTheme(const QString &themeName) {
     }
 }
 
-void MainWindow::applyXpStyleIcons(bool enabled) {
-    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
-        if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) {
-            group->setXpStyleIcons(enabled);
-        }
-    }
-}
-
 void MainWindow::chooseColors() {
     const QString previous = m_themeName;
     ThemeDialog dialog(m_themeName, this);
@@ -516,6 +505,12 @@ void MainWindow::load() {
     QSettings settings(path, QSettings::IniFormat);
     applyTheme(settings.value("theme", builtinThemes().first().name).toString());
 
+    // XP icon styling used to be one switch for the whole Program Manager.
+    // A desktop saved back then carries no per-item setting, so the switch is
+    // read one last time and handed to the items it used to restyle; saving
+    // the profile again writes them out individually and drops the key.
+    const bool globalXpIcons = settings.value("xpStyleIcons", false).toBool();
+
     // Where the Program Manager window itself was last left. saveGeometry
     // carries the screen and the maximized state, not just a rectangle.
     // Only honoured at startup: moving the window out from under someone
@@ -545,9 +540,11 @@ void MainWindow::load() {
             item.runner = settings.value("runner").toString();
             item.iconIndex = settings.value("iconIndex", -1).toInt();
             item.iconSource = settings.value("iconSource").toString();
+            item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
             group->addProgramItem(item);
         }
         settings.endArray();
+        if (globalXpIcons) group->adoptGlobalXpStyleIcons();
 
         QMdiSubWindow *sub = addGroupWindow(group);
         sub->setGeometry(x, y, w, h);
@@ -557,14 +554,6 @@ void MainWindow::load() {
     settings.endArray();
 
     if (groupCount == 0) createDefaultGroups();
-
-    // After the groups exist, so each one picks the setting up. Applied
-    // explicitly as well: when the setting is the same as the profile just
-    // closed, setChecked() emits nothing and the new groups would keep the
-    // default.
-    const bool xpIcons = settings.value("xpStyleIcons", false).toBool();
-    m_xpIconsAction->setChecked(xpIcons);
-    applyXpStyleIcons(xpIcons);
 }
 
 void MainWindow::save() {
@@ -575,7 +564,6 @@ void MainWindow::save() {
     settings.clear();
     settings.setValue("theme", m_themeName);
     settings.setValue("windowGeometry", saveGeometry());
-    settings.setValue("xpStyleIcons", m_xpIconsAction->isChecked());
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();
     settings.beginWriteArray("Groups");
@@ -613,6 +601,7 @@ void MainWindow::save() {
                     settings.setValue("iconSource", items[j].iconSource);
                 }
             }
+            if (items[j].xpStyleIcon) settings.setValue("xpStyleIcon", true);
         }
         settings.endArray();
     }

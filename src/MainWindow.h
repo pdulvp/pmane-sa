@@ -39,7 +39,6 @@ private slots:
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();
-    void applyXpStyleIcons(bool enabled);
     void about();
     void newProfile();
     void duplicateProfile();
@@ -74,7 +73,6 @@ private:
     // Keeps the one radio button beside the open profile exclusive.
     QActionGroup *m_profileGroup;
     QAction *m_saveOnExitAction;
-    QAction *m_xpIconsAction;
     QString m_themeName;
     ProfileManager m_profiles;
 

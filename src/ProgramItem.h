@@ -16,6 +16,11 @@ struct ProgramItem {
     QString runner;
     QIcon icon;            // Icon extracted from the executable
     bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork
+    // Whether this icon is drawn the Windows XP way: tipped into a shallow
+    // perspective and lifted off the desktop with a shadow. Per item, since
+    // a desktop usually mixes artwork that suits it with artwork that does
+    // not.
+    bool xpStyleIcon = false;
     // Which of the icons its file holds the item wears. An executable or an
     // .ico often carries several; -1 means whichever one the file leads with,
     // and anything else is a choice made in the properties dialog, which

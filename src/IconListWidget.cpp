@@ -169,7 +169,9 @@ QMimeData *IconListWidget::mimeData(const QList<QListWidgetItem *> &items) const
     for (const QListWidgetItem *item : items) {
         stream << item->data(IndexRole).toInt() << item->data(NameRole).toString()
                << item->data(CommandRole).toString() << item->data(ArgumentsRole).toString()
-               << item->data(WorkingDirRole).toString() << item->data(RunnerRole).toString();
+               << item->data(WorkingDirRole).toString() << item->data(RunnerRole).toString()
+               << item->data(IconIndexRole).toInt() << item->data(IconSourceRole).toString()
+               << item->data(XpStyleRole).toBool();
     }
 
     auto *mime = new QMimeData;
@@ -286,7 +288,8 @@ void IconListWidget::dropEvent(QDropEvent *event) {
             int sourceIndex;
             ProgramItem item;
             stream >> sourceIndex >> item.name >> item.command >> item.arguments >>
-                item.workingDir >> item.runner;
+                item.workingDir >> item.runner >> item.iconIndex >> item.iconSource >>
+                item.xpStyleIcon;
             if (stream.status() != QDataStream::Ok) break;
             items.append(item);
             sourceRows.append(sourceIndex);

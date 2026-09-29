@@ -162,9 +162,7 @@ void completeProgramItem(ProgramItem &it) {
         // it wears the icon the desktop gives its file type.
         if (it.icon.isNull()) it.icon = mimeIcon(it.command);
     } else if (it.icon.isNull()) {
-        PeIconExtractor::Source source = PeIconExtractor::Source::None;
-        it.icon = PeIconExtractor::extractIcon(it.command, &source);
-        it.legacyIcon = source == PeIconExtractor::Source::Ne;
+        it.icon = loadIconFile(it.command, -1, &it.legacyIcon);
         if (!it.icon.isNull()) it.iconSource = it.command;
     }
 

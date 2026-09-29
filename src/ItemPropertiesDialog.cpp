@@ -1,10 +1,12 @@
 #include "ItemPropertiesDialog.h"
 
 #include "CompatTools.h"
+#include "IconEffect.h"
 #include "IconPickerDialog.h"
 #include "ItemDetails.h"
 #include "PeIconExtractor.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -45,9 +47,15 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_iconPreview->setFixedSize(kPreviewSize, kPreviewSize);
     m_iconPreview->setAlignment(Qt::AlignCenter);
     auto *changeIconButton = new QPushButton(tr("Change Icon..."), this);
+    m_xpStyleCheck = new QCheckBox(tr("XP style"), this);
+    m_xpStyleCheck->setToolTip(tr("Tip the icon into a shallow perspective and lift it off "
+                                  "the desktop with a shadow, the way Windows XP drew its "
+                                  "own. Suits the flat artwork of 16-bit programs and .ico "
+                                  "files best."));
     auto *iconRow = new QHBoxLayout;
     iconRow->addWidget(m_iconPreview);
     iconRow->addWidget(changeIconButton);
+    iconRow->addWidget(m_xpStyleCheck);
     iconRow->addStretch();
 
     m_form = new QFormLayout;
@@ -70,6 +78,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 
     connect(commandBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseCommand);
     connect(changeIconButton, &QPushButton::clicked, this, &ItemPropertiesDialog::changeIcon);
+    connect(m_xpStyleCheck, &QCheckBox::toggled, this, &ItemPropertiesDialog::refreshIconPreview);
     connect(workDirBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseWorkingDir);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -84,6 +93,7 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_argsEdit->setText(item.arguments);
     m_workDirEdit->setText(item.workingDir);
     populateRunners(item.runner);
+    m_xpStyleCheck->setChecked(item.xpStyleIcon);
     updateRunnerVisibility();
     refreshIconPreview();
 }
@@ -97,9 +107,10 @@ void ItemPropertiesDialog::refreshIconPreview() {
     probe.command = m_commandEdit->text().trimmed();
     if (!probe.command.isEmpty()) completeProgramItem(probe);
 
-    m_iconPreview->setPixmap(probe.icon.isNull()
-                                 ? QPixmap()
-                                 : probe.icon.pixmap(kPreviewSize, kPreviewSize));
+    const QIcon shown =
+        m_xpStyleCheck->isChecked() ? xpStyleIcon(probe.icon) : probe.icon;
+    m_iconPreview->setPixmap(shown.isNull() ? QPixmap()
+                                            : shown.pixmap(kPreviewSize, kPreviewSize));
 }
 
 void ItemPropertiesDialog::changeIcon() {
@@ -172,6 +183,7 @@ ProgramItem ItemPropertiesDialog::item() const {
     it.arguments = m_argsEdit->text().trimmed();
     it.workingDir = m_workDirEdit->text().trimmed();
     it.runner = m_runnerCombo->currentData().toString();
+    it.xpStyleIcon = m_xpStyleCheck->isChecked();
     return it;
 }
 

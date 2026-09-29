@@ -3,6 +3,7 @@
 #include <QDialog>
 #include "ProgramItem.h"
 
+class QCheckBox;
 class QComboBox;
 class QFormLayout;
 class QLabel;
@@ -46,6 +47,7 @@ private:
     QLineEdit *m_workDirEdit;
     QComboBox *m_runnerCombo;
     QLabel *m_iconPreview;
+    QCheckBox *m_xpStyleCheck;
     QFormLayout *m_form;
     bool m_runnerRowShown = true;
     // The item being edited, carrying the fields the dialog does not show --

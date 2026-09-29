@@ -60,9 +60,8 @@ void GroupWindow::clearSelection() {
     m_list->setCurrentItem(nullptr);
 }
 
-void GroupWindow::setXpStyleIcons(bool enabled) {
-    if (m_xpStyleIcons == enabled) return;
-    m_xpStyleIcons = enabled;
+void GroupWindow::adoptGlobalXpStyleIcons() {
+    for (ProgramItem &it : m_items) it.xpStyleIcon = it.legacyIcon;
     rebuildList();
 }
 
@@ -70,8 +69,7 @@ void GroupWindow::rebuildList() {
     m_list->clear();
     for (int i = 0; i < m_items.size(); ++i) {
         const ProgramItem &it = m_items[i];
-        const QIcon shown =
-            (m_xpStyleIcons && it.legacyIcon) ? xpStyleIcon(it.icon) : it.icon;
+        const QIcon shown = it.xpStyleIcon ? xpStyleIcon(it.icon) : it.icon;
         auto *listItem = new QListWidgetItem(shown, it.name);
         listItem->setData(IconListWidget::IndexRole, i);
         listItem->setData(IconListWidget::NameRole, it.name);
@@ -79,6 +77,11 @@ void GroupWindow::rebuildList() {
         listItem->setData(IconListWidget::ArgumentsRole, it.arguments);
         listItem->setData(IconListWidget::WorkingDirRole, it.workingDir);
         listItem->setData(IconListWidget::RunnerRole, it.runner);
+        // So an item dragged to another group keeps the icon somebody picked
+        // for it, rather than being worked out again from its command.
+        listItem->setData(IconListWidget::IconIndexRole, it.iconIndex);
+        listItem->setData(IconListWidget::IconSourceRole, it.iconSource);
+        listItem->setData(IconListWidget::XpStyleRole, it.xpStyleIcon);
         m_list->addItem(listItem);
     }
     m_list->updateGridSize();
