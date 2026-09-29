@@ -6,6 +6,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include "MainWindow.h"
+#include "NoCloseBoxStyle.h"
 
 namespace {
 
@@ -38,6 +39,12 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("progman-linux");
     QApplication::setApplicationName("progman-linux");
+    // Program groups have no close box. The only captions this application
+    // draws itself are its group windows', so taking the box out at the
+    // style is enough -- and it reaches the buttons a maximized group hands
+    // up to the menu bar, which belong to the menu bar rather than to the
+    // group.
+    QApplication::setStyle(new NoCloseBoxStyle);
     ensureIconTheme();
 
     QCommandLineParser parser;

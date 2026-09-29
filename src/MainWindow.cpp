@@ -83,6 +83,18 @@ GroupWindow *MainWindow::activeGroup() const {
 
 QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     QMdiSubWindow *sub = m_mdiArea->addSubWindow(group);
+    // A group is never closed, only minimized to an icon: it leaves the
+    // desktop through File > Delete Group, which asks first. So the caption
+    // carries no close box, and the system menu's Close entry -- along with
+    // the shortcut that lives on it -- is greyed out to match.
+    if (QMenu *systemMenu = sub->systemMenu()) {
+        for (QAction *action : systemMenu->actions()) {
+            if (action->shortcut() == QKeySequence(QKeySequence::Close)) {
+                action->setEnabled(false);
+                action->setVisible(false);
+            }
+        }
+    }
     sub->setWindowTitle(group->title());
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
