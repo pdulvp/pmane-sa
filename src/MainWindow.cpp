@@ -3,6 +3,8 @@
 #include "DesktopArea.h"
 #include "GroupWindow.h"
 #include "MinimizedGroupIcon.h"
+#include "TitleBar.h"
+#include "WindowEdges.h"
 #include "Theme.h"
 #include "ThemeDialog.h"
 
@@ -17,12 +19,23 @@
 #include <QMdiSubWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMouseEvent>
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
 
 MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
+
+    // No window manager caption: the menu strip carries the title and the
+    // caption buttons itself, and the window keeps a band along its other
+    // three edges to be resized by.
+    setWindowFlag(Qt::FramelessWindowHint);
+    setContentsMargins(kResizeMargin, 0, kResizeMargin, kResizeMargin);
+    setMouseTracking(true);
+
+    m_titleBar = new TitleBar(this);
+    setMenuWidget(m_titleBar);
 
     m_mdiArea = new DesktopArea(this);
     m_mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
@@ -51,31 +64,33 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::buildMenus() {
-    QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
+    QMenuBar *bar = m_titleBar->menuBar();
+
+    QMenu *fileMenu = bar->addMenu(tr("&File"));
     fileMenu->addAction(tr("&New Program Group..."), this, &MainWindow::newGroup);
     fileMenu->addAction(tr("New &Item..."), this, &MainWindow::newItem);
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
 
-    QMenu *insertMenu = menuBar()->addMenu(tr("&Insert"));
+    QMenu *insertMenu = bar->addMenu(tr("&Insert"));
     insertMenu->addAction(tr("&Application..."), this, &MainWindow::insertApplication);
 
-    QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
+    QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
     m_saveOnExitAction->setChecked(true);
 
-    m_profileMenu = menuBar()->addMenu(tr("&Profiles"));
+    m_profileMenu = bar->addMenu(tr("&Profiles"));
     m_profileGroup = new QActionGroup(this);
     m_profileGroup->setExclusive(true);
 
-    m_windowMenu = menuBar()->addMenu(tr("&Window"));
+    m_windowMenu = bar->addMenu(tr("&Window"));
     connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
 
-    QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
+    QMenu *helpMenu = bar->addMenu(tr("&Help"));
     helpMenu->addAction(tr("&About Program Manager..."), this, &MainWindow::about);
 }
 
@@ -510,6 +525,30 @@ void MainWindow::about() {
         this, tr("About Program Manager"),
         tr("Program Manager for Linux\n\n"
            "A Progman-style launcher for Windows programs, run through Wine."));
+}
+
+void MainWindow::changeEvent(QEvent *event) {
+    if (event->type() == QEvent::WindowStateChange) {
+        // A maximized window has no edges of its own to drag, so the band
+        // that offers them goes away along with them.
+        const int margin = isMaximized() ? 0 : kResizeMargin;
+        setContentsMargins(margin, 0, margin, margin);
+    }
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event) {
+    setCursor(cursorForWindowEdges(windowEdgesAt(this, event->globalPosition().toPoint())));
+    QMainWindow::mouseMoveEvent(event);
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton &&
+        startWindowResize(this, windowEdgesAt(this, event->globalPosition().toPoint()))) {
+        event->accept();
+        return;
+    }
+    QMainWindow::mousePressEvent(event);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

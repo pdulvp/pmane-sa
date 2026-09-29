@@ -12,6 +12,7 @@ class QMenu;
 class DesktopArea;
 class GroupWindow;
 class MinimizedGroupIcon;
+class TitleBar;
 
 // The main "Program Manager" window: an MDI desktop holding Program
 // Group windows, with progman.ini-style persistence.
@@ -31,6 +32,11 @@ public slots:
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
+    // The window draws its own frame, so the band along its edges is where
+    // a resize starts and what the pointer reports.
+    void changeEvent(QEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
 private slots:
     void newGroup();
@@ -76,6 +82,8 @@ private:
     // Keeps the one radio button beside the open profile exclusive.
     QActionGroup *m_profileGroup;
     QAction *m_saveOnExitAction;
+    // The menu bar, the window title and the caption buttons in one strip.
+    TitleBar *m_titleBar;
     QString m_themeName;
     ProfileManager m_profiles;
 
