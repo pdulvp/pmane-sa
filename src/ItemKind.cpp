@@ -1,5 +1,6 @@
 #include "ItemKind.h"
 
+#include <QFileInfo>
 #include <QStringList>
 
 bool isWindowsExecutable(const QString &path) {
@@ -26,6 +27,12 @@ bool isRetroArchRom(const QString &path) {
     return false;
 }
 
+bool isFolder(const QString &path) {
+    const QFileInfo info(path);
+    if (info.exists()) return info.isDir();
+    return info.suffix().isEmpty();
+}
+
 bool isDesktopEntry(const QString &path) {
     return path.endsWith(QLatin1String(".desktop"), Qt::CaseInsensitive);
 }
@@ -43,5 +50,5 @@ bool isDocument(const QString &path) {
 
 bool isLaunchable(const QString &path) {
     return isWindowsExecutable(path) || isDosBoxConfig(path) || isScummVmGame(path) ||
-           isRetroArchRom(path) || isDesktopEntry(path) || isDocument(path);
+           isRetroArchRom(path) || isDesktopEntry(path) || isDocument(path) || isFolder(path);
 }

@@ -38,10 +38,15 @@ signals:
     // A drag that started and ended in this same group: move the rows rather
     // than copying them across.
     void programItemsReordered(const QVector<int> &sourceRows, int row);
+    // Delete pressed with an icon picked out, carrying the same item index
+    // the context menu works with. The group asks before acting on it, so
+    // the key never loses an item outright.
+    void deleteRequested(int index);
 
 protected:
     int dropRow(const QPoint &pos) const;
 
+    void keyPressEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;

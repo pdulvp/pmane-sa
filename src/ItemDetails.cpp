@@ -175,6 +175,12 @@ void completeProgramItem(ProgramItem &it) {
         if (it.icon.isNull()) it.icon = desktopEntryIcon(entry.icon, &it.legacyIcon);
         // Where the application asks to be started, if it asks at all.
         if (it.workingDir.isEmpty()) it.workingDir = entry.path;
+    } else if (isFolder(it.command)) {
+        // The folder's own name, whatever it looks like: a drop would have
+        // handed us "photos" for a folder called "photos.2024".
+        if (nameIsOurs(it)) it.name = QDir(it.command).dirName();
+        if (it.icon.isNull()) it.icon = QIcon::fromTheme(QStringLiteral("folder"));
+        if (it.workingDir.isEmpty()) it.workingDir = it.command;
     } else if (isDocument(it.command)) {
         // Nothing to extract from a document, and nothing legacy to restyle:
         // it wears the icon the desktop gives its file type.
@@ -205,6 +211,7 @@ void completeProgramItem(ProgramItem &it) {
         if (isRetroArchRom(it.command)) fallback = QStyle::SP_DriveFDIcon;
         if (isDocument(it.command)) fallback = QStyle::SP_FileIcon;
         if (isDesktopEntry(it.command)) fallback = QStyle::SP_FileIcon;
+        if (isFolder(it.command)) fallback = QStyle::SP_DirIcon;
         it.icon = QApplication::style()->standardIcon(fallback);
     }
 

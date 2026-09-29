@@ -6,6 +6,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFontMetrics>
+#include <QKeyEvent>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -241,6 +242,20 @@ int IconListWidget::dropRow(const QPoint &pos) const {
         insertAt = i + 1;
     }
     return insertAt;
+}
+
+void IconListWidget::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Delete && !event->modifiers()) {
+        // Only an icon that is actually picked out, not merely the one the
+        // focus rectangle happens to sit on.
+        QListWidgetItem *current = currentItem();
+        if (current && current->isSelected()) {
+            emit deleteRequested(current->data(IndexRole).toInt());
+            event->accept();
+            return;
+        }
+    }
+    QListWidget::keyPressEvent(event);
 }
 
 void IconListWidget::mousePressEvent(QMouseEvent *event) {

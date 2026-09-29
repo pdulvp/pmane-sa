@@ -32,6 +32,7 @@ GroupWindow::GroupWindow(const QString &title, QWidget *parent)
             &GroupWindow::onProgramItemsReordered);
     connect(m_list, &IconListWidget::programItemsMovedOut, this,
             &GroupWindow::onProgramItemsMovedOut);
+    connect(m_list, &IconListWidget::deleteRequested, this, &GroupWindow::deleteItem);
     connect(m_list, &QListWidget::customContextMenuRequested, this,
             &GroupWindow::onContextMenuRequested);
 }
@@ -100,7 +101,8 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
 void GroupWindow::launch(const ProgramItem &item) {
     const QString error = launchProgramItem(item);
     if (error.isEmpty()) return;
-    QMessageBox::warning(this, isDocument(item.command) ? tr("Open") : tr("Run"), error);
+    const bool opens = isDocument(item.command) || isFolder(item.command);
+    QMessageBox::warning(this, opens ? tr("Open") : tr("Run"), error);
 }
 
 void GroupWindow::onFilesDropped(const QStringList &paths) {
@@ -109,7 +111,8 @@ void GroupWindow::onFilesDropped(const QStringList &paths) {
         ProgramItem item;
         item.name = QFileInfo(path).completeBaseName();
         item.command = path;
-        item.workingDir = QFileInfo(path).absolutePath();
+        // The working directory is left to completeProgramItem(): beside the
+        // file for most items, but a folder item works inside itself.
         addProgramItem(item);
     }
 }
@@ -191,8 +194,9 @@ void GroupWindow::onContextMenuRequested(const QPoint &pos) {
 
     if (listItem) {
         int idx = indexOfListItem(listItem);
-        QAction *runAction =
-            menu.addAction(isDocument(m_items[idx].command) ? tr("Open") : tr("Run"));
+        const QString &command = m_items[idx].command;
+        QAction *runAction = menu.addAction(
+            (isDocument(command) || isFolder(command)) ? tr("Open") : tr("Run"));
         QAction *propsAction = menu.addAction(tr("Properties..."));
         menu.addSeparator();
         QAction *deleteAction = menu.addAction(tr("Delete"));

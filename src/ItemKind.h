@@ -6,7 +6,8 @@
 //
 // The classification is by file name alone, never by opening the file:
 // groups routinely hold paths on volumes that are not mounted when the
-// group is read back in, and those items still have to be listed.
+// group is read back in, and those items still have to be listed. Folders
+// are the one exception, having no extension to be told apart by.
 bool isWindowsExecutable(const QString &path);
 bool isDosBoxConfig(const QString &path);
 // A ScummVM game, identified by one of its data files. ScummVM is pointed
@@ -17,6 +18,12 @@ bool isRetroArchRom(const QString &path);
 // A freedesktop application launcher, as the desktop's own menus are made
 // of: it names the program to run rather than being one.
 bool isDesktopEntry(const QString &path);
+
+// A folder, opened in the file manager. This is the one kind that looks at
+// the file system, there being no extension to go by -- and when the volume
+// it lives on is not mounted, a path with nothing that looks like a file
+// extension is taken for one anyway.
+bool isFolder(const QString &path);
 
 // A document rather than a program: opened with whatever the desktop has
 // registered for it instead of being run.

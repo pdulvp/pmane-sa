@@ -148,6 +148,14 @@ Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &ex
 } // namespace
 
 QString launchProgramItem(const ProgramItem &item) {
+    if (isFolder(item.command)) {
+        // Handed to the file manager the desktop has registered, the same
+        // way a document goes to its own application.
+        if (QDesktopServices::openUrl(QUrl::fromLocalFile(item.command))) return {};
+        return tr("Could not open '%1'. No file manager is registered for folders.")
+            .arg(item.command);
+    }
+
     if (isDocument(item.command)) {
         // Opened by whatever the desktop has registered for the type, which
         // is the one launcher here that is not a command of our own -- so
