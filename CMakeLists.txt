@@ -42,8 +42,8 @@ add_executable(progman-linux
     src/ItemPropertiesDialog.h
     src/MinimizedGroupIcon.cpp
     src/MinimizedGroupIcon.h
-    src/NoCloseBoxStyle.cpp
-    src/NoCloseBoxStyle.h
+    src/GroupCaptionStyle.cpp
+    src/GroupCaptionStyle.h
     src/IconEffect.cpp
     src/IconEffect.h
     src/Theme.cpp

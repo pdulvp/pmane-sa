@@ -220,6 +220,13 @@ void MainWindow::deleteGroup() {
 
 void MainWindow::updateWindowMenu() {
     m_windowMenu->clear();
+
+    // The way back from a maximized window, whose caption carries no buttons
+    // while it fills the screen.
+    QAction *restore = m_windowMenu->addAction(tr("&Restore"), this, &QWidget::showNormal);
+    restore->setEnabled(isMaximized());
+    m_windowMenu->addSeparator();
+
     m_windowMenu->addAction(tr("&Cascade"), m_mdiArea, &QMdiArea::cascadeSubWindows);
     m_windowMenu->addAction(tr("&Tile"), m_mdiArea, &QMdiArea::tileSubWindows);
     m_windowMenu->addSeparator();
@@ -491,6 +498,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             // Deactivate the group too, so no caption stays highlighted when
             // the click landed on bare desktop.
             m_mdiArea->setActiveSubWindow(nullptr);
+        }
+    }
+
+    if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
+        // A group's caption has no maximize box; double clicking it, which is
+        // the other way to the same thing, does nothing either.
+        if (event->type() == QEvent::MouseButtonDblClick) return true;
+        // And should a group be maximized by some other route -- the system
+        // menu still on a right click -- it is put straight back.
+        if (event->type() == QEvent::WindowStateChange && sub->isMaximized()) {
+            sub->showNormal();
+            return true;
         }
     }
 

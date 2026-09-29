@@ -6,7 +6,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include "MainWindow.h"
-#include "NoCloseBoxStyle.h"
+#include "GroupCaptionStyle.h"
 
 namespace {
 
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     // style is enough -- and it reaches the buttons a maximized group hands
     // up to the menu bar, which belong to the menu bar rather than to the
     // group.
-    QApplication::setStyle(new NoCloseBoxStyle);
+    QApplication::setStyle(new GroupCaptionStyle);
     ensureIconTheme();
 
     QCommandLineParser parser;

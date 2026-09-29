@@ -6,7 +6,7 @@
 
 Qt::Edges windowEdgesAt(const QWidget *window, const QPoint &globalPos) {
     if (!window) return {};
-    if (window->isMaximized() || window->isFullScreen()) return {};
+    if (windowFillsScreen(window)) return {};
 
     const QRect frame = window->frameGeometry();
     if (!frame.adjusted(-kResizeMargin, -kResizeMargin, kResizeMargin, kResizeMargin)
@@ -22,8 +22,12 @@ Qt::Edges windowEdgesAt(const QWidget *window, const QPoint &globalPos) {
     return edges;
 }
 
+bool windowFillsScreen(const QWidget *window) {
+    return window && (window->isMaximized() || window->isFullScreen());
+}
+
 bool windowCanBeMoved(const QWidget *window) {
-    return window && !window->isMaximized() && !window->isFullScreen();
+    return window && !windowFillsScreen(window);
 }
 
 Qt::CursorShape cursorForWindowEdges(Qt::Edges edges) {

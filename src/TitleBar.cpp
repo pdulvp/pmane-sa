@@ -161,7 +161,11 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
 }
 
 void TitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+    // A double click maximizes the window, but never brings it back out
+    // again: with the window filling the screen the caption is a long strip
+    // of nothing to click on, and a stray double click there should not
+    // shrink it. The restore button is the way back.
+    if (event->button() == Qt::LeftButton && !windowFillsScreen(window())) {
         toggleMaximized();
         event->accept();
         return;
@@ -191,6 +195,15 @@ void TitleBar::updateMaximizeButton() {
         maximized ? QStyle::SP_TitleBarNormalButton : QStyle::SP_TitleBarMaxButton, nullptr,
         this));
     m_maximizeButton->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
+
+    // A window filling the screen carries no caption buttons at all: there is
+    // nothing to drag it by up there either, so the strip is left to the
+    // menus, the title and the clock. Window > Restore brings it back, and
+    // File > Exit closes it.
+    const bool showButtons = !windowFillsScreen(window());
+    m_minimizeButton->setVisible(showButtons);
+    m_maximizeButton->setVisible(showButtons);
+    m_closeButton->setVisible(showButtons);
 }
 
 bool TitleBar::eventFilter(QObject *watched, QEvent *event) {
