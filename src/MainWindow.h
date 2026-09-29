@@ -35,6 +35,9 @@ protected:
 private slots:
     void newGroup();
     void newItem();
+    // Adds one of the applications installed on the machine to the active
+    // group, picked from a list of them.
+    void insertApplication();
     void deleteGroup();
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);

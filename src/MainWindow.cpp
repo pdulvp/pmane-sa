@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ApplicationPickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
 #include "MinimizedGroupIcon.h"
@@ -56,6 +57,9 @@ void MainWindow::buildMenus() {
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
+
+    QMenu *insertMenu = menuBar()->addMenu(tr("&Insert"));
+    insertMenu->addAction(tr("&Application..."), this, &MainWindow::insertApplication);
 
     QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
@@ -129,6 +133,19 @@ void MainWindow::newItem() {
         return;
     }
     gw->newItemDialog();
+}
+
+void MainWindow::insertApplication() {
+    GroupWindow *gw = activeGroup();
+    if (!gw) {
+        QMessageBox::information(this, tr("Insert Application"),
+                                  tr("Select or open a Program Group first."));
+        return;
+    }
+
+    ApplicationPickerDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    for (const ProgramItem &item : dialog.chosenItems()) gw->addProgramItem(item);
 }
 
 void MainWindow::deleteGroup() {

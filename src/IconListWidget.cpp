@@ -11,6 +11,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
+#include <QTextLayout>
+#include <QTextOption>
 #include <QUrl>
 
 #include <algorithm>
@@ -20,8 +22,13 @@ const char *const kProgramItemMimeType = "application/x-progman-item";
 
 constexpr int kTextPadding = 16;
 constexpr int kIconPadding = 24;
-// A single very long name wraps instead of stretching the whole grid.
-constexpr int kMaxCellWidth = 180;
+// A long name wraps instead of stretching the whole grid: it runs to three
+// icons' width before it breaks, and to three lines before what is left of
+// it is cut short with an ellipsis.
+constexpr int kMaxLabelIconWidths = 3;
+constexpr int kMaxLabelLines = 3;
+// How far the selection highlight reaches past the label, on each side.
+constexpr int kHighlightPadding = 2;
 constexpr int kTopPadding = 6;
 constexpr int kIconTextGap = 4;
 // Dead space between cells, so a click that lands between icons hits no item.
@@ -30,6 +37,41 @@ constexpr int kCellGap = 8;
 // covers the spare pixel an XP-styled icon carries for its shadow; anything
 // larger is real artwork and gets scaled down instead.
 constexpr int kNativeDrawSlack = 4;
+
+// Breaks a name into the lines it is drawn on: wrapped at `width`, at most
+// `maxLines` of them, the last cut short with an ellipsis when the name runs
+// on past it. The grid measures labels with this and the delegate draws them
+// with it, so what is reserved is what appears.
+QStringList labelLines(const QString &text, const QFont &font, int width, int maxLines) {
+    if (text.isEmpty() || width <= 0 || maxLines <= 0) return {};
+
+    const QFontMetrics metrics(font);
+    QStringList lines;
+
+    QTextOption option;
+    // A single word longer than the cell has to break somewhere.
+    option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+
+    QTextLayout layout(text, font);
+    layout.setTextOption(option);
+    layout.beginLayout();
+    for (;;) {
+        QTextLine line = layout.createLine();
+        if (!line.isValid()) break;
+        line.setLineWidth(width);
+
+        if (lines.size() == maxLines - 1) {
+            // The last line there is room for: everything still to come goes
+            // on it, shortened to fit.
+            lines.append(metrics.elidedText(text.mid(line.textStart()).trimmed(),
+                                            Qt::ElideRight, width));
+            break;
+        }
+        lines.append(text.mid(line.textStart(), line.textLength()).trimmed());
+    }
+    layout.endLayout();
+    return lines;
+}
 
 // Draws an icon centred over its label, with the selection highlight
 // hugging the text the way Progman did, rather than filling the cell.
@@ -80,19 +122,40 @@ public:
         }
 
         const int textTop = iconRect.bottom() + kIconTextGap;
-        const QRect textArea(cell.left() + 2, textTop, cell.width() - 4,
-                             cell.bottom() - textTop);
-        const int flags = Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap;
-        const QRect textBounds =
-            painter->fontMetrics().boundingRect(textArea, flags, text);
+        // The same width the grid measured the label at, so a name takes the
+        // number of lines the cell was built for.
+        const int textWidth = cell.width() - kTextPadding;
+        const QStringList lines = labelLines(text, opt.font, textWidth, kMaxLabelLines);
+
+        const QFontMetrics metrics(opt.font);
+        // Every line is placed by hand rather than centred by drawText, so
+        // the highlight below can be measured against exactly where the text
+        // lands: letting the painter do the centring leaves the two a
+        // rounded pixel apart, and the box looks pushed to one side.
+        const auto lineLeft = [&](const QString &line) {
+            return cell.left() + (cell.width() - metrics.horizontalAdvance(line)) / 2;
+        };
+
+        int widest = 0;
+        for (const QString &line : lines) {
+            widest = std::max(widest, metrics.horizontalAdvance(line));
+        }
+        const QRect textBounds(cell.left() + (cell.width() - widest) / 2, textTop, widest,
+                               lines.size() * metrics.height());
 
         if (selected) {
-            painter->fillRect(textBounds.adjusted(-2, -1, 2, 1), opt.palette.highlight());
+            painter->fillRect(textBounds.adjusted(-kHighlightPadding, -1, kHighlightPadding, 1),
+                              opt.palette.highlight());
             painter->setPen(opt.palette.highlightedText().color());
         } else {
             painter->setPen(opt.palette.text().color());
         }
-        painter->drawText(textArea, flags, text);
+        for (int i = 0; i < lines.size(); ++i) {
+            const QRect lineRect(lineLeft(lines[i]), textTop + i * metrics.height(),
+                                 metrics.horizontalAdvance(lines[i]), metrics.height());
+            painter->drawText(lineRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
+                              lines[i]);
+        }
 
         painter->restore();
     }
@@ -129,22 +192,20 @@ void IconListWidget::updateGridSize() {
     }
 
     int cellWidth = std::max(widestText + kTextPadding, iconSize().width() + kIconPadding);
-    cellWidth = std::min(cellWidth, kMaxCellWidth);
+    cellWidth = std::min(cellWidth, iconSize().width() * kMaxLabelIconWidths + kTextPadding);
 
     // Reserve only as many label lines as some name actually needs, rather
-    // than always two: unused lines would be dead space that still counts as
-    // part of the item and keeps it selected when clicked.
+    // than always three: unused lines would be dead space that still counts
+    // as part of the item and keeps it selected when clicked.
     const int textWidth = cellWidth - kTextPadding;
-    int labelLines = 1;
+    int lineCount = 1;
     for (int i = 0; i < count(); ++i) {
-        const QRect bounds =
-            metrics.boundingRect(QRect(0, 0, textWidth, 0),
-                                 Qt::AlignHCenter | Qt::TextWordWrap, item(i)->text());
-        labelLines = std::max(labelLines, bounds.height() / std::max(1, metrics.height()));
+        lineCount = std::max<int>(
+            lineCount, labelLines(item(i)->text(), font(), textWidth, kMaxLabelLines).size());
     }
 
     const int contentHeight =
-        kTopPadding + iconSize().height() + kIconTextGap + labelLines * metrics.height();
+        kTopPadding + iconSize().height() + kIconTextGap + lineCount * metrics.height();
 
     // The grid is a cell bigger than the item in each direction, so the strip
     // between neighbours belongs to no item and a click there deselects.

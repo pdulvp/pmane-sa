@@ -1,8 +1,12 @@
 #include "DesktopEntry.h"
 
+#include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QLocale>
+#include <QMap>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTextStream>
 
@@ -75,10 +79,47 @@ DesktopEntry readDesktopEntry(const QString &path) {
                 entry.path = value;
             } else if (key == QLatin1String("Terminal")) {
                 entry.terminal = value.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
+            } else if (key == QLatin1String("Type")) {
+                entry.type = value;
+            } else if (key == QLatin1String("NoDisplay") || key == QLatin1String("Hidden")) {
+                if (value.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0) {
+                    entry.noDisplay = true;
+                }
             }
         }
     }
     return entry;
+}
+
+QStringList installedDesktopEntries() {
+    // The desktop-file id is the path below the applications directory with
+    // the separators turned into dashes, and the first directory that has one
+    // owns it -- which is how a user's own copy shadows the system's.
+    QMap<QString, QString> byId;
+    const QStringList dirs =
+        QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
+    for (const QString &dir : dirs) {
+        QDirIterator it(dir, {QStringLiteral("*.desktop")}, QDir::Files,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString path = it.next();
+            const QString id =
+                QDir(dir).relativeFilePath(path).replace(QLatin1Char('/'), QLatin1Char('-'));
+            if (!byId.contains(id)) byId.insert(id, path);
+        }
+    }
+
+    QStringList paths;
+    for (const QString &path : byId) {
+        const DesktopEntry entry = readDesktopEntry(path);
+        // Only the applications a menu would show: not the Link and Directory
+        // entries, not the handlers kept out of sight, and nothing that names
+        // no program to run.
+        if (!entry.isValid() || entry.noDisplay) continue;
+        if (!entry.type.isEmpty() && entry.type != QLatin1String("Application")) continue;
+        paths.append(path);
+    }
+    return paths;
 }
 
 QStringList desktopEntryCommand(const DesktopEntry &entry) {
