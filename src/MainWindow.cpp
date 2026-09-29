@@ -1,16 +1,18 @@
 #include "MainWindow.h"
+#include "DesktopArea.h"
 #include "GroupWindow.h"
 #include "MinimizedGroupIcon.h"
 #include "Theme.h"
 #include "ThemeDialog.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QCloseEvent>
 #include <QDir>
 #include <QFile>
 #include <QInputDialog>
+#include <QKeySequence>
 #include <QLineEdit>
-#include <QMdiArea>
 #include <QMdiSubWindow>
 #include <QMenu>
 #include <QMenuBar>
@@ -18,17 +20,22 @@
 #include <QSettings>
 #include <QStandardPaths>
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle(tr("Program Manager"));
+MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
 
-    m_mdiArea = new QMdiArea(this);
+    m_mdiArea = new DesktopArea(this);
     m_mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
     setCentralWidget(m_mdiArea);
 
     buildMenus();
+    // --profile on the command line wins over whatever was open last.
+    if (!startupProfile.isEmpty() && m_profiles.contains(startupProfile)) {
+        m_profiles.setCurrent(startupProfile);
+    }
     applyTheme(builtinThemes().first().name);
     load();
+    rebuildProfileMenu();
+    updateWindowTitle();
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
@@ -59,6 +66,10 @@ void MainWindow::buildMenus() {
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
     m_saveOnExitAction->setChecked(true);
+
+    m_profileMenu = menuBar()->addMenu(tr("&Profiles"));
+    m_profileGroup = new QActionGroup(this);
+    m_profileGroup->setExclusive(true);
 
     m_windowMenu = menuBar()->addMenu(tr("&Window"));
     connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
@@ -147,6 +158,146 @@ void MainWindow::updateWindowMenu() {
             sub->showNormal();
         });
     }
+}
+
+void MainWindow::rebuildProfileMenu() {
+    // The menu owns the per-profile actions, so clearing it deletes them and
+    // they fall out of the exclusive group on the way.
+    m_profileMenu->clear();
+
+    const QStringList names = m_profiles.names();
+    for (int i = 0; i < names.size(); ++i) {
+        const QString &name = names[i];
+        QAction *act = m_profileMenu->addAction(name);
+        act->setCheckable(true);
+        act->setChecked(name == m_profiles.current());
+        // The first nine are a keystroke away, in menu order.
+        if (i < 9) act->setShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_1 + i)));
+        m_profileGroup->addAction(act);
+        connect(act, &QAction::triggered, this, [this, name]() { switchToProfile(name); });
+    }
+
+    m_profileMenu->addSeparator();
+    m_profileMenu->addAction(tr("&New Profile..."), this, &MainWindow::newProfile);
+    m_profileMenu->addAction(tr("D&uplicate Profile..."), this, &MainWindow::duplicateProfile);
+    m_profileMenu->addAction(tr("&Rename Profile..."), this, &MainWindow::renameProfile);
+    QAction *del = m_profileMenu->addAction(tr("&Delete Profile..."), this,
+                                            &MainWindow::deleteProfile);
+    // There is always one profile to fall back on, so the last cannot go.
+    del->setEnabled(names.size() > 1);
+    m_profileMenu->addSeparator();
+    m_profileMenu->addAction(tr("&Save Profile Now"), QKeySequence::Save, this,
+                             &MainWindow::save);
+}
+
+void MainWindow::updateWindowTitle() {
+    setWindowTitle(tr("Program Manager - %1").arg(m_profiles.current()));
+    m_mdiArea->setProfileName(m_profiles.current());
+}
+
+QString MainWindow::askProfileName(const QString &windowTitle, const QString &initial) {
+    QString suggestion = initial;
+    forever {
+        bool ok = false;
+        const QString name =
+            QInputDialog::getText(this, windowTitle, tr("Profile name:"), QLineEdit::Normal,
+                                  suggestion, &ok)
+                .trimmed();
+        if (!ok || name.isEmpty()) return {};
+        // Leaving a rename dialog on the name it opened with is not a clash.
+        if (!m_profiles.contains(name) || name == initial) return name;
+
+        QMessageBox::warning(this, windowTitle,
+                             tr("A profile named '%1' already exists.").arg(name));
+        suggestion = name;
+    }
+}
+
+void MainWindow::clearDesktop() {
+    for (MinimizedGroupIcon *icon : m_minimizedIcons) delete icon;
+    m_minimizedIcons.clear();
+    m_minimizedOrder.clear();
+
+    // Deleted rather than closeAllSubWindows()'d: a close is only a request,
+    // and the windows would still be alive when the next profile's groups
+    // opened on top of them.
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) delete sub;
+    // After the deletions, so a resize on the way out cannot file geometry
+    // against a window that is already gone.
+    m_normalGeometry.clear();
+}
+
+void MainWindow::switchToProfile(const QString &name) {
+    if (!m_profiles.contains(name) || name == m_profiles.current()) {
+        rebuildProfileMenu(); // re-check the radio button a stray click moved
+        return;
+    }
+
+    save();
+    clearDesktop();
+    m_profiles.setCurrent(name);
+    load();
+    rebuildProfileMenu();
+    updateWindowTitle();
+}
+
+void MainWindow::newProfile() {
+    const QString name = askProfileName(tr("New Profile"), QString());
+    if (name.isEmpty() || !m_profiles.create(name)) return;
+
+    save();
+    clearDesktop();
+    m_profiles.setCurrent(name);
+    // Nothing saved under this name yet, so load() lays out a fresh desktop.
+    load();
+    rebuildProfileMenu();
+    updateWindowTitle();
+}
+
+void MainWindow::duplicateProfile() {
+    const QString source = m_profiles.current();
+    // Copied from disk, so what is on screen has to be written out first.
+    save();
+
+    const QString name = askProfileName(tr("Duplicate Profile"),
+                                        tr("%1 (copy)").arg(source));
+    if (name.isEmpty() || !m_profiles.duplicate(source, name)) return;
+
+    m_profiles.setCurrent(name);
+    rebuildProfileMenu();
+    updateWindowTitle();
+}
+
+void MainWindow::renameProfile() {
+    const QString from = m_profiles.current();
+    const QString to = askProfileName(tr("Rename Profile"), from);
+    if (to.isEmpty() || to == from) return;
+    if (!m_profiles.rename(from, to)) return;
+
+    rebuildProfileMenu();
+    updateWindowTitle();
+}
+
+void MainWindow::deleteProfile() {
+    const QString name = m_profiles.current();
+    if (m_profiles.names().size() <= 1) {
+        QMessageBox::information(this, tr("Delete Profile"),
+                                 tr("'%1' is the only profile; there has to be one.").arg(name));
+        return;
+    }
+
+    const auto reply = QMessageBox::question(
+        this, tr("Delete Profile"),
+        tr("Delete profile '%1' and all the groups in it?").arg(name));
+    if (reply != QMessageBox::Yes) return;
+
+    if (!m_profiles.remove(name)) return;
+
+    // remove() already moved current on to a surviving profile.
+    clearDesktop();
+    load();
+    rebuildProfileMenu();
+    updateWindowTitle();
 }
 
 QPalette MainWindow::captionPalette(const QPalette &base) const {
@@ -348,31 +499,29 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     event->accept();
 }
 
-QString MainWindow::configFilePath() const {
-    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    QDir().mkpath(dir);
-    return dir + "/groups.ini";
-}
-
 void MainWindow::createDefaultGroups() {
     addGroupWindow(new GroupWindow(tr("Main")))->setGeometry(20, 20, 320, 240);
     addGroupWindow(new GroupWindow(tr("StartUp")))->setGeometry(360, 20, 320, 240);
 }
 
 void MainWindow::load() {
-    QString path = configFilePath();
-    if (!QFile::exists(path)) {
+    const QString path = m_profiles.filePath(m_profiles.current());
+    if (path.isEmpty() || !QFile::exists(path)) {
+        // A profile that has never been saved starts on the stock desktop.
+        applyTheme(builtinThemes().first().name);
         createDefaultGroups();
         return;
     }
 
     QSettings settings(path, QSettings::IniFormat);
-    applyTheme(settings.value("theme", m_themeName).toString());
+    applyTheme(settings.value("theme", builtinThemes().first().name).toString());
 
     // Where the Program Manager window itself was last left. saveGeometry
     // carries the screen and the maximized state, not just a rectangle.
+    // Only honoured at startup: moving the window out from under someone
+    // mid-session, just because they switched profile, would be rude.
     const QByteArray windowGeometry = settings.value("windowGeometry").toByteArray();
-    if (!windowGeometry.isEmpty()) restoreGeometry(windowGeometry);
+    if (!windowGeometry.isEmpty() && !isVisible()) restoreGeometry(windowGeometry);
 
     int groupCount = settings.beginReadArray("Groups");
     for (int i = 0; i < groupCount; ++i) {
@@ -406,12 +555,20 @@ void MainWindow::load() {
 
     if (groupCount == 0) createDefaultGroups();
 
-    // After the groups exist, so each one picks the setting up.
-    m_xpIconsAction->setChecked(settings.value("xpStyleIcons", false).toBool());
+    // After the groups exist, so each one picks the setting up. Applied
+    // explicitly as well: when the setting is the same as the profile just
+    // closed, setChecked() emits nothing and the new groups would keep the
+    // default.
+    const bool xpIcons = settings.value("xpStyleIcons", false).toBool();
+    m_xpIconsAction->setChecked(xpIcons);
+    applyXpStyleIcons(xpIcons);
 }
 
 void MainWindow::save() {
-    QSettings settings(configFilePath(), QSettings::IniFormat);
+    const QString path = m_profiles.filePath(m_profiles.current());
+    if (path.isEmpty()) return;
+
+    QSettings settings(path, QSettings::IniFormat);
     settings.clear();
     settings.setValue("theme", m_themeName);
     settings.setValue("windowGeometry", saveGeometry());

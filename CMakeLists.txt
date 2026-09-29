@@ -13,6 +13,10 @@ add_executable(progman-linux
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
+    src/DesktopArea.cpp
+    src/DesktopArea.h
+    src/ProfileManager.cpp
+    src/ProfileManager.h
     src/GroupWindow.cpp
     src/GroupWindow.h
     src/IconListWidget.cpp

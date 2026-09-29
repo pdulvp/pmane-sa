@@ -4,9 +4,12 @@
 #include <QList>
 #include <QMainWindow>
 
-class QMdiArea;
+#include "ProfileManager.h"
+
+class QActionGroup;
 class QMdiSubWindow;
 class QMenu;
+class DesktopArea;
 class GroupWindow;
 class MinimizedGroupIcon;
 
@@ -15,8 +18,15 @@ class MinimizedGroupIcon;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    // startupProfile, when given and known, overrides the profile that was
+    // open last.
+    explicit MainWindow(const QString &startupProfile = QString(), QWidget *parent = nullptr);
     ~MainWindow() override;
+
+public slots:
+    // Loads a profile by name, saving whatever is on screen first. Also how
+    // a second launch with --profile reaches the running instance.
+    void switchToProfile(const QString &name);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -31,14 +41,23 @@ private slots:
     void chooseColors();
     void applyXpStyleIcons(bool enabled);
     void about();
+    void newProfile();
+    void duplicateProfile();
+    void renameProfile();
+    void deleteProfile();
 
 private:
     void buildMenus();
+    void rebuildProfileMenu();
+    void updateWindowTitle();
     GroupWindow *activeGroup() const;
     QMdiSubWindow *addGroupWindow(GroupWindow *group);
-    QString configFilePath() const;
     void load();
     void save();
+    // Tears the desktop down to bare background, ready for another profile.
+    void clearDesktop();
+    // Asks for a profile name, rejecting blanks and names already in use.
+    QString askProfileName(const QString &windowTitle, const QString &initial);
     void createDefaultGroups();
     void applyTheme(const QString &themeName);
 
@@ -49,11 +68,15 @@ private:
     void clearMinimizedIconSelection();
     void clearGroupSelections();
 
-    QMdiArea *m_mdiArea;
+    DesktopArea *m_mdiArea;
     QMenu *m_windowMenu;
+    QMenu *m_profileMenu;
+    // Keeps the one radio button beside the open profile exclusive.
+    QActionGroup *m_profileGroup;
     QAction *m_saveOnExitAction;
     QAction *m_xpIconsAction;
     QString m_themeName;
+    ProfileManager m_profiles;
 
     // Groups shown as desktop icons instead of stub title bars, in the order
     // they were minimized.
