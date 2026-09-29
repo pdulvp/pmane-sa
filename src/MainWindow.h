@@ -56,6 +56,11 @@ private slots:
 
 private:
     void buildMenus();
+    // Asks systemd to suspend, restart or shut the machine down, after
+    // asking the user whether that is really what they meant. `verb` is the
+    // systemctl one; the desktop is saved first for the two that end the
+    // session.
+    void requestSystemState(const QString &verb, const QString &question, bool endsSession);
     void rebuildProfileMenu();
     void updateWindowTitle();
     GroupWindow *activeGroup() const;

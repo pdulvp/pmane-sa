@@ -22,6 +22,7 @@
 #include <QMouseEvent>
 #include <QMessageBox>
 #include <QSettings>
+#include <QProcess>
 #include <QStandardPaths>
 
 MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWindow(parent) {
@@ -70,6 +71,22 @@ void MainWindow::buildMenus() {
     fileMenu->addAction(tr("&New Program Group..."), this, &MainWindow::newGroup);
     fileMenu->addAction(tr("New &Item..."), this, &MainWindow::newItem);
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
+    fileMenu->addSeparator();
+    fileMenu->addAction(tr("S&uspend Computer"), this, [this] {
+        requestSystemState(QStringLiteral("suspend"), tr("Suspend the computer?"), false);
+    });
+    fileMenu->addAction(tr("&Restart Computer"), this, [this] {
+        requestSystemState(QStringLiteral("reboot"),
+                            tr("Restart the computer? Anything not saved, here or in another "
+                               "application, will be lost."),
+                            true);
+    });
+    fileMenu->addAction(tr("Shut Do&wn Computer"), this, [this] {
+        requestSystemState(QStringLiteral("poweroff"),
+                            tr("Shut the computer down? Anything not saved, here or in another "
+                               "application, will be lost."),
+                            true);
+    });
     fileMenu->addSeparator();
     fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
 
@@ -148,6 +165,31 @@ void MainWindow::newItem() {
         return;
     }
     gw->newItemDialog();
+}
+
+void MainWindow::requestSystemState(const QString &verb, const QString &question,
+                                    bool endsSession) {
+    if (QMessageBox::question(this, tr("Program Manager"), question) != QMessageBox::Yes) return;
+
+    const QString systemctl = QStandardPaths::findExecutable(QStringLiteral("systemctl"));
+    if (systemctl.isEmpty()) {
+        QMessageBox::warning(this, tr("Program Manager"),
+                              tr("Could not find systemctl, so the computer cannot be asked to "
+                                 "do that from here."));
+        return;
+    }
+
+    // The desktop would otherwise go down with the session unsaved, closeEvent
+    // never having run.
+    if (endsSession && m_saveOnExitAction->isChecked()) save();
+
+    // Started detached rather than waited on: when the machine is allowed to
+    // do this the process outlives us, and when it is not, the desktop's own
+    // authorisation agent takes over the conversation.
+    if (!QProcess::startDetached(systemctl, {verb})) {
+        QMessageBox::warning(this, tr("Program Manager"),
+                              tr("Could not run '%1 %2'.").arg(systemctl, verb));
+    }
 }
 
 void MainWindow::insertApplication() {
