@@ -190,8 +190,8 @@ ProgramItem ItemPropertiesDialog::item() const {
 void ItemPropertiesDialog::browseCommand() {
     QString path = QFileDialog::getOpenFileName(
         this, tr("Select Program"), m_commandEdit->text(),
-        tr("Programs and documents (*.exe *.EXE *.conf *.pdf *.PDF *.cbz *.CBZ);;"
-           "Programs (*.exe *.EXE);;DOSBox configs (*.conf);;"
+        tr("Programs and documents (*.exe *.EXE *.desktop *.conf *.pdf *.PDF *.cbz *.CBZ);;"
+           "Programs (*.exe *.EXE);;Applications (*.desktop);;DOSBox configs (*.conf);;"
            "Documents (*.pdf *.PDF *.cbz *.CBZ);;All Files (*)"));
     if (path.isEmpty()) return;
 

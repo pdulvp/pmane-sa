@@ -19,6 +19,8 @@ add_executable(progman-linux
     src/ProfileManager.h
     src/GroupWindow.cpp
     src/GroupWindow.h
+    src/DesktopEntry.cpp
+    src/DesktopEntry.h
     src/ItemKind.cpp
     src/ItemKind.h
     src/ItemDetails.cpp

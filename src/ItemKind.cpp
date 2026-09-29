@@ -26,6 +26,10 @@ bool isRetroArchRom(const QString &path) {
     return false;
 }
 
+bool isDesktopEntry(const QString &path) {
+    return path.endsWith(QLatin1String(".desktop"), Qt::CaseInsensitive);
+}
+
 bool isDocument(const QString &path) {
     static const QStringList extensions = {
         QStringLiteral(".pdf"),
@@ -39,5 +43,5 @@ bool isDocument(const QString &path) {
 
 bool isLaunchable(const QString &path) {
     return isWindowsExecutable(path) || isDosBoxConfig(path) || isScummVmGame(path) ||
-           isRetroArchRom(path) || isDocument(path);
+           isRetroArchRom(path) || isDesktopEntry(path) || isDocument(path);
 }

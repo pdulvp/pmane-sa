@@ -1,6 +1,7 @@
 #include "ItemLauncher.h"
 
 #include "CompatTools.h"
+#include "DesktopEntry.h"
 #include "ItemKind.h"
 
 #include <QCoreApplication>
@@ -12,6 +13,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QUrl>
 
 namespace {
@@ -108,6 +110,41 @@ Invocation protonInvocation(const ProgramItem &item, const QStringList &extraArg
     return call;
 }
 
+// A .desktop file is a recipe for starting an application rather than an
+// application itself. gio knows how to follow one properly -- it puts a
+// Terminal=true program in a terminal, and reaches a D-Bus activated one
+// over the bus -- so it does the work wherever it is installed, which on a
+// desktop with .desktop files is very nearly everywhere.
+Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &extraArgs) {
+    Invocation call;
+
+    const DesktopEntry entry = readDesktopEntry(item.command);
+    if (!entry.isValid()) {
+        call.error = tr("'%1' names no program to run.").arg(item.command);
+        return call;
+    }
+
+    const QString gio = QStandardPaths::findExecutable(QStringLiteral("gio"));
+    if (!gio.isEmpty()) {
+        call.program = gio;
+        call.args = QStringList{QStringLiteral("launch"), item.command} + extraArgs;
+        call.failureHint = tr("Could not launch '%1'.").arg(item.name);
+        return call;
+    }
+
+    // No gio: run the Exec line ourselves. A program that wanted a terminal
+    // of its own does not get one this way, but it does start.
+    QStringList command = desktopEntryCommand(entry);
+    if (command.isEmpty()) {
+        call.error = tr("'%1' names no program to run.").arg(item.command);
+        return call;
+    }
+    call.program = command.takeFirst();
+    call.args = command + extraArgs;
+    call.failureHint = tr("Could not launch '%1'.").arg(item.name);
+    return call;
+}
+
 } // namespace
 
 QString launchProgramItem(const ProgramItem &item) {
@@ -125,6 +162,8 @@ QString launchProgramItem(const ProgramItem &item) {
     Invocation call;
     if (isWindowsExecutable(item.command) && !item.runner.isEmpty()) {
         call = protonInvocation(item, extraArgs);
+    } else if (isDesktopEntry(item.command)) {
+        call = desktopEntryInvocation(item, extraArgs);
     } else if (isDosBoxConfig(item.command)) {
         // `db` is a shell alias, so it exists only in an interactive bash.
         // The path goes through as a positional argument so names with
@@ -172,9 +211,13 @@ QString launchProgramItem(const ProgramItem &item) {
     QProcess process;
     process.setProgram(call.program);
     process.setArguments(call.args);
-    process.setWorkingDirectory(item.workingDir.isEmpty()
-                                    ? QFileInfo(item.command).absolutePath()
-                                    : item.workingDir);
+    // A .desktop file lives in /usr/share/applications, which is no place to
+    // start an application: it runs from home unless the launcher named a
+    // directory of its own, which completeProgramItem() will have picked up.
+    const QString fallbackDir = isDesktopEntry(item.command)
+                                    ? QDir::homePath()
+                                    : QFileInfo(item.command).absolutePath();
+    process.setWorkingDirectory(item.workingDir.isEmpty() ? fallbackDir : item.workingDir);
     if (!call.env.isEmpty()) process.setProcessEnvironment(call.env);
 
     return process.startDetached() ? QString() : call.failureHint;

@@ -14,6 +14,10 @@ bool isDosBoxConfig(const QString &path);
 bool isScummVmGame(const QString &path);
 // A console ROM or disc image RetroArch plays.
 bool isRetroArchRom(const QString &path);
+// A freedesktop application launcher, as the desktop's own menus are made
+// of: it names the program to run rather than being one.
+bool isDesktopEntry(const QString &path);
+
 // A document rather than a program: opened with whatever the desktop has
 // registered for it instead of being run.
 bool isDocument(const QString &path);

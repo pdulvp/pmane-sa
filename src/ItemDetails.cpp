@@ -1,5 +1,6 @@
 #include "ItemDetails.h"
 
+#include "DesktopEntry.h"
 #include "ItemKind.h"
 #include "PeIconExtractor.h"
 
@@ -121,6 +122,15 @@ QIcon loadIconFile(const QString &path, int index, bool *legacy) {
     return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
 }
 
+// The icon a .desktop file names: an icon theme name most of the time, but
+// the specification allows an absolute path to an image as well.
+QIcon desktopEntryIcon(const QString &icon, bool *legacy) {
+    if (legacy) *legacy = false;
+    if (icon.isEmpty()) return {};
+    if (icon.contains(QLatin1Char('/'))) return loadIconFile(icon, -1, legacy);
+    return QIcon::fromTheme(icon);
+}
+
 // Whether a name is one the user chose, as opposed to the file name we
 // would have defaulted to.
 bool nameIsOurs(const ProgramItem &item) {
@@ -157,6 +167,14 @@ void completeProgramItem(ProgramItem &it) {
             const QString banner = readTrsBannerTitle(it.command);
             it.name = banner.isEmpty() ? QFileInfo(it.command).absoluteDir().dirName() : banner;
         }
+    } else if (isDesktopEntry(it.command)) {
+        const DesktopEntry entry = readDesktopEntry(it.command);
+        // The launcher names the application and points at its artwork; the
+        // file name ("org.kde.okular") is no use as a label.
+        if (!entry.name.isEmpty() && nameIsOurs(it)) it.name = entry.name;
+        if (it.icon.isNull()) it.icon = desktopEntryIcon(entry.icon, &it.legacyIcon);
+        // Where the application asks to be started, if it asks at all.
+        if (it.workingDir.isEmpty()) it.workingDir = entry.path;
     } else if (isDocument(it.command)) {
         // Nothing to extract from a document, and nothing legacy to restyle:
         // it wears the icon the desktop gives its file type.
@@ -177,12 +195,16 @@ void completeProgramItem(ProgramItem &it) {
     if (it.icon.isNull() && isRetroArchRom(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("retroarch"));
     }
+    if (it.icon.isNull() && isDesktopEntry(it.command)) {
+        it.icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
+    }
     if (it.icon.isNull()) {
         QStyle::StandardPixmap fallback = QStyle::SP_ComputerIcon;
         if (isDosBoxConfig(it.command)) fallback = QStyle::SP_DriveHDIcon;
         if (isScummVmGame(it.command)) fallback = QStyle::SP_DirIcon;
         if (isRetroArchRom(it.command)) fallback = QStyle::SP_DriveFDIcon;
         if (isDocument(it.command)) fallback = QStyle::SP_FileIcon;
+        if (isDesktopEntry(it.command)) fallback = QStyle::SP_FileIcon;
         it.icon = QApplication::style()->standardIcon(fallback);
     }
 
