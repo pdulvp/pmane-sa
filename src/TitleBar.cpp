@@ -3,11 +3,15 @@
 #include "WindowEdges.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QHBoxLayout>
+#include <QLabel>
+#include <QLocale>
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyle>
+#include <QTimer>
 #include <QToolButton>
 #include <QWindow>
 
@@ -17,8 +21,13 @@ namespace {
 // way a window manager would have drawn them.
 constexpr int kButtonWidth = 34;
 constexpr int kButtonHeight = 24;
-// Keeps the title clear of the menus and the buttons on either side.
+// Keeps the title clear of the menus and the clock on either side.
 constexpr int kTitleMargin = 12;
+// Room around the clock, so it belongs to neither the title nor the buttons.
+constexpr int kClockMargin = 10;
+// The short time format has no seconds in it, but the minute still has to
+// turn over promptly, and the system clock can be set while we watch.
+constexpr int kClockInterval = 1000;
 
 QToolButton *captionButton(QWidget *parent, QStyle::StandardPixmap glyph) {
     auto *button = new QToolButton(parent);
@@ -37,6 +46,15 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // widget's own surface, which is what makes it draggable.
     m_menuBar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 
+    m_clock = new QLabel(this);
+    m_clock->setContentsMargins(kClockMargin, 0, kClockMargin, 0);
+    m_clock->setAlignment(Qt::AlignCenter);
+    updateClock();
+
+    auto *clockTimer = new QTimer(this);
+    connect(clockTimer, &QTimer::timeout, this, &TitleBar::updateClock);
+    clockTimer->start(kClockInterval);
+
     m_minimizeButton = captionButton(this, QStyle::SP_TitleBarMinButton);
     m_maximizeButton = captionButton(this, QStyle::SP_TitleBarMaxButton);
     m_closeButton = captionButton(this, QStyle::SP_TitleBarCloseButton);
@@ -49,6 +67,7 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     layout->setSpacing(0);
     layout->addWidget(m_menuBar);
     layout->addStretch();
+    layout->addWidget(m_clock);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
     layout->addWidget(m_closeButton);
@@ -97,8 +116,20 @@ void TitleBar::paintEvent(QPaintEvent *event) {
 
 QRect TitleBar::titleArea() const {
     const int left = m_menuBar->geometry().right() + kTitleMargin;
-    const int right = m_minimizeButton->geometry().left() - kTitleMargin;
+    const int right = m_clock->geometry().left() - kTitleMargin;
     return QRect(left, 0, right - left, height());
+}
+
+void TitleBar::updateClock() {
+    const QLocale locale = QLocale::system();
+    const QDateTime now = QDateTime::currentDateTime();
+    // Whatever this system's idea of a short time and a short date is; the
+    // label ignores a text it is already showing, so the minutes in between
+    // cost nothing.
+    m_clock->setText(QStringLiteral("%1   %2")
+                         .arg(locale.toString(now.time(), QLocale::ShortFormat),
+                              locale.toString(now.date(), QLocale::ShortFormat)));
+    m_clock->setToolTip(locale.toString(now.date(), QLocale::LongFormat));
 }
 
 void TitleBar::mousePressEvent(QMouseEvent *event) {

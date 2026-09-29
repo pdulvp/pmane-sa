@@ -2,12 +2,14 @@
 
 #include <QWidget>
 
+class QLabel;
 class QMenuBar;
 class QToolButton;
 
 // The menu bar and the title bar in one strip, the way current desktop
 // applications draw them: the menus on the left, the window's title across
-// the middle, and the minimize/maximize/close buttons on the right. The
+// the middle, and the clock and the minimize/maximize/close buttons on the
+// right. The
 // window itself is frameless, so this strip is also where it is dragged
 // from and where its top edge is resized.
 //
@@ -36,12 +38,15 @@ protected:
 
 private:
     void toggleMaximized();
+    // The time and date, written the way this system writes them.
+    void updateClock();
     void updateMaximizeButton();
     // Where the title is drawn: the space left between the menus and the
     // window buttons.
     QRect titleArea() const;
 
     QMenuBar *m_menuBar;
+    QLabel *m_clock;
     QToolButton *m_minimizeButton;
     QToolButton *m_maximizeButton;
     QToolButton *m_closeButton;
