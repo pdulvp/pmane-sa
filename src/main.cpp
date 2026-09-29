@@ -1,14 +1,44 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QFileInfo>
+#include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include "MainWindow.h"
+
+namespace {
+
+// Qt settles on the bare "hicolor" theme when the desktop has not told it
+// which icon theme to use, and hicolor carries next to nothing -- which
+// leaves file-type icons, the ones documents are shown with, empty. Point
+// the fallback at an icon theme that is actually installed.
+void ensureIconTheme() {
+    const QString configured = QIcon::themeName();
+    if (!configured.isEmpty() && configured != QLatin1String("hicolor")) return;
+
+    const QStringList candidates = {QStringLiteral("Adwaita"), QStringLiteral("breeze"),
+                                    QStringLiteral("oxygen"), QStringLiteral("Papirus"),
+                                    QStringLiteral("gnome")};
+    for (const QString &name : candidates) {
+        for (const QString &dir : QIcon::themeSearchPaths()) {
+            if (!QFileInfo::exists(dir + QLatin1Char('/') + name +
+                                   QLatin1String("/index.theme"))) {
+                continue;
+            }
+            QIcon::setFallbackThemeName(name);
+            return;
+        }
+    }
+}
+
+} // namespace
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("progman-linux");
     QApplication::setApplicationName("progman-linux");
+    ensureIconTheme();
 
     QCommandLineParser parser;
     parser.setApplicationDescription(

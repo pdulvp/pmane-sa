@@ -8,12 +8,16 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QDesktopServices>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeDatabase>
+#include <QMimeType>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStyle>
 #include <QTextStream>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -22,6 +26,19 @@ namespace {
 
 bool isDosBoxConfig(const QString &path) {
     return path.endsWith(QLatin1String(".conf"), Qt::CaseInsensitive);
+}
+
+// A document rather than a program: opened with whatever the desktop has
+// registered for it instead of being run.
+bool isDocument(const QString &path) {
+    static const QStringList extensions = {
+        QStringLiteral(".pdf"),
+        QStringLiteral(".cbz"),
+    };
+    for (const QString &extension : extensions) {
+        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
+    }
+    return false;
 }
 
 // A ScummVM game, identified by one of its data files. ScummVM is pointed at
@@ -45,7 +62,7 @@ bool isRetroArchRom(const QString &path) {
 
 bool isLaunchable(const QString &path) {
     return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path) ||
-           isScummVmGame(path) || isRetroArchRom(path);
+           isScummVmGame(path) || isRetroArchRom(path) || isDocument(path);
 }
 
 // RetroArch does not pick a core from the content on its own, and ignores a
@@ -163,6 +180,18 @@ DosBoxUi readDosBoxUi(const QString &confPath) {
     return ui;
 }
 
+// The icon the desktop's theme gives a file of this kind -- for documents,
+// which carry no artwork of their own to extract.
+QIcon mimeIcon(const QString &path) {
+    const QMimeType mime = QMimeDatabase().mimeTypeForFile(path);
+    for (const QString &name : {mime.iconName(), mime.genericIconName()}) {
+        if (name.isEmpty()) continue;
+        QIcon icon = QIcon::fromTheme(name);
+        if (!icon.isNull()) return icon;
+    }
+    return {};
+}
+
 QIcon loadIconFile(const QString &path, bool *legacy) {
     if (legacy) *legacy = false;
 
@@ -239,6 +268,10 @@ void GroupWindow::insertProgramItem(const ProgramItem &item, int row) {
             const QString banner = readTrsBannerTitle(it.command);
             it.name = banner.isEmpty() ? QFileInfo(it.command).absoluteDir().dirName() : banner;
         }
+    } else if (isDocument(it.command)) {
+        // Nothing to extract from a document, and nothing legacy to restyle:
+        // it wears the icon the desktop gives its file type.
+        if (it.icon.isNull()) it.icon = mimeIcon(it.command);
     } else if (it.icon.isNull()) {
         PeIconExtractor::Source source = PeIconExtractor::Source::None;
         it.icon = PeIconExtractor::extractIcon(it.command, &source);
@@ -258,6 +291,7 @@ void GroupWindow::insertProgramItem(const ProgramItem &item, int row) {
         if (isDosBoxConfig(it.command)) fallback = QStyle::SP_DriveHDIcon;
         if (isScummVmGame(it.command)) fallback = QStyle::SP_DirIcon;
         if (isRetroArchRom(it.command)) fallback = QStyle::SP_DriveFDIcon;
+        if (isDocument(it.command)) fallback = QStyle::SP_FileIcon;
         it.icon = QApplication::style()->standardIcon(fallback);
     }
     if (it.workingDir.isEmpty()) {
@@ -312,6 +346,19 @@ void GroupWindow::launch(const ProgramItem &item) {
     const QStringList extraArgs = QProcess::splitCommand(item.arguments);
     const QString workDir = item.workingDir.isEmpty() ? QFileInfo(item.command).absolutePath()
                                                        : item.workingDir;
+
+    if (isDocument(item.command)) {
+        // Opened by whatever the desktop has registered for the type, which
+        // is the one launcher here that is not a command of our own -- so the
+        // item's arguments have nowhere to go and are not used.
+        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(item.command))) {
+            QMessageBox::warning(
+                this, tr("Open"),
+                tr("Could not open '%1'. No application is registered for this file type.")
+                    .arg(item.command));
+        }
+        return;
+    }
 
     QString program;
     QStringList args;
@@ -416,8 +463,18 @@ void GroupWindow::showPropertiesDialog(int index) {
     if (it.command.isEmpty()) return;
 
     if (index >= 0) {
-        it.icon = PeIconExtractor::extractIcon(it.command);
-        if (it.icon.isNull()) it.icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+        if (isDocument(it.command)) {
+            it.icon = mimeIcon(it.command);
+            it.legacyIcon = false;
+            if (it.icon.isNull()) {
+                it.icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+            }
+        } else {
+            it.icon = PeIconExtractor::extractIcon(it.command);
+            if (it.icon.isNull()) {
+                it.icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+            }
+        }
         m_items[index] = it;
         rebuildList();
         emit modified();
@@ -442,7 +499,8 @@ void GroupWindow::onContextMenuRequested(const QPoint &pos) {
 
     if (listItem) {
         int idx = indexOfListItem(listItem);
-        QAction *runAction = menu.addAction(tr("Run"));
+        QAction *runAction =
+            menu.addAction(isDocument(m_items[idx].command) ? tr("Open") : tr("Run"));
         QAction *propsAction = menu.addAction(tr("Properties..."));
         menu.addSeparator();
         QAction *deleteAction = menu.addAction(tr("Delete"));
