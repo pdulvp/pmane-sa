@@ -74,7 +74,8 @@ QString retroArchCoresDir() {
 QString retroArchCoreFor(const QString &romPath) {
     static const QHash<QString, QString> coreByExtension = {
         {QStringLiteral("nes"), QStringLiteral("mesen_libretro.so")},
-        {QStringLiteral("gba"), QStringLiteral("vba_next_libretro.so")},
+        {QStringLiteral("gba"), QStringLiteral("mgba_libretro.so")},
+        {QStringLiteral("gb"), QStringLiteral("gearboy_libretro.so")},
         {QStringLiteral("sfc"), QStringLiteral("snes9x_libretro.so")},
         {QStringLiteral("smc"), QStringLiteral("snes9x_libretro.so")},
         {QStringLiteral("n64"), QStringLiteral("mupen64plus_next_libretro.so")},
@@ -198,6 +199,8 @@ GroupWindow::GroupWindow(const QString &title, QWidget *parent)
     connect(m_list, &IconListWidget::filesDropped, this, &GroupWindow::onFilesDropped);
     connect(m_list, &IconListWidget::programItemsDropped, this,
             &GroupWindow::onProgramItemsDropped);
+    connect(m_list, &IconListWidget::programItemsReordered, this,
+            &GroupWindow::onProgramItemsReordered);
     connect(m_list, &IconListWidget::programItemsMovedOut, this,
             &GroupWindow::onProgramItemsMovedOut);
     connect(m_list, &QListWidget::customContextMenuRequested, this,
@@ -210,6 +213,10 @@ void GroupWindow::setTitle(const QString &title) {
 }
 
 void GroupWindow::addProgramItem(const ProgramItem &item) {
+    insertProgramItem(item, m_items.size());
+}
+
+void GroupWindow::insertProgramItem(const ProgramItem &item, int row) {
     ProgramItem it = item;
     if (isDosBoxConfig(it.command)) {
         const DosBoxUi ui = readDosBoxUi(it.command);
@@ -256,7 +263,7 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
     if (it.workingDir.isEmpty()) {
         it.workingDir = QFileInfo(it.command).absolutePath();
     }
-    m_items.append(it);
+    m_items.insert(std::clamp(row, 0, int(m_items.size())), it);
     rebuildList();
     emit modified();
 }
@@ -366,8 +373,28 @@ void GroupWindow::onFilesDropped(const QStringList &paths) {
     }
 }
 
-void GroupWindow::onProgramItemsDropped(const QVector<ProgramItem> &items) {
-    for (const ProgramItem &item : items) addProgramItem(item);
+void GroupWindow::onProgramItemsDropped(const QVector<ProgramItem> &items, int row) {
+    int at = std::clamp(row, 0, int(m_items.size()));
+    for (const ProgramItem &item : items) {
+        insertProgramItem(item, at);
+        ++at;
+    }
+}
+
+void GroupWindow::onProgramItemsReordered(const QVector<int> &sourceRows, int row) {
+    if (sourceRows.size() != 1) return; // the grid only ever selects one
+    const int from = sourceRows.first();
+    if (from < 0 || from >= m_items.size()) return;
+
+    // The insertion point was measured before the row was lifted out, so it
+    // shifts down by one once the row ahead of it is removed.
+    int to = row > from ? row - 1 : row;
+    to = std::clamp(to, 0, int(m_items.size()) - 1);
+    if (to == from) return;
+
+    m_items.move(from, to);
+    rebuildList();
+    emit modified();
 }
 
 void GroupWindow::onProgramItemsMovedOut(const QVector<int> &indices) {

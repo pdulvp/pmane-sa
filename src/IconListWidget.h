@@ -29,10 +29,15 @@ public:
 
 signals:
     void filesDropped(const QStringList &paths);
-    void programItemsDropped(const QVector<ProgramItem> &items);
+    void programItemsDropped(const QVector<ProgramItem> &items, int row);
     void programItemsMovedOut(const QVector<int> &indices);
+    // A drag that started and ended in this same group: move the rows rather
+    // than copying them across.
+    void programItemsReordered(const QVector<int> &sourceRows, int row);
 
 protected:
+    int dropRow(const QPoint &pos) const;
+
     void mousePressEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;

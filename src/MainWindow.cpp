@@ -254,6 +254,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         if (event->type() == QEvent::MouseButtonPress) {
             clearMinimizedIconSelection();
             clearGroupSelections();
+            // Deactivate the group too, so no caption stays highlighted when
+            // the click landed on bare desktop.
+            m_mdiArea->setActiveSubWindow(nullptr);
         }
     }
 

@@ -19,6 +19,7 @@ public:
 
     const QVector<ProgramItem> &items() const { return m_items; }
     void addProgramItem(const ProgramItem &item);
+    void insertProgramItem(const ProgramItem &item, int row);
     void newItemDialog() { showPropertiesDialog(-1); }
 
     // Renders legacy (16-bit / .ico) icons in the Windows XP manner.
@@ -38,7 +39,8 @@ signals:
 private slots:
     void onItemActivated(QListWidgetItem *item);
     void onFilesDropped(const QStringList &paths);
-    void onProgramItemsDropped(const QVector<ProgramItem> &items);
+    void onProgramItemsDropped(const QVector<ProgramItem> &items, int row);
+    void onProgramItemsReordered(const QVector<int> &sourceRows, int row);
     void onProgramItemsMovedOut(const QVector<int> &indices);
     void onContextMenuRequested(const QPoint &pos);
 

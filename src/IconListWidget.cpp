@@ -204,10 +204,41 @@ void IconListWidget::startDrag(Qt::DropActions supportedActions) {
     }
 }
 
-// Rearranging icons within one group is not supported: the grid is always
-// auto-arranged, so a drop onto the originating group has nothing to do.
-static bool isSelfDrag(const QMimeData *mime, const QObject *source, const QObject *self) {
-    return mime->hasFormat(kProgramItemMimeType) && source == self;
+// Where a drop lands, as an insertion point in the row order. A drop on the
+// left half of an icon goes before it and the right half after it.
+int IconListWidget::dropRow(const QPoint &pos) const {
+    const int rows = count();
+    if (rows == 0) return 0;
+
+    const QModelIndex index = indexAt(pos);
+    if (index.isValid()) {
+        const QRect rect = visualRect(index);
+        return pos.x() < rect.center().x() ? index.row() : index.row() + 1;
+    }
+
+    // Empty space. Pick the band of icons the drop belongs to — the lowest one
+    // starting at or above it, so a drop under the grid belongs to the last
+    // row rather than to the end of the list — then position within that band
+    // by x, exactly as if an icon had been hit.
+    bool found = false;
+    int band = 0;
+    for (int i = 0; i < rows; ++i) {
+        const int top = visualRect(model()->index(i, 0)).top();
+        if (top <= pos.y() && (!found || top > band)) {
+            band = top;
+            found = true;
+        }
+    }
+    if (!found) return 0; // above the first row
+
+    int insertAt = rows;
+    for (int i = 0; i < rows; ++i) {
+        const QRect rect = visualRect(model()->index(i, 0));
+        if (rect.top() != band) continue;
+        if (pos.x() < rect.center().x()) return i;
+        insertAt = i + 1;
+    }
+    return insertAt;
 }
 
 void IconListWidget::mousePressEvent(QMouseEvent *event) {
@@ -222,9 +253,7 @@ void IconListWidget::mousePressEvent(QMouseEvent *event) {
 
 void IconListWidget::dragEnterEvent(QDragEnterEvent *event) {
     const QMimeData *mime = event->mimeData();
-    if (isSelfDrag(mime, event->source(), this)) {
-        event->ignore();
-    } else if (mime->hasUrls() || mime->hasFormat(kProgramItemMimeType)) {
+    if (mime->hasUrls() || mime->hasFormat(kProgramItemMimeType)) {
         event->acceptProposedAction();
     } else {
         event->ignore();
@@ -233,9 +262,7 @@ void IconListWidget::dragEnterEvent(QDragEnterEvent *event) {
 
 void IconListWidget::dragMoveEvent(QDragMoveEvent *event) {
     const QMimeData *mime = event->mimeData();
-    if (isSelfDrag(mime, event->source(), this)) {
-        event->ignore();
-    } else if (mime->hasUrls() || mime->hasFormat(kProgramItemMimeType)) {
+    if (mime->hasUrls() || mime->hasFormat(kProgramItemMimeType)) {
         event->acceptProposedAction();
     } else {
         event->ignore();
@@ -246,10 +273,7 @@ void IconListWidget::dropEvent(QDropEvent *event) {
     const QMimeData *mime = event->mimeData();
 
     if (mime->hasFormat(kProgramItemMimeType)) {
-        if (event->source() == this) {
-            event->ignore();
-            return;
-        }
+        const int row = dropRow(event->position().toPoint());
 
         QByteArray payload = mime->data(QString::fromLatin1(kProgramItemMimeType));
         QDataStream stream(&payload, QIODevice::ReadOnly);
@@ -257,6 +281,7 @@ void IconListWidget::dropEvent(QDropEvent *event) {
         stream >> count;
 
         QVector<ProgramItem> items;
+        QVector<int> sourceRows;
         for (int i = 0; i < count; ++i) {
             int sourceIndex;
             ProgramItem item;
@@ -264,13 +289,23 @@ void IconListWidget::dropEvent(QDropEvent *event) {
                 item.workingDir;
             if (stream.status() != QDataStream::Ok) break;
             items.append(item);
+            sourceRows.append(sourceIndex);
         }
 
-        if (!items.isEmpty()) {
-            event->acceptProposedAction();
-            emit programItemsDropped(items);
-        } else {
+        if (items.isEmpty()) {
             event->ignore();
+            return;
+        }
+
+        if (event->source() == this) {
+            // Reordering within the group. Report IgnoreAction so startDrag
+            // does not also strip the rows out as if they had left.
+            event->setDropAction(Qt::IgnoreAction);
+            event->accept();
+            emit programItemsReordered(sourceRows, row);
+        } else {
+            event->acceptProposedAction();
+            emit programItemsDropped(items, row);
         }
         return;
     }
