@@ -21,6 +21,7 @@ public:
         CommandRole,
         ArgumentsRole,
         WorkingDirRole,
+        RunnerRole,
     };
 
     // Resizes the (uniform) grid cells to fit the widest label. Call after

@@ -542,6 +542,7 @@ void MainWindow::load() {
             item.command = settings.value("command").toString();
             item.arguments = settings.value("arguments").toString();
             item.workingDir = settings.value("workingDir").toString();
+            item.runner = settings.value("runner").toString();
             group->addProgramItem(item);
         }
         settings.endArray();
@@ -600,6 +601,8 @@ void MainWindow::save() {
             settings.setValue("command", items[j].command);
             settings.setValue("arguments", items[j].arguments);
             settings.setValue("workingDir", items[j].workingDir);
+            // Only written when set, so a plain wine item stays as it was.
+            if (!items[j].runner.isEmpty()) settings.setValue("runner", items[j].runner);
         }
         settings.endArray();
     }

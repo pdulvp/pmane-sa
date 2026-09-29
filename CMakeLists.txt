@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network)
 
 add_executable(progman-linux
     src/main.cpp
@@ -19,9 +19,17 @@ add_executable(progman-linux
     src/ProfileManager.h
     src/GroupWindow.cpp
     src/GroupWindow.h
+    src/ItemKind.cpp
+    src/ItemKind.h
+    src/ItemDetails.cpp
+    src/ItemDetails.h
+    src/ItemLauncher.cpp
+    src/ItemLauncher.h
     src/IconListWidget.cpp
     src/IconListWidget.h
     src/ProgramItem.h
+    src/CompatTools.cpp
+    src/CompatTools.h
     src/PeIconExtractor.cpp
     src/PeIconExtractor.h
     src/ItemPropertiesDialog.cpp

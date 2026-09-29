@@ -1,218 +1,18 @@
 #include "GroupWindow.h"
 #include "IconEffect.h"
 #include "IconListWidget.h"
+#include "ItemDetails.h"
+#include "ItemKind.h"
+#include "ItemLauncher.h"
 #include "ItemPropertiesDialog.h"
-#include "PeIconExtractor.h"
 
-#include <QApplication>
-#include <QDir>
-#include <QFile>
 #include <QFileInfo>
-#include <QDesktopServices>
+#include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
-#include <QMimeDatabase>
-#include <QMimeType>
-#include <QProcess>
-#include <QRegularExpression>
-#include <QStyle>
-#include <QTextStream>
-#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
-
-namespace {
-
-bool isDosBoxConfig(const QString &path) {
-    return path.endsWith(QLatin1String(".conf"), Qt::CaseInsensitive);
-}
-
-// A document rather than a program: opened with whatever the desktop has
-// registered for it instead of being run.
-bool isDocument(const QString &path) {
-    static const QStringList extensions = {
-        QStringLiteral(".pdf"),
-        QStringLiteral(".cbz"),
-    };
-    for (const QString &extension : extensions) {
-        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
-    }
-    return false;
-}
-
-// A ScummVM game, identified by one of its data files. ScummVM is pointed at
-// the folder that holds it, not the file itself.
-bool isScummVmGame(const QString &path) {
-    return path.endsWith(QLatin1String(".trs"), Qt::CaseInsensitive);
-}
-
-// Console ROMs and disc images RetroArch plays.
-bool isRetroArchRom(const QString &path) {
-    static const QStringList extensions = {
-        QStringLiteral(".nes"), QStringLiteral(".z64"), QStringLiteral(".n64"),
-        QStringLiteral(".sfc"), QStringLiteral(".gb"),  QStringLiteral(".gba"),
-        QStringLiteral(".gcm"), QStringLiteral(".iso"),
-    };
-    for (const QString &extension : extensions) {
-        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
-    }
-    return false;
-}
-
-bool isLaunchable(const QString &path) {
-    return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive) || isDosBoxConfig(path) ||
-           isScummVmGame(path) || isRetroArchRom(path) || isDocument(path);
-}
-
-// RetroArch does not pick a core from the content on its own, and ignores a
-// bare core name, so the full path to one has to be passed. Rather than
-// hard-coding where the cores live, read it back out of the retroarch alias
-// and cache it for the session.
-QString retroArchCoresDir() {
-    static const QString dir = []() -> QString {
-        QProcess probe;
-        probe.start(QStringLiteral("bash"), {QStringLiteral("-ic"), QStringLiteral("alias retroarch")});
-        if (!probe.waitForFinished(3000)) return {};
-
-        const QString definition = QString::fromLocal8Bit(probe.readAllStandardOutput());
-        static const QRegularExpression binary(QStringLiteral("(/[^\\s'\"]+)/retroarch\\b"));
-        const QRegularExpressionMatch match = binary.match(definition);
-        if (!match.hasMatch()) return {};
-
-        const QString cores = match.captured(1) + QStringLiteral("/cores");
-        return QDir(cores).exists() ? cores : QString();
-    }();
-    return dir;
-}
-
-// The libretro core for a ROM, by extension. Core file names are standard
-// across libretro installs; only the directory is site-specific.
-QString retroArchCoreFor(const QString &romPath) {
-    static const QHash<QString, QString> coreByExtension = {
-        {QStringLiteral("nes"), QStringLiteral("mesen_libretro.so")},
-        {QStringLiteral("gba"), QStringLiteral("mgba_libretro.so")},
-        {QStringLiteral("gb"), QStringLiteral("gearboy_libretro.so")},
-        {QStringLiteral("sfc"), QStringLiteral("snes9x_libretro.so")},
-        {QStringLiteral("smc"), QStringLiteral("snes9x_libretro.so")},
-        {QStringLiteral("n64"), QStringLiteral("mupen64plus_next_libretro.so")},
-        {QStringLiteral("z64"), QStringLiteral("mupen64plus_next_libretro.so")},
-        {QStringLiteral("v64"), QStringLiteral("mupen64plus_next_libretro.so")},
-    };
-
-    const QString core = coreByExtension.value(QFileInfo(romPath).suffix().toLower());
-    if (core.isEmpty()) return {};
-
-    const QString dir = retroArchCoresDir();
-    if (dir.isEmpty()) return {};
-
-    const QString path = QDir(dir).filePath(core);
-    return QFile::exists(path) ? path : QString();
-}
-
-// A .trs installer script may name its game, as a resource definition
-// followed by the string on the next line:
-//
-//   #define TRS_BANNER_TITLE            225
-//   //^f02Full Throttle
-//
-// The leading ^fNN is a font code, not part of the title. These are DOS-era
-// files: CRLF line endings and 8-bit Latin-1 text.
-QString readTrsBannerTitle(const QString &trsPath) {
-    QFile file(trsPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
-
-    QTextStream in(&file);
-    in.setEncoding(QStringConverter::Latin1);
-
-    bool titleIsNext = false;
-    while (!in.atEnd()) {
-        const QString line = in.readLine().trimmed();
-        if (titleIsNext) {
-            if (!line.startsWith(QLatin1String("//"))) return {};
-            QString value = line.mid(2).trimmed();
-            static const QRegularExpression fontCode(QStringLiteral("^\\^[A-Za-z]\\d*"));
-            value.remove(fontCode);
-            return value.trimmed();
-        }
-        if (line.startsWith(QLatin1String("#define")) &&
-            line.contains(QLatin1String("TRS_BANNER_TITLE"))) {
-            titleIsNext = true;
-        }
-    }
-    return {};
-}
-
-// The optional [ui] section a dosbox conf may carry, naming the entry and
-// pointing at an icon relative to the conf itself.
-struct DosBoxUi {
-    QString title;
-    QString iconPath;
-};
-
-DosBoxUi readDosBoxUi(const QString &confPath) {
-    DosBoxUi ui;
-    QFile file(confPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return ui;
-
-    QTextStream in(&file);
-    bool inUiSection = false;
-    while (!in.atEnd()) {
-        const QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
-
-        if (line.startsWith(QLatin1Char('['))) {
-            inUiSection = line.compare(QLatin1String("[ui]"), Qt::CaseInsensitive) == 0;
-            continue;
-        }
-        if (!inUiSection) continue;
-
-        const int eq = line.indexOf(QLatin1Char('='));
-        if (eq < 0) continue;
-        const QString key = line.left(eq).trimmed().toLower();
-        const QString value = line.mid(eq + 1).trimmed();
-        if (key == QLatin1String("title")) {
-            ui.title = value;
-        } else if (key == QLatin1String("icon")) {
-            ui.iconPath = value;
-        }
-    }
-    return ui;
-}
-
-// The icon the desktop's theme gives a file of this kind -- for documents,
-// which carry no artwork of their own to extract.
-QIcon mimeIcon(const QString &path) {
-    const QMimeType mime = QMimeDatabase().mimeTypeForFile(path);
-    for (const QString &name : {mime.iconName(), mime.genericIconName()}) {
-        if (name.isEmpty()) continue;
-        QIcon icon = QIcon::fromTheme(name);
-        if (!icon.isNull()) return icon;
-    }
-    return {};
-}
-
-QIcon loadIconFile(const QString &path, bool *legacy) {
-    if (legacy) *legacy = false;
-
-    if (path.endsWith(QLatin1String(".ico"), Qt::CaseInsensitive)) {
-        QIcon icon = PeIconExtractor::extractIcoFile(path);
-        if (!icon.isNull()) {
-            if (legacy) *legacy = true;
-            return icon;
-        }
-    }
-    if (path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) {
-        PeIconExtractor::Source source = PeIconExtractor::Source::None;
-        QIcon icon = PeIconExtractor::extractIcon(path, &source);
-        if (legacy) *legacy = source == PeIconExtractor::Source::Ne;
-        return icon;
-    }
-    QImage image(path);
-    return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
-}
-
-} // namespace
 
 GroupWindow::GroupWindow(const QString &title, QWidget *parent)
     : QWidget(parent), m_title(title) {
@@ -247,56 +47,7 @@ void GroupWindow::addProgramItem(const ProgramItem &item) {
 
 void GroupWindow::insertProgramItem(const ProgramItem &item, int row) {
     ProgramItem it = item;
-    if (isDosBoxConfig(it.command)) {
-        const DosBoxUi ui = readDosBoxUi(it.command);
-        // A [ui] title names the entry, but never overrides a name the user
-        // typed in the properties dialog.
-        if (!ui.title.isEmpty() &&
-            (it.name.isEmpty() || it.name == QFileInfo(it.command).completeBaseName())) {
-            it.name = ui.title;
-        }
-        if (it.icon.isNull() && !ui.iconPath.isEmpty()) {
-            const QString resolved =
-                QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
-            it.icon = loadIconFile(resolved, &it.legacyIcon);
-        }
-    } else if (isScummVmGame(it.command)) {
-        // Prefer the title the .trs names itself, falling back to the folder
-        // holding it ("The Dig", not "DIG"). Never override a name the user
-        // typed in the properties dialog.
-        if (it.name.isEmpty() || it.name == QFileInfo(it.command).completeBaseName()) {
-            const QString banner = readTrsBannerTitle(it.command);
-            it.name = banner.isEmpty() ? QFileInfo(it.command).absoluteDir().dirName() : banner;
-        }
-    } else if (isDocument(it.command)) {
-        // Nothing to extract from a document, and nothing legacy to restyle:
-        // it wears the icon the desktop gives its file type.
-        if (it.icon.isNull()) it.icon = mimeIcon(it.command);
-    } else if (it.icon.isNull()) {
-        PeIconExtractor::Source source = PeIconExtractor::Source::None;
-        it.icon = PeIconExtractor::extractIcon(it.command, &source);
-        it.legacyIcon = source == PeIconExtractor::Source::Ne;
-    }
-    if (it.icon.isNull() && isDosBoxConfig(it.command)) {
-        it.icon = QIcon::fromTheme(QStringLiteral("dosbox"));
-    }
-    if (it.icon.isNull() && isScummVmGame(it.command)) {
-        it.icon = QIcon::fromTheme(QStringLiteral("scummvm"));
-    }
-    if (it.icon.isNull() && isRetroArchRom(it.command)) {
-        it.icon = QIcon::fromTheme(QStringLiteral("retroarch"));
-    }
-    if (it.icon.isNull()) {
-        QStyle::StandardPixmap fallback = QStyle::SP_ComputerIcon;
-        if (isDosBoxConfig(it.command)) fallback = QStyle::SP_DriveHDIcon;
-        if (isScummVmGame(it.command)) fallback = QStyle::SP_DirIcon;
-        if (isRetroArchRom(it.command)) fallback = QStyle::SP_DriveFDIcon;
-        if (isDocument(it.command)) fallback = QStyle::SP_FileIcon;
-        it.icon = QApplication::style()->standardIcon(fallback);
-    }
-    if (it.workingDir.isEmpty()) {
-        it.workingDir = QFileInfo(it.command).absolutePath();
-    }
+    completeProgramItem(it);
     m_items.insert(std::clamp(row, 0, int(m_items.size())), it);
     rebuildList();
     emit modified();
@@ -327,6 +78,7 @@ void GroupWindow::rebuildList() {
         listItem->setData(IconListWidget::CommandRole, it.command);
         listItem->setData(IconListWidget::ArgumentsRole, it.arguments);
         listItem->setData(IconListWidget::WorkingDirRole, it.workingDir);
+        listItem->setData(IconListWidget::RunnerRole, it.runner);
         m_list->addItem(listItem);
     }
     m_list->updateGridSize();
@@ -343,70 +95,9 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
 }
 
 void GroupWindow::launch(const ProgramItem &item) {
-    const QStringList extraArgs = QProcess::splitCommand(item.arguments);
-    const QString workDir = item.workingDir.isEmpty() ? QFileInfo(item.command).absolutePath()
-                                                       : item.workingDir;
-
-    if (isDocument(item.command)) {
-        // Opened by whatever the desktop has registered for the type, which
-        // is the one launcher here that is not a command of our own -- so the
-        // item's arguments have nowhere to go and are not used.
-        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(item.command))) {
-            QMessageBox::warning(
-                this, tr("Open"),
-                tr("Could not open '%1'. No application is registered for this file type.")
-                    .arg(item.command));
-        }
-        return;
-    }
-
-    QString program;
-    QStringList args;
-    QString failureHint;
-
-    if (isDosBoxConfig(item.command)) {
-        // `db` is a shell alias, so it exists only in an interactive bash.
-        // The path goes through as a positional argument so names with
-        // spaces survive and nothing is re-parsed by the shell.
-        program = QStringLiteral("bash");
-        args = QStringList{QStringLiteral("-ic"), QStringLiteral("db -conf \"$@\""),
-                           QStringLiteral("_"), item.command};
-        args += extraArgs;
-        failureHint = tr("Could not launch '%1' with dosbox (the 'db' alias).").arg(item.command);
-    } else if (isScummVmGame(item.command)) {
-        // `scm` is a shell alias too, and it wants the folder holding the game
-        // data rather than the file itself.
-        program = QStringLiteral("bash");
-        args = QStringList{QStringLiteral("-ic"), QStringLiteral("scm -p \"$1\" \"${@:2}\""),
-                           QStringLiteral("_"), QFileInfo(item.command).absolutePath()};
-        args += extraArgs;
-        failureHint =
-            tr("Could not launch '%1' with ScummVM (the 'scm' alias).").arg(item.command);
-    } else if (isRetroArchRom(item.command)) {
-        // Another shell alias, taking the ROM itself. The alias pins one
-        // core, so pass the right one for this ROM when we can identify it;
-        // a later -L overrides the alias's own --libretro.
-        program = QStringLiteral("bash");
-        const QString core = retroArchCoreFor(item.command);
-        if (core.isEmpty()) {
-            args = QStringList{QStringLiteral("-ic"), QStringLiteral("retroarch \"$@\""),
-                               QStringLiteral("_"), item.command};
-        } else {
-            args = QStringList{QStringLiteral("-ic"), QStringLiteral("retroarch -L \"$1\" \"$2\""),
-                               QStringLiteral("_"), core, item.command};
-        }
-        args += extraArgs;
-        failureHint =
-            tr("Could not launch '%1' with RetroArch (the 'retroarch' alias).").arg(item.command);
-    } else {
-        program = QStringLiteral("wine");
-        args = QStringList{item.command} + extraArgs;
-        failureHint = tr("Could not launch '%1' with wine.").arg(item.command);
-    }
-
-    if (!QProcess::startDetached(program, args, workDir)) {
-        QMessageBox::warning(this, tr("Run"), failureHint);
-    }
+    const QString error = launchProgramItem(item);
+    if (error.isEmpty()) return;
+    QMessageBox::warning(this, isDocument(item.command) ? tr("Open") : tr("Run"), error);
 }
 
 void GroupWindow::onFilesDropped(const QStringList &paths) {
@@ -463,18 +154,11 @@ void GroupWindow::showPropertiesDialog(int index) {
     if (it.command.isEmpty()) return;
 
     if (index >= 0) {
-        if (isDocument(it.command)) {
-            it.icon = mimeIcon(it.command);
-            it.legacyIcon = false;
-            if (it.icon.isNull()) {
-                it.icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-            }
-        } else {
-            it.icon = PeIconExtractor::extractIcon(it.command);
-            if (it.icon.isNull()) {
-                it.icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-            }
-        }
+        // The command may now point somewhere else, so the icon is derived
+        // again from scratch rather than kept from the previous target.
+        it.icon = QIcon();
+        it.legacyIcon = false;
+        completeProgramItem(it);
         m_items[index] = it;
         rebuildList();
         emit modified();
