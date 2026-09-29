@@ -115,11 +115,15 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
     }
 
     // Anywhere else on the bare strip drags the window, which the window
-    // manager carries out so that snapping and the pointer grab behave.
-    if (QWindow *handle = window() ? window()->windowHandle() : nullptr) {
-        if (handle->startSystemMove()) {
-            event->accept();
-            return;
+    // manager carries out so that snapping and the pointer grab behave --
+    // unless the window fills the screen, which is not something to be
+    // dragged out of by accident.
+    if (windowCanBeMoved(window())) {
+        if (QWindow *handle = window()->windowHandle()) {
+            if (handle->startSystemMove()) {
+                event->accept();
+                return;
+            }
         }
     }
     QWidget::mousePressEvent(event);

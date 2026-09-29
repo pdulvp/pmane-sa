@@ -18,6 +18,13 @@ constexpr int kResizeMargin = 4;
 // screen.
 Qt::Edges windowEdgesAt(const QWidget *window, const QPoint &globalPos);
 
+// Whether a drag on the window's own caption should move it. A maximized or
+// full screen window is not moved: the compositor would shrink it back to
+// its old size just to follow the pointer, which is rarely what the drag was
+// meant for. Restoring it stays a deliberate act -- the caption button, or a
+// double click.
+bool windowCanBeMoved(const QWidget *window);
+
 // The pointer that says which way those edges would stretch.
 Qt::CursorShape cursorForWindowEdges(Qt::Edges edges);
 

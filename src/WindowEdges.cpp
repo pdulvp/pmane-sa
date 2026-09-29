@@ -22,6 +22,10 @@ Qt::Edges windowEdgesAt(const QWidget *window, const QPoint &globalPos) {
     return edges;
 }
 
+bool windowCanBeMoved(const QWidget *window) {
+    return window && !window->isMaximized() && !window->isFullScreen();
+}
+
 Qt::CursorShape cursorForWindowEdges(Qt::Edges edges) {
     if ((edges & Qt::LeftEdge && edges & Qt::TopEdge) ||
         (edges & Qt::RightEdge && edges & Qt::BottomEdge)) {
