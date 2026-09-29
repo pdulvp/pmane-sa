@@ -1,6 +1,9 @@
 #include "ItemPropertiesDialog.h"
 
 #include "CompatTools.h"
+#include "IconPickerDialog.h"
+#include "ItemDetails.h"
+#include "PeIconExtractor.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -8,9 +11,15 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+namespace {
+// The size the group windows show their icons at.
+constexpr int kPreviewSize = 32;
+} // namespace
 
 ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Program Item Properties"));
@@ -32,12 +41,22 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     workDirRow->addWidget(m_workDirEdit);
     workDirRow->addWidget(workDirBrowse);
 
+    m_iconPreview = new QLabel(this);
+    m_iconPreview->setFixedSize(kPreviewSize, kPreviewSize);
+    m_iconPreview->setAlignment(Qt::AlignCenter);
+    auto *changeIconButton = new QPushButton(tr("Change Icon..."), this);
+    auto *iconRow = new QHBoxLayout;
+    iconRow->addWidget(m_iconPreview);
+    iconRow->addWidget(changeIconButton);
+    iconRow->addStretch();
+
     m_form = new QFormLayout;
     m_form->addRow(tr("Description:"), m_nameEdit);
     m_form->addRow(tr("Command Line:"), commandRow);
     m_form->addRow(tr("Arguments:"), m_argsEdit);
     m_form->addRow(tr("Working Directory:"), workDirRow);
     m_form->addRow(tr("Run With:"), m_runnerCombo);
+    m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 
@@ -50,6 +69,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     updateRunnerVisibility();
 
     connect(commandBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseCommand);
+    connect(changeIconButton, &QPushButton::clicked, this, &ItemPropertiesDialog::changeIcon);
     connect(workDirBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseWorkingDir);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -58,12 +78,53 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 }
 
 void ItemPropertiesDialog::setItem(const ProgramItem &item) {
+    m_item = item;
     m_nameEdit->setText(item.name);
     m_commandEdit->setText(item.command);
     m_argsEdit->setText(item.arguments);
     m_workDirEdit->setText(item.workingDir);
     populateRunners(item.runner);
     updateRunnerVisibility();
+    refreshIconPreview();
+}
+
+void ItemPropertiesDialog::refreshIconPreview() {
+    // The icon the item will actually end up with, worked out on a copy: the
+    // one picked by hand if there is one, otherwise whatever the command it
+    // now names leads to. Never stored back on m_item, so an icon nobody
+    // chose stays a preview and is derived again for real on OK.
+    ProgramItem probe = m_item;
+    probe.command = m_commandEdit->text().trimmed();
+    if (!probe.command.isEmpty()) completeProgramItem(probe);
+
+    m_iconPreview->setPixmap(probe.icon.isNull()
+                                 ? QPixmap()
+                                 : probe.icon.pixmap(kPreviewSize, kPreviewSize));
+}
+
+void ItemPropertiesDialog::changeIcon() {
+    ProgramItem probe = m_item;
+    probe.command = m_commandEdit->text().trimmed();
+
+    IconPickerDialog dlg(this);
+    dlg.setSource(iconSourceFile(probe), m_item.iconIndex);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    if (dlg.isReset()) {
+        // Back to whatever the item would find on its own, worked out again
+        // once the dialog is closed.
+        m_item.iconIndex = -1;
+        m_item.iconSource.clear();
+        m_item.icon = QIcon();
+        m_item.legacyIcon = false;
+    } else {
+        if (dlg.selectedIcon().isNull()) return;
+        m_item.iconIndex = dlg.selectedIndex();
+        m_item.iconSource = dlg.sourcePath();
+        m_item.icon = dlg.selectedIcon();
+        m_item.legacyIcon = dlg.selectedIsLegacy();
+    }
+    refreshIconPreview();
 }
 
 void ItemPropertiesDialog::populateRunners(const QString &selected) {
@@ -103,7 +164,9 @@ void ItemPropertiesDialog::updateRunnerVisibility() {
 }
 
 ProgramItem ItemPropertiesDialog::item() const {
-    ProgramItem it;
+    // Everything the dialog does not show -- the icon and the file it came
+    // from -- is carried over from the item being edited.
+    ProgramItem it = m_item;
     it.name = m_nameEdit->text().trimmed();
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
@@ -124,6 +187,15 @@ void ItemPropertiesDialog::browseCommand() {
     QFileInfo info(path);
     if (m_nameEdit->text().isEmpty()) m_nameEdit->setText(info.completeBaseName());
     if (m_workDirEdit->text().isEmpty()) m_workDirEdit->setText(info.absolutePath());
+
+    // The item now points somewhere else, so it wears that file's icon --
+    // unless one was picked by hand, which outlives a change of command.
+    if (m_item.iconIndex < 0) {
+        m_item.icon = QIcon();
+        m_item.iconSource.clear();
+        m_item.legacyIcon = false;
+    }
+    refreshIconPreview();
 }
 
 void ItemPropertiesDialog::browseWorkingDir() {

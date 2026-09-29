@@ -27,6 +27,8 @@ add_executable(progman-linux
     src/ItemLauncher.h
     src/IconListWidget.cpp
     src/IconListWidget.h
+    src/IconPickerDialog.cpp
+    src/IconPickerDialog.h
     src/ProgramItem.h
     src/CompatTools.cpp
     src/CompatTools.h

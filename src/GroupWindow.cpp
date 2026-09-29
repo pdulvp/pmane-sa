@@ -155,9 +155,14 @@ void GroupWindow::showPropertiesDialog(int index) {
 
     if (index >= 0) {
         // The command may now point somewhere else, so the icon is derived
-        // again from scratch rather than kept from the previous target.
-        it.icon = QIcon();
-        it.legacyIcon = false;
+        // again from scratch rather than kept from the previous target. An
+        // icon picked by hand in the dialog is not derived at all: it is the
+        // one the item is meant to wear.
+        if (it.iconIndex < 0) {
+            it.icon = QIcon();
+            it.iconSource.clear();
+            it.legacyIcon = false;
+        }
         completeProgramItem(it);
         m_items[index] = it;
         rebuildList();

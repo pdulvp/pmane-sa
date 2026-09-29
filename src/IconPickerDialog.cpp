@@ -1,0 +1,160 @@
+#include "IconPickerDialog.h"
+
+#include <QDialogButtonBox>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPushButton>
+#include <QVBoxLayout>
+
+namespace {
+
+// Big enough for the classic 32x32 artwork to be shown untouched, with room
+// around it for the selection frame.
+constexpr int kCellIconSize = 32;
+constexpr int kCellSize = 48;
+
+// The index stored on each cell, which is the file's own numbering and not
+// the row: an icon that fails to decode leaves a gap in the listing.
+constexpr int kIconIndexRole = Qt::UserRole;
+
+} // namespace
+
+IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
+    setWindowTitle(tr("Change Icon"));
+
+    m_pathEdit = new QLineEdit(this);
+    auto *browseButton = new QPushButton(tr("Browse..."), this);
+    browseButton->setAutoDefault(false);
+
+    auto *pathRow = new QHBoxLayout;
+    pathRow->addWidget(new QLabel(tr("File Name:"), this));
+    pathRow->addWidget(m_pathEdit);
+    pathRow->addWidget(browseButton);
+
+    m_list = new QListWidget(this);
+    m_list->setViewMode(QListView::IconMode);
+    m_list->setIconSize(QSize(kCellIconSize, kCellIconSize));
+    m_list->setGridSize(QSize(kCellSize, kCellSize));
+    m_list->setResizeMode(QListView::Adjust);
+    m_list->setMovement(QListView::Static);
+    m_list->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_list->setMinimumHeight(kCellSize * 2 + 12);
+
+    m_status = new QLabel(this);
+
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
+    m_okButton = buttons->button(QDialogButtonBox::Ok);
+    m_okButton->setEnabled(false);
+    QPushButton *defaultButton = buttons->button(QDialogButtonBox::RestoreDefaults);
+    defaultButton->setText(tr("Default Icon"));
+    defaultButton->setToolTip(tr("Go back to the icon the item finds on its own."));
+
+    auto *layout = new QVBoxLayout(this);
+    layout->addLayout(pathRow);
+    layout->addWidget(new QLabel(tr("Current Icon:"), this));
+    layout->addWidget(m_list);
+    layout->addWidget(m_status);
+    layout->addWidget(buttons);
+
+    connect(browseButton, &QPushButton::clicked, this, &IconPickerDialog::browse);
+    connect(m_pathEdit, &QLineEdit::editingFinished, this, &IconPickerDialog::reload);
+    connect(m_list, &QListWidget::itemSelectionChanged, this,
+            [this] { m_okButton->setEnabled(currentRow() >= 0); });
+    connect(m_list, &QListWidget::itemDoubleClicked, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(defaultButton, &QPushButton::clicked, this, [this] {
+        m_reset = true;
+        accept();
+    });
+
+    resize(420, 320);
+}
+
+void IconPickerDialog::setSource(const QString &path, int index) {
+    m_pathEdit->setText(path);
+    reload();
+
+    for (int row = 0; row < m_list->count(); ++row) {
+        if (m_list->item(row)->data(kIconIndexRole).toInt() == index) {
+            m_list->setCurrentRow(row);
+            return;
+        }
+    }
+    // The item wears whichever icon the file leads with: that is the one the
+    // listing opens on, so OK without a choice changes nothing.
+    if (m_list->count() > 0) m_list->setCurrentRow(0);
+}
+
+void IconPickerDialog::reload() {
+    const QString path = m_pathEdit->text().trimmed();
+
+    m_list->clear();
+    m_icons = PeIconExtractor::listIcons(path, &m_source);
+
+    for (const PeIconExtractor::IconInfo &info : m_icons) {
+        auto *cell = new QListWidgetItem(info.icon, QString(), m_list);
+        cell->setData(kIconIndexRole, info.index);
+        cell->setToolTip(info.bitCount > 0
+                             ? tr("%1 x %2, %3-bit")
+                                   .arg(info.width)
+                                   .arg(info.height)
+                                   .arg(info.bitCount)
+                             : tr("%1 x %2").arg(info.width).arg(info.height));
+    }
+
+    if (m_icons.size() == 1) {
+        m_status->setText(tr("One icon in this file."));
+    } else if (!m_icons.isEmpty()) {
+        m_status->setText(tr("%1 icons in this file.").arg(m_icons.size()));
+    } else if (path.isEmpty()) {
+        m_status->setText(tr("Name a program or icon file to choose an icon from."));
+    } else if (!QFileInfo::exists(path)) {
+        m_status->setText(tr("There is no file at that path."));
+    } else {
+        m_status->setText(tr("This file holds no icons we can read."));
+    }
+
+    m_okButton->setEnabled(false);
+}
+
+int IconPickerDialog::currentRow() const {
+    const QList<QListWidgetItem *> selected = m_list->selectedItems();
+    return selected.isEmpty() ? -1 : m_list->row(selected.first());
+}
+
+QString IconPickerDialog::sourcePath() const {
+    return m_pathEdit->text().trimmed();
+}
+
+int IconPickerDialog::selectedIndex() const {
+    const int row = currentRow();
+    return row < 0 ? -1 : m_list->item(row)->data(kIconIndexRole).toInt();
+}
+
+QIcon IconPickerDialog::selectedIcon() const {
+    const int row = currentRow();
+    return row < 0 ? QIcon() : m_list->item(row)->icon();
+}
+
+bool IconPickerDialog::selectedIsLegacy() const {
+    return m_source == PeIconExtractor::Source::Ne || m_source == PeIconExtractor::Source::Ico;
+}
+
+void IconPickerDialog::browse() {
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Select Icon Source"), m_pathEdit->text(),
+        tr("Icon sources (*.exe *.EXE *.dll *.DLL *.ico *.ICO);;"
+           "Programs (*.exe *.EXE);;Libraries (*.dll *.DLL);;Icons (*.ico *.ICO);;"
+           "All Files (*)"));
+    if (path.isEmpty()) return;
+
+    m_pathEdit->setText(path);
+    reload();
+    if (m_list->count() > 0) m_list->setCurrentRow(0);
+}

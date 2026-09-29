@@ -100,22 +100,23 @@ QIcon mimeIcon(const QString &path) {
     return {};
 }
 
-QIcon loadIconFile(const QString &path, bool *legacy) {
+// One of the icons a file holds -- `index` of them, or whichever the file
+// leads with for -1.
+QIcon loadIconFile(const QString &path, int index, bool *legacy) {
     if (legacy) *legacy = false;
 
-    if (path.endsWith(QLatin1String(".ico"), Qt::CaseInsensitive)) {
-        QIcon icon = PeIconExtractor::extractIcoFile(path);
-        if (!icon.isNull()) {
-            if (legacy) *legacy = true;
-            return icon;
+    PeIconExtractor::Source source = PeIconExtractor::Source::None;
+    QIcon icon = PeIconExtractor::extractIconAt(path, index, &source);
+    if (!icon.isNull()) {
+        if (legacy) {
+            *legacy = source == PeIconExtractor::Source::Ne ||
+                      source == PeIconExtractor::Source::Ico;
         }
-    }
-    if (path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) {
-        PeIconExtractor::Source source = PeIconExtractor::Source::None;
-        QIcon icon = PeIconExtractor::extractIcon(path, &source);
-        if (legacy) *legacy = source == PeIconExtractor::Source::Ne;
         return icon;
     }
+
+    // Neither an executable nor an .ico: a plain image file, as a dosbox
+    // [ui] icon is free to name.
     QImage image(path);
     return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
 }
@@ -129,6 +130,13 @@ bool nameIsOurs(const ProgramItem &item) {
 } // namespace
 
 void completeProgramItem(ProgramItem &it) {
+    // An icon picked by hand in the properties dialog outranks anything we
+    // would go looking for. If the file it came from is gone, the item falls
+    // back to the usual discovery below rather than to no icon at all.
+    if (it.icon.isNull() && it.iconIndex >= 0) {
+        it.icon = loadIconFile(iconSourceFile(it), it.iconIndex, &it.legacyIcon);
+    }
+
     if (isDosBoxConfig(it.command)) {
         const DosBoxUi ui = readDosBoxUi(it.command);
         // A [ui] title names the entry, but never overrides a name the user
@@ -136,7 +144,10 @@ void completeProgramItem(ProgramItem &it) {
         if (!ui.title.isEmpty() && nameIsOurs(it)) it.name = ui.title;
         if (it.icon.isNull() && !ui.iconPath.isEmpty()) {
             const QString resolved = QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
-            it.icon = loadIconFile(resolved, &it.legacyIcon);
+            it.icon = loadIconFile(resolved, -1, &it.legacyIcon);
+            // Remembered so the properties dialog can offer the rest of the
+            // icons that file holds, the conf naming only the file.
+            if (!it.icon.isNull()) it.iconSource = resolved;
         }
     } else if (isScummVmGame(it.command)) {
         // Prefer the title the .trs names itself, falling back to the folder
@@ -154,6 +165,7 @@ void completeProgramItem(ProgramItem &it) {
         PeIconExtractor::Source source = PeIconExtractor::Source::None;
         it.icon = PeIconExtractor::extractIcon(it.command, &source);
         it.legacyIcon = source == PeIconExtractor::Source::Ne;
+        if (!it.icon.isNull()) it.iconSource = it.command;
     }
 
     // Whatever the item is, the launcher that plays it may have an icon of
@@ -177,4 +189,8 @@ void completeProgramItem(ProgramItem &it) {
     }
 
     if (it.workingDir.isEmpty()) it.workingDir = QFileInfo(it.command).absolutePath();
+}
+
+QString iconSourceFile(const ProgramItem &item) {
+    return item.iconSource.isEmpty() ? item.command : item.iconSource;
 }

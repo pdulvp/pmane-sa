@@ -543,6 +543,8 @@ void MainWindow::load() {
             item.arguments = settings.value("arguments").toString();
             item.workingDir = settings.value("workingDir").toString();
             item.runner = settings.value("runner").toString();
+            item.iconIndex = settings.value("iconIndex", -1).toInt();
+            item.iconSource = settings.value("iconSource").toString();
             group->addProgramItem(item);
         }
         settings.endArray();
@@ -603,6 +605,14 @@ void MainWindow::save() {
             settings.setValue("workingDir", items[j].workingDir);
             // Only written when set, so a plain wine item stays as it was.
             if (!items[j].runner.isEmpty()) settings.setValue("runner", items[j].runner);
+            // Likewise the icon: only an item wearing one somebody picked out
+            // of the several its file holds has anything to remember.
+            if (items[j].iconIndex >= 0) {
+                settings.setValue("iconIndex", items[j].iconIndex);
+                if (!items[j].iconSource.isEmpty()) {
+                    settings.setValue("iconSource", items[j].iconSource);
+                }
+            }
         }
         settings.endArray();
     }

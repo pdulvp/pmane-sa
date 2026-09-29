@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QIcon>
+#include <QVector>
 
 // Extracts the "MAINICON"-style group icon embedded as a PE32/PE32+
 // resource (RT_GROUP_ICON / RT_ICON) inside a Windows .exe/.dll, without
@@ -16,9 +17,28 @@ public:
     // and low-colour, which is what the XP-style rendering targets.
     enum class Source { None, Pe, Ne, Ico };
 
+    // One of the icons a file offers, as listIcons() found it.
+    struct IconInfo {
+        int index = -1;   // what extractIconAt() takes back
+        QIcon icon;
+        int width = 0;    // of the decoded image
+        int height = 0;
+        int bitCount = 0; // colour depth the container declares, 0 if unknown
+    };
+
     static QIcon extractIcon(const QString &exePath, Source *source = nullptr);
 
     // Reads a standalone .ico file. Same image payloads as the icons
     // embedded in an executable, just a different container around them.
     static QIcon extractIcoFile(const QString &icoPath);
+
+    // Every distinct icon a file holds, in the order the file stores them:
+    // one per icon group in a PE/NE executable (a group being the same
+    // artwork at several sizes), one per image in an .ico.
+    static QVector<IconInfo> listIcons(const QString &path, Source *source = nullptr);
+
+    // The icon that listing gave `index`. A negative index -- or one the
+    // file no longer holds, its icons having changed since the item was set
+    // up -- gives whichever icon extractIcon() would.
+    static QIcon extractIconAt(const QString &path, int index, Source *source = nullptr);
 };

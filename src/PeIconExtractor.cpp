@@ -6,6 +6,8 @@
 #include <QVector>
 #include <QtEndian>
 
+#include <functional>
+
 namespace {
 
 constexpr quint16 RT_ICON = 3;
@@ -105,6 +107,13 @@ struct GrpIconEntry {
     quint16 bitCount;
     quint16 id;
 };
+
+// How much this desktop wants a given image: a classic 32x32 first (closest
+// to the win3.1 look), otherwise the largest and deepest one on offer.
+int iconScore(int width, int bitCount) {
+    const int w = width ? width : 256;
+    return (w == 32 ? 1000 : 0) + w * 10 + bitCount;
+}
 
 // Decodes a legacy ICO "raw" image (either a PNG blob, or an old-style
 // DIB: BITMAPINFOHEADER + optional palette + XOR bitmap + AND mask) into
@@ -257,16 +266,57 @@ QImage decodeIconImage(const QByteArray &raw) {
     return img;
 }
 
-// Extracts the group-icon image from a modern PE32/PE32+ executable.
-QImage extractPeIconImage(const Reader &r, const uchar *d, qint64 size, quint32 peOffset) {
+// The GRPICONDIR layout, shared by PE and NE executables: a short header,
+// then one 14-byte entry per image in the group.
+QVector<GrpIconEntry> parseGroupDir(const QByteArray &blob) {
+    QVector<GrpIconEntry> members;
+    Reader r{reinterpret_cast<const uchar *>(blob.constData()), blob.size()};
+    quint16 idCount;
+    if (!r.u16(4, idCount)) return members;
+    for (int i = 0; i < idCount; ++i) {
+        qint64 o = 6 + qint64(i) * 14;
+        if (!r.bytes(o, 14)) break;
+        GrpIconEntry e;
+        e.width = quint8(blob[o]);
+        e.height = quint8(blob[o + 1]);
+        r.u16(o + 6, e.bitCount);
+        r.u16(o + 12, e.id);
+        members.append(e);
+    }
+    return members;
+}
+
+// Which image of a group this desktop would rather show.
+GrpIconEntry bestMember(const QVector<GrpIconEntry> &members) {
+    GrpIconEntry best = members.first();
+    for (const GrpIconEntry &e : members) {
+        if (iconScore(e.width, e.bitCount) > iconScore(best.width, best.bitCount)) best = e;
+    }
+    return best;
+}
+
+// The resource directory of a modern PE32/PE32+ executable, resolved down
+// to raw file offsets.
+struct PeResTable {
+    QVector<Section> sections;
+    quint32 resourceRva = 0;
+    qint64 baseOffset = -1;
+
+    bool valid() const { return baseOffset >= 0; }
+    qint64 toFile(quint32 relOffset) const { return rvaToOffset(sections, resourceRva + relOffset); }
+};
+
+PeResTable parsePeResources(const Reader &r, quint32 peOffset) {
+    PeResTable t;
+
     qint64 coffOffset = peOffset + 4;
     quint16 numSections, sizeOfOptionalHeader;
-    if (!r.u16(coffOffset + 2, numSections)) return {};
-    if (!r.u16(coffOffset + 16, sizeOfOptionalHeader)) return {};
+    if (!r.u16(coffOffset + 2, numSections)) return t;
+    if (!r.u16(coffOffset + 16, sizeOfOptionalHeader)) return t;
 
     qint64 optHeaderOffset = coffOffset + 20;
     quint16 magic;
-    if (!r.u16(optHeaderOffset, magic)) return {};
+    if (!r.u16(optHeaderOffset, magic)) return t;
 
     qint64 dataDirOffset;
     if (magic == 0x10b) { // PE32
@@ -274,125 +324,80 @@ QImage extractPeIconImage(const Reader &r, const uchar *d, qint64 size, quint32 
     } else if (magic == 0x20b) { // PE32+
         dataDirOffset = optHeaderOffset + 112;
     } else {
-        return {};
+        return t;
     }
 
+    // Entry 2 of the data directory is the resource table.
     quint32 resourceRva, resourceSize;
-    if (!r.u32(dataDirOffset + 2 * 8, resourceRva)) return {};
-    if (!r.u32(dataDirOffset + 2 * 8 + 4, resourceSize)) return {};
-    if (resourceRva == 0 || resourceSize == 0) return {};
+    if (!r.u32(dataDirOffset + 2 * 8, resourceRva)) return t;
+    if (!r.u32(dataDirOffset + 2 * 8 + 4, resourceSize)) return t;
+    if (resourceRva == 0 || resourceSize == 0) return t;
 
     qint64 sectionTableOffset = optHeaderOffset + sizeOfOptionalHeader;
-    QVector<Section> sections;
     for (int i = 0; i < numSections; ++i) {
         qint64 o = sectionTableOffset + i * 40;
         quint32 virtualSize, virtualAddress, rawSize, rawOffset;
-        if (!r.u32(o + 8, virtualSize)) return {};
-        if (!r.u32(o + 12, virtualAddress)) return {};
-        if (!r.u32(o + 16, rawSize)) return {};
-        if (!r.u32(o + 20, rawOffset)) return {};
-        sections.append({virtualAddress, virtualSize, rawOffset, rawSize});
+        if (!r.u32(o + 8, virtualSize)) return t;
+        if (!r.u32(o + 12, virtualAddress)) return t;
+        if (!r.u32(o + 16, rawSize)) return t;
+        if (!r.u32(o + 20, rawOffset)) return t;
+        t.sections.append({virtualAddress, virtualSize, rawOffset, rawSize});
     }
 
-    qint64 resourceBaseOffset = rvaToOffset(sections, resourceRva);
-    if (resourceBaseOffset < 0) return {};
+    t.resourceRva = resourceRva;
+    t.baseOffset = rvaToOffset(t.sections, resourceRva);
+    return t;
+}
 
-    auto resOffsetToFile = [&](quint32 relOffset) -> qint64 {
-        return rvaToOffset(sections, resourceRva + relOffset);
-    };
+// The bytes of a resource, given its level-2 entry: down through the
+// language directory to the leaf that points at the payload.
+QByteArray peLeafData(const Reader &r, const uchar *d, const PeResTable &t,
+                      const ResourceDirEntry &res) {
+    if (!res.isDirectory) return {};
+    qint64 langDirOffset = t.toFile(res.offset);
+    if (langDirOffset < 0) return {};
+    ResourceDirEntry leaf;
+    if (!firstEntry(r, langDirOffset, leaf) || leaf.isDirectory) return {};
 
-    // Level 1: resource type directory -> RT_GROUP_ICON
+    qint64 dataEntryOffset = t.toFile(leaf.offset);
+    if (dataEntryOffset < 0) return {};
+    quint32 dataRva, dataSize;
+    if (!r.u32(dataEntryOffset, dataRva)) return {};
+    if (!r.u32(dataEntryOffset + 4, dataSize)) return {};
+
+    qint64 dataOffset = rvaToOffset(t.sections, dataRva);
+    if (dataOffset < 0 || !r.bytes(dataOffset, dataSize)) return {};
+    return QByteArray(reinterpret_cast<const char *>(d + dataOffset), int(dataSize));
+}
+
+// The icon groups a PE holds, one per logical icon.
+QVector<ResourceDirEntry> peIconGroups(const Reader &r, const PeResTable &t) {
+    QVector<ResourceDirEntry> groups;
+
     ResourceDirEntry groupIconType;
-    if (!findEntryById(r, resourceBaseOffset, RT_GROUP_ICON, groupIconType) ||
+    if (!findEntryById(r, t.baseOffset, RT_GROUP_ICON, groupIconType) ||
         !groupIconType.isDirectory) {
-        return {};
+        return groups;
     }
+    qint64 groupTypeDirOffset = t.toFile(groupIconType.offset);
+    if (groupTypeDirOffset < 0) return groups;
 
-    // Level 2: pick the first icon-group resource present.
-    qint64 groupTypeDirOffset = resOffsetToFile(groupIconType.offset);
-    if (groupTypeDirOffset < 0) return {};
-    ResourceDirEntry groupIconRes;
-    if (!firstEntry(r, groupTypeDirOffset, groupIconRes) || !groupIconRes.isDirectory) {
-        return {};
+    QVector<ResourceDirEntry> entries;
+    if (!readDirEntries(r, groupTypeDirOffset, entries)) return groups;
+    for (const ResourceDirEntry &e : entries) {
+        if (e.isDirectory) groups.append(e);
     }
+    return groups;
+}
 
-    // Level 3: language directory -> leaf data entry.
-    qint64 groupLangDirOffset = resOffsetToFile(groupIconRes.offset);
-    if (groupLangDirOffset < 0) return {};
-    ResourceDirEntry groupLeaf;
-    if (!firstEntry(r, groupLangDirOffset, groupLeaf) || groupLeaf.isDirectory) {
-        return {};
-    }
-
-    qint64 groupDataEntryOffset = resOffsetToFile(groupLeaf.offset);
-    if (groupDataEntryOffset < 0) return {};
-    quint32 groupDataRva, groupDataSize;
-    if (!r.u32(groupDataEntryOffset, groupDataRva)) return {};
-    if (!r.u32(groupDataEntryOffset + 4, groupDataSize)) return {};
-
-    qint64 groupDataOffset = rvaToOffset(sections, groupDataRva);
-    if (groupDataOffset < 0 || !r.bytes(groupDataOffset, groupDataSize)) return {};
-
-    quint16 idCount;
-    if (!r.u16(groupDataOffset + 4, idCount)) return {};
-
-    QVector<GrpIconEntry> candidates;
-    for (int i = 0; i < idCount; ++i) {
-        qint64 o = groupDataOffset + 6 + i * 14;
-        if (!r.bytes(o, 14)) break;
-        GrpIconEntry e;
-        e.width = d[o];
-        e.height = d[o + 1];
-        quint16 bitCount;
-        r.u16(o + 6, bitCount);
-        e.bitCount = bitCount;
-        quint16 id;
-        r.u16(o + 12, id);
-        e.id = id;
-        candidates.append(e);
-    }
-    if (candidates.isEmpty()) return {};
-
-    // Prefer a classic 32x32 icon (closest to the win3.1 look); otherwise
-    // take the largest/highest quality one available.
-    auto score = [](const GrpIconEntry &e) {
-        int w = e.width ? e.width : 256;
-        int exact32 = (w == 32) ? 1000 : 0;
-        return exact32 + w * 10 + e.bitCount;
-    };
-    GrpIconEntry best = candidates.first();
-    for (const GrpIconEntry &e : candidates) {
-        if (score(e) > score(best)) best = e;
-    }
-
-    // Find RT_ICON entry matching best.id
+QByteArray peIconData(const Reader &r, const uchar *d, const PeResTable &t, quint16 id) {
     ResourceDirEntry iconType;
-    if (!findEntryById(r, resourceBaseOffset, RT_ICON, iconType) || !iconType.isDirectory) {
-        return {};
-    }
-    qint64 iconTypeDirOffset = resOffsetToFile(iconType.offset);
+    if (!findEntryById(r, t.baseOffset, RT_ICON, iconType) || !iconType.isDirectory) return {};
+    qint64 iconTypeDirOffset = t.toFile(iconType.offset);
     if (iconTypeDirOffset < 0) return {};
     ResourceDirEntry iconRes;
-    if (!findEntryById(r, iconTypeDirOffset, best.id, iconRes) || !iconRes.isDirectory) {
-        return {};
-    }
-    qint64 iconLangDirOffset = resOffsetToFile(iconRes.offset);
-    if (iconLangDirOffset < 0) return {};
-    ResourceDirEntry iconLeaf;
-    if (!firstEntry(r, iconLangDirOffset, iconLeaf) || iconLeaf.isDirectory) {
-        return {};
-    }
-    qint64 iconDataEntryOffset = resOffsetToFile(iconLeaf.offset);
-    if (iconDataEntryOffset < 0) return {};
-    quint32 iconDataRva, iconDataSize;
-    if (!r.u32(iconDataEntryOffset, iconDataRva)) return {};
-    if (!r.u32(iconDataEntryOffset + 4, iconDataSize)) return {};
-
-    qint64 iconDataOffset = rvaToOffset(sections, iconDataRva);
-    if (iconDataOffset < 0 || !r.bytes(iconDataOffset, iconDataSize)) return {};
-
-    QByteArray raw(reinterpret_cast<const char *>(d + iconDataOffset), int(iconDataSize));
-    return decodeIconImage(raw);
+    if (!findEntryById(r, iconTypeDirOffset, id, iconRes)) return {};
+    return peLeafData(r, d, t, iconRes);
 }
 
 // A resource located inside an NE (16-bit "New Executable") resource table.
@@ -448,167 +453,212 @@ QMap<quint16, QVector<NeResource>> parseNeResourceTable(const Reader &r, qint64 
     return result;
 }
 
-// Extracts the group-icon image from an old 16-bit NE executable.
-QImage extractNeIconImage(const Reader &r, const uchar *d, qint64 size, qint64 neHeaderOffset) {
-    QMap<quint16, QVector<NeResource>> resources = parseNeResourceTable(r, neHeaderOffset);
+// One icon a file offers, with its payload left unread until somebody
+// actually wants to decode it: listing the icons of an executable that
+// embeds dozens should not decode all of them.
+struct IconSlot {
+    int index = 0;
+    int width = 0;    // 0 when the container does not say
+    int bitCount = 0;
+    std::function<QByteArray()> payload;
+};
 
+// Returning false stops the walk.
+using SlotVisitor = std::function<bool(const IconSlot &)>;
+
+void walkPeIcons(const Reader &r, const uchar *d, quint32 peOffset, const SlotVisitor &visit) {
+    const PeResTable t = parsePeResources(r, peOffset);
+    if (!t.valid()) return;
+
+    const QVector<ResourceDirEntry> groups = peIconGroups(r, t);
+    for (int i = 0; i < groups.size(); ++i) {
+        const QVector<GrpIconEntry> members = parseGroupDir(peLeafData(r, d, t, groups[i]));
+        if (members.isEmpty()) continue;
+        const GrpIconEntry best = bestMember(members);
+
+        IconSlot slot;
+        slot.index = i;
+        slot.width = best.width;
+        slot.bitCount = best.bitCount;
+        slot.payload = [&r, d, &t, best] { return peIconData(r, d, t, best.id); };
+        if (!visit(slot)) return;
+    }
+}
+
+void walkNeIcons(const Reader &r, const uchar *d, qint64 neHeaderOffset, const SlotVisitor &visit) {
+    const QMap<quint16, QVector<NeResource>> resources = parseNeResourceTable(r, neHeaderOffset);
     const QVector<NeResource> iconList = resources.value(RT_ICON);
-    if (iconList.isEmpty()) return {};
+    if (iconList.isEmpty()) return;
 
-    const QVector<NeResource> groupList = resources.value(RT_GROUP_ICON);
-
-    auto readRaw = [&](const NeResource &res) -> QByteArray {
+    auto readRaw = [&r, d](const NeResource &res) -> QByteArray {
         if (!r.bytes(res.offset, res.length)) return {};
         return QByteArray(reinterpret_cast<const char *>(d + res.offset), int(res.length));
     };
 
-    if (!groupList.isEmpty()) {
-        QByteArray groupData = readRaw(groupList.first());
-        Reader gr{reinterpret_cast<const uchar *>(groupData.constData()), groupData.size()};
-        quint16 idCount;
-        if (groupData.size() >= 6 && gr.u16(4, idCount)) {
-            QVector<GrpIconEntry> candidates;
-            for (int i = 0; i < idCount; ++i) {
-                qint64 o = 6 + i * 14;
-                if (!gr.bytes(o, 14)) break;
-                GrpIconEntry e;
-                e.width = quint8(groupData[o]);
-                e.height = quint8(groupData[o + 1]);
-                quint16 bitCount;
-                gr.u16(o + 6, bitCount);
-                e.bitCount = bitCount;
-                quint16 id;
-                gr.u16(o + 12, id);
-                e.id = id;
-                candidates.append(e);
-            }
-            if (!candidates.isEmpty()) {
-                auto score = [](const GrpIconEntry &e) {
-                    int w = e.width ? e.width : 256;
-                    int exact32 = (w == 32) ? 1000 : 0;
-                    return exact32 + w * 10 + e.bitCount;
-                };
-                GrpIconEntry best = candidates.first();
-                for (const GrpIconEntry &e : candidates) {
-                    if (score(e) > score(best)) best = e;
-                }
-                for (const NeResource &res : iconList) {
-                    if (res.id == best.id) {
-                        QImage img = decodeIconImage(readRaw(res));
-                        if (!img.isNull()) return img;
-                    }
-                }
-            }
+    int listed = 0;
+    for (const NeResource &group : resources.value(RT_GROUP_ICON)) {
+        const QVector<GrpIconEntry> members = parseGroupDir(readRaw(group));
+        if (members.isEmpty()) continue;
+        const GrpIconEntry best = bestMember(members);
+
+        for (const NeResource &icon : iconList) {
+            if (icon.id != best.id) continue;
+            IconSlot slot;
+            slot.index = listed;
+            slot.width = best.width;
+            slot.bitCount = best.bitCount;
+            slot.payload = [&readRaw, icon] { return readRaw(icon); };
+            ++listed;
+            if (!visit(slot)) return;
+            break;
         }
+    }
+    if (listed > 0) return;
+
+    // No usable group-icon resource: the individual icon resources are all
+    // there is to offer, so they are listed one by one instead.
+    for (int i = 0; i < iconList.size(); ++i) {
+        const NeResource &icon = iconList[i];
+        IconSlot slot;
+        slot.index = i;
+        slot.payload = [&readRaw, icon] { return readRaw(icon); };
+        if (!visit(slot)) return;
+    }
+}
+
+void walkIcoIcons(const Reader &r, const uchar *d, const SlotVisitor &visit) {
+    quint16 reserved, type, count;
+    if (!r.u16(0, reserved) || !r.u16(2, type) || !r.u16(4, count)) return;
+    // type 1 is an icon, 2 a cursor; anything else is not an .ico at all.
+    if (reserved != 0 || (type != 1 && type != 2) || count == 0) return;
+
+    // An .ico directory entry is like a PE group-icon entry, except the
+    // trailing field is a 4-byte file offset instead of a 2-byte resource id.
+    for (int i = 0; i < count; ++i) {
+        qint64 o = 6 + qint64(i) * 16;
+        if (!r.bytes(o, 16)) break;
+        quint16 bitCount;
+        r.u16(o + 6, bitCount);
+        quint32 length, offset;
+        r.u32(o + 8, length);
+        r.u32(o + 12, offset);
+
+        IconSlot slot;
+        slot.index = i;
+        slot.width = d[o];
+        slot.bitCount = bitCount;
+        slot.payload = [&r, d, offset, length]() -> QByteArray {
+            if (!r.bytes(offset, length)) return {};
+            return QByteArray(reinterpret_cast<const char *>(d + offset), int(length));
+        };
+        if (!visit(slot)) return;
+    }
+}
+
+// Hands `visit` every icon the file holds, whichever container it is, and
+// reports which container that was. The file is read once and its bytes
+// stay alive for the whole walk.
+void forEachIcon(const QString &path, PeIconExtractor::Source &source, const SlotVisitor &visit) {
+    source = PeIconExtractor::Source::None;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return;
+    const QByteArray bytes = file.readAll();
+    file.close();
+
+    const uchar *d = reinterpret_cast<const uchar *>(bytes.constData());
+    const qint64 size = bytes.size();
+    const Reader r{d, size};
+
+    if (size >= 2 && d[0] == 'M' && d[1] == 'Z') {
+        if (size < 0x40) return;
+        quint32 newHeaderOffset;
+        if (!r.u32(0x3c, newHeaderOffset)) return;
+        if (!r.bytes(newHeaderOffset, 4)) return;
+
+        if (d[newHeaderOffset] == 'P' && d[newHeaderOffset + 1] == 'E' &&
+            d[newHeaderOffset + 2] == 0 && d[newHeaderOffset + 3] == 0) {
+            source = PeIconExtractor::Source::Pe;
+            walkPeIcons(r, d, newHeaderOffset, visit);
+        } else if (d[newHeaderOffset] == 'N' && d[newHeaderOffset + 1] == 'E') {
+            source = PeIconExtractor::Source::Ne;
+            walkNeIcons(r, d, newHeaderOffset, visit);
+        }
+        // Anything else is an unrecognized executable format (e.g. OS/2
+        // LE/LX) and holds nothing we know how to read.
+        return;
     }
 
-    // No usable group-icon resource: fall back to whichever RT_ICON
-    // decodes successfully, preferring the largest.
-    QImage bestImage;
-    for (const NeResource &res : iconList) {
-        QImage img = decodeIconImage(readRaw(res));
-        if (img.isNull()) continue;
-        if (bestImage.isNull() || img.width() * img.height() > bestImage.width() * bestImage.height()) {
-            bestImage = img;
-        }
-    }
-    return bestImage;
+    source = PeIconExtractor::Source::Ico;
+    walkIcoIcons(r, d, visit);
 }
 
 } // namespace
 
+QVector<PeIconExtractor::IconInfo> PeIconExtractor::listIcons(const QString &path,
+                                                              Source *source) {
+    QVector<IconInfo> list;
+    Source found = Source::None;
+
+    forEachIcon(path, found, [&list](const IconSlot &slot) {
+        const QImage image = decodeIconImage(slot.payload());
+        if (!image.isNull()) {
+            IconInfo info;
+            info.index = slot.index;
+            info.icon = QIcon(QPixmap::fromImage(image));
+            info.width = image.width();
+            info.height = image.height();
+            info.bitCount = slot.bitCount;
+            list.append(info);
+        }
+        return true;
+    });
+
+    if (source) *source = list.isEmpty() ? Source::None : found;
+    return list;
+}
+
+QIcon PeIconExtractor::extractIconAt(const QString &path, int index, Source *source) {
+    if (source) *source = Source::None;
+
+    Source found = Source::None;
+    QImage chosen;
+    int chosenScore = -1;
+
+    forEachIcon(path, found, [&](const IconSlot &slot) {
+        if (index >= 0) {
+            if (slot.index != index) return true;
+            chosen = decodeIconImage(slot.payload());
+            return false; // the one that was asked for, decoded or not
+        }
+        // Nothing asked for in particular: an executable leads with its main
+        // icon, while an .ico is a set of sizes to pick the best from.
+        if (found != Source::Ico) {
+            chosen = decodeIconImage(slot.payload());
+            return chosen.isNull();
+        }
+        const int score = iconScore(slot.width, slot.bitCount);
+        if (score <= chosenScore) return true;
+        const QImage image = decodeIconImage(slot.payload());
+        if (image.isNull()) return true;
+        chosen = image;
+        chosenScore = score;
+        return true;
+    });
+
+    // The file's icons have changed since the item was set up and the one it
+    // remembers is gone: better its default icon than none at all.
+    if (chosen.isNull() && index >= 0) return extractIconAt(path, -1, source);
+
+    if (chosen.isNull()) return {};
+    if (source) *source = found;
+    return QIcon(QPixmap::fromImage(chosen));
+}
+
 QIcon PeIconExtractor::extractIcoFile(const QString &icoPath) {
-    QFile file(icoPath);
-    if (!file.open(QIODevice::ReadOnly)) return {};
-    QByteArray bytes = file.readAll();
-    file.close();
-
-    const uchar *d = reinterpret_cast<const uchar *>(bytes.constData());
-    qint64 size = bytes.size();
-    Reader r{d, size};
-
-    quint16 reserved, type, count;
-    if (!r.u16(0, reserved) || !r.u16(2, type) || !r.u16(4, count)) return {};
-    // type 1 is an icon, 2 a cursor; anything else is not an .ico at all.
-    if (reserved != 0 || (type != 1 && type != 2) || count == 0) return {};
-
-    // An .ico directory entry is like a PE group-icon entry, except the
-    // trailing field is a 4-byte file offset instead of a 2-byte resource id.
-    struct IcoEntry {
-        quint8 width;
-        quint16 bitCount;
-        quint32 offset;
-        quint32 length;
-    };
-
-    QVector<IcoEntry> entries;
-    for (int i = 0; i < count; ++i) {
-        qint64 o = 6 + qint64(i) * 16;
-        if (!r.bytes(o, 16)) break;
-        IcoEntry e;
-        e.width = d[o];
-        quint16 bitCount;
-        r.u16(o + 6, bitCount);
-        e.bitCount = bitCount;
-        quint32 length, offset;
-        r.u32(o + 8, length);
-        r.u32(o + 12, offset);
-        e.length = length;
-        e.offset = offset;
-        entries.append(e);
-    }
-    if (entries.isEmpty()) return {};
-
-    auto score = [](const IcoEntry &e) {
-        int w = e.width ? e.width : 256;
-        int exact32 = (w == 32) ? 1000 : 0;
-        return exact32 + w * 10 + e.bitCount;
-    };
-    IcoEntry best = entries.first();
-    for (const IcoEntry &e : entries) {
-        if (score(e) > score(best)) best = e;
-    }
-
-    if (!r.bytes(best.offset, best.length)) return {};
-    QByteArray raw(reinterpret_cast<const char *>(d + best.offset), int(best.length));
-    QImage img = decodeIconImage(raw);
-    if (img.isNull()) return {};
-
-    return QIcon(QPixmap::fromImage(img));
+    return extractIconAt(icoPath, -1);
 }
 
 QIcon PeIconExtractor::extractIcon(const QString &exePath, Source *source) {
-    if (source) *source = Source::None;
-
-    QFile file(exePath);
-    if (!file.open(QIODevice::ReadOnly)) return {};
-    QByteArray bytes = file.readAll();
-    file.close();
-
-    const uchar *d = reinterpret_cast<const uchar *>(bytes.constData());
-    qint64 size = bytes.size();
-    Reader r{d, size};
-
-    if (size < 0x40 || d[0] != 'M' || d[1] != 'Z') return {};
-
-    quint32 newHeaderOffset;
-    if (!r.u32(0x3c, newHeaderOffset)) return {};
-    if (!r.bytes(newHeaderOffset, 4)) return {};
-
-    QImage img;
-    Source found = Source::None;
-    if (d[newHeaderOffset] == 'P' && d[newHeaderOffset + 1] == 'E' &&
-        d[newHeaderOffset + 2] == 0 && d[newHeaderOffset + 3] == 0) {
-        img = extractPeIconImage(r, d, size, newHeaderOffset);
-        found = Source::Pe;
-    } else if (d[newHeaderOffset] == 'N' && d[newHeaderOffset + 1] == 'E') {
-        img = extractNeIconImage(r, d, size, newHeaderOffset);
-        found = Source::Ne;
-    } else {
-        return {}; // unrecognized executable format (e.g. OS/2 LE/LX)
-    }
-
-    if (img.isNull()) return {};
-    if (source) *source = found;
-    return QIcon(QPixmap::fromImage(img));
+    return extractIconAt(exePath, -1, source);
 }

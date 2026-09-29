@@ -16,4 +16,13 @@ struct ProgramItem {
     QString runner;
     QIcon icon;            // Icon extracted from the executable
     bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork
+    // Which of the icons its file holds the item wears. An executable or an
+    // .ico often carries several; -1 means whichever one the file leads with,
+    // and anything else is a choice made in the properties dialog, which
+    // survives the icon being derived again.
+    int iconIndex = -1;
+    // The file the artwork comes from: the executable itself for most items,
+    // the .ico a dosbox conf points at, or whatever the user picked instead.
+    // Empty falls back to the command.
+    QString iconSource;
 };

@@ -11,3 +11,8 @@
 // Whatever the user typed in the properties dialog is left alone, so this
 // is safe to run over an item more than once.
 void completeProgramItem(ProgramItem &item);
+
+// The file an item's icon artwork comes from: the one the user picked in the
+// properties dialog, else the one discovery found when the item was created,
+// else the command itself. What the "Change Icon" listing opens on.
+QString iconSourceFile(const ProgramItem &item);

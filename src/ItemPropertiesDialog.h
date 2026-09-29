@@ -5,6 +5,7 @@
 
 class QComboBox;
 class QFormLayout;
+class QLabel;
 class QLineEdit;
 
 // The "Program Item Properties" dialog, modeled after Progman's own:
@@ -20,6 +21,9 @@ public:
 private slots:
     void browseCommand();
     void browseWorkingDir();
+    // Picks one of the several icons the item's executable or .ico holds,
+    // the way Progman's own "Change Icon" did.
+    void changeIcon();
     // Only a Windows executable goes through Wine or Proton -- DOSBox
     // configs, ScummVM games, ROMs and documents each have a launcher of
     // their own -- so the row is there only when it has something to say.
@@ -31,11 +35,20 @@ private:
     // silently rewriting the item to wine.
     void populateRunners(const QString &selected);
 
+    // Shows the icon the item would end up with. Called after anything that
+    // may have changed it -- never on every keystroke, since working it out
+    // means reading the file.
+    void refreshIconPreview();
+
     QLineEdit *m_nameEdit;
     QLineEdit *m_commandEdit;
     QLineEdit *m_argsEdit;
     QLineEdit *m_workDirEdit;
     QComboBox *m_runnerCombo;
+    QLabel *m_iconPreview;
     QFormLayout *m_form;
     bool m_runnerRowShown = true;
+    // The item being edited, carrying the fields the dialog does not show --
+    // its icon and where that came from -- through to item().
+    ProgramItem m_item;
 };
