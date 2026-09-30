@@ -134,6 +134,12 @@ void colourChrome(QDialog *dialog, const Theme &theme) {
     // one, but never a colour the theme does not own.
     const QColor edge = blend(theme.windowBg, theme.windowText, 0.30);
 
+    // The style sheet goes on first. Re-setting one makes the style unpolish
+    // the whole dialog and hand every widget back the palette it had saved at
+    // the first polish, so palettes set before this call would be wiped and
+    // the banner and footer would keep the scheme they were born in.
+    dialog->setStyleSheet(styleSheetFor(theme, edge));
+
     if (QWidget *banner = dialog->findChild<QWidget *>(QLatin1String(kBannerName))) {
         QPalette pal = banner->palette();
         pal.setColor(QPalette::Window, theme.titleActive);
@@ -158,7 +164,6 @@ void colourChrome(QDialog *dialog, const Theme &theme) {
     if (QWidget *rule = dialog->findChild<QWidget *>(QLatin1String(kRuleName))) {
         rule->setStyleSheet(QStringLiteral("background: %1; border: none;").arg(edge.name()));
     }
-    dialog->setStyleSheet(styleSheetFor(theme, edge));
 }
 
 } // namespace
