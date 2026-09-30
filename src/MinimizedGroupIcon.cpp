@@ -1,4 +1,5 @@
 #include "MinimizedGroupIcon.h"
+#include "Theme.h"
 
 #include <QFontMetrics>
 #include <QMouseEvent>
@@ -83,10 +84,8 @@ void MinimizedGroupIcon::paintEvent(QPaintEvent *) {
     const QRect glyph((width() - kGlyphWidth) / 2, kGlyphTop, kGlyphWidth, kGlyphHeight);
     paintGroupGlyph(p, glyph, palette(), m_preview);
 
-    // The label has to stay readable against whatever colour the desktop is,
-    // so pick black or white from its luminance rather than a fixed colour.
-    const bool lightDesktop = m_desktop.isValid() && m_desktop.lightnessF() > 0.55;
-    const QColor textColor = lightDesktop ? Qt::black : Qt::white;
+    // The label has to stay readable against whatever colour the desktop is.
+    const QColor textColor = readableTextOn(m_desktop);
 
     const QRect labelArea(2, glyph.bottom() + 3, width() - 4, height() - glyph.bottom() - 5);
     const int flags = Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap;

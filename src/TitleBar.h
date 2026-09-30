@@ -24,6 +24,11 @@ public:
     // The menus live here; the window builds them as it always did.
     QMenuBar *menuBar() const { return m_menuBar; }
 
+    // Colours the whole strip. A platform theme can hand QMenuBar and the
+    // buttons palettes of their own, which outrank the application's, so
+    // each part is told the colour scheme rather than left to inherit it.
+    void applyPalette(const QPalette &palette);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     // Where the watch on the window is set up, the window being final by

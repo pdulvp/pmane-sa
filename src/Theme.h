@@ -22,5 +22,11 @@ struct Theme {
     QColor highlightText;
 };
 
+// Black or white, whichever stays readable on this colour. A theme's desktop
+// is anything from pale wheat to bright red, and what is drawn straight onto
+// it -- a minimized group's label, the menu strip -- has to hold up either
+// way.
+QColor readableTextOn(const QColor &background);
+
 const QVector<Theme> &builtinThemes();
 const Theme &themeByName(const QString &name);

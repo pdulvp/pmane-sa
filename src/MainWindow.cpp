@@ -70,6 +70,7 @@ void MainWindow::buildMenus() {
     QMenu *fileMenu = bar->addMenu(tr("&File"));
     fileMenu->addAction(tr("&New Program Group..."), this, &MainWindow::newGroup);
     fileMenu->addAction(tr("New &Item..."), this, &MainWindow::newItem);
+    fileMenu->addAction(tr("&Rename Group..."), this, [this] { renameGroup(); });
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("S&uspend Computer"), this, [this] {
@@ -216,6 +217,22 @@ void MainWindow::deleteGroup() {
 
     m_normalGeometry.remove(sub);
     delete sub; // owns and deletes the GroupWindow child widget too
+}
+
+void MainWindow::renameGroup(QMdiSubWindow *sub) {
+    if (!sub) sub = m_mdiArea->activeSubWindow();
+    GroupWindow *gw = sub ? qobject_cast<GroupWindow *>(sub->widget()) : nullptr;
+    if (!gw) return;
+
+    bool ok = false;
+    const QString title = QInputDialog::getText(this, tr("Rename Program Group"),
+                                                 tr("Description:"), QLineEdit::Normal,
+                                                 gw->title(), &ok);
+    if (!ok) return;
+    const QString trimmed = title.trimmed();
+    if (trimmed.isEmpty() || trimmed == gw->title()) return;
+    // The caption and the minimized icon both follow titleChanged().
+    gw->setTitle(trimmed);
 }
 
 void MainWindow::updateWindowMenu() {
@@ -502,9 +519,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     }
 
     if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
-        // A group's caption has no maximize box; double clicking it, which is
-        // the other way to the same thing, does nothing either.
-        if (event->type() == QEvent::MouseButtonDblClick) return true;
+        // A group's caption has no maximize box, so double clicking it is
+        // free for what a caption double click is otherwise no use for here:
+        // renaming the group. Anywhere else on the subwindow -- its own
+        // contents having had first refusal -- it does nothing.
+        if (event->type() == QEvent::MouseButtonDblClick) {
+            auto *mouse = static_cast<QMouseEvent *>(event);
+            const QWidget *contents = sub->widget();
+            if (mouse->button() == Qt::LeftButton && contents &&
+                mouse->position().y() < contents->geometry().top()) {
+                renameGroup(sub);
+            }
+            return true;
+        }
         // And should a group be maximized by some other route -- the system
         // menu still on a right click -- it is put straight back.
         if (event->type() == QEvent::WindowStateChange && sub->isMaximized()) {
@@ -555,6 +582,25 @@ void MainWindow::applyTheme(const QString &themeName) {
     pal.setColor(QPalette::ToolTipBase, theme.windowBg);
     pal.setColor(QPalette::ToolTipText, theme.windowText);
     qApp->setPalette(pal);
+
+    // The menu strip takes the desktop's own colour, so the window reads as
+    // one surface rather than a grey band sitting above a coloured one. It is
+    // told directly: a platform theme hands QMenuBar a palette of its own,
+    // and that outranks the application's.
+    QPalette stripPal = pal;
+    const QColor stripText = readableTextOn(theme.desktop);
+    stripPal.setColor(QPalette::Window, theme.desktop);
+    stripPal.setColor(QPalette::Button, theme.desktop);
+    stripPal.setColor(QPalette::WindowText, stripText);
+    stripPal.setColor(QPalette::ButtonText, stripText);
+    stripPal.setColor(QPalette::Text, stripText);
+    m_titleBar->applyPalette(stripPal);
+
+    // What drops out of the strip is an ordinary menu, in the ordinary window
+    // colours: only the bar itself wears the desktop's.
+    for (QAction *action : m_titleBar->menuBar()->actions()) {
+        if (QMenu *menu = action->menu()) menu->setPalette(pal);
+    }
 
     // Styles draw the MDI child captions from the subwindow's own
     // Highlight/HighlightedText roles.

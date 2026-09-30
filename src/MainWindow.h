@@ -45,6 +45,8 @@ private slots:
     // group, picked from a list of them.
     void insertApplication();
     void deleteGroup();
+    // Renames the active group, or the one whose caption was double clicked.
+    void renameGroup(QMdiSubWindow *sub = nullptr);
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();

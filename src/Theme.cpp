@@ -24,6 +24,10 @@ Theme make(const QString &name, const char *desktop, const char *titleActive,
 
 } // namespace
 
+QColor readableTextOn(const QColor &background) {
+    return (background.isValid() && background.lightnessF() > 0.55) ? Qt::black : Qt::white;
+}
+
 const QVector<Theme> &builtinThemes() {
     static const QVector<Theme> themes = {
         //                     desktop    titleAct   titleActTx titleInact titleInactTx windowBg   windowTx   btnFace    btnText    highlight  highlightTx

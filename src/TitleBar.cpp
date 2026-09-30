@@ -45,6 +45,11 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // Only as wide as the menus themselves: the rest of the strip is this
     // widget's own surface, which is what makes it draggable.
     m_menuBar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    // The strip is one colour throughout. A menu bar paints a panel of its
+    // own, which most styles shade a little darker than the window behind
+    // it, and that left a faint band behind the menus; without the panel the
+    // menus sit straight on this widget's background.
+    m_menuBar->setStyleSheet(QStringLiteral("QMenuBar { background: transparent; }"));
 
     m_clock = new QLabel(this);
     m_clock->setContentsMargins(kClockMargin, 0, kClockMargin, 0);
@@ -78,6 +83,20 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     connect(m_closeButton, &QToolButton::clicked, this, [this] { window()->close(); });
 
     setMouseTracking(true);
+    // A plain widget paints no background of its own, and the window behind
+    // it would show through in the ordinary window colour: the strip carries
+    // a colour of its own, so it has to fill.
+    setAutoFillBackground(true);
+}
+
+void TitleBar::applyPalette(const QPalette &palette) {
+    setPalette(palette);
+    m_menuBar->setPalette(palette);
+    m_clock->setPalette(palette);
+    for (QToolButton *button : {m_minimizeButton, m_maximizeButton, m_closeButton}) {
+        button->setPalette(palette);
+    }
+    update();
 }
 
 void TitleBar::showEvent(QShowEvent *event) {
