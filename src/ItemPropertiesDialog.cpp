@@ -5,6 +5,7 @@
 #include "IconPickerDialog.h"
 #include "ItemDetails.h"
 #include "PeIconExtractor.h"
+#include "DialogChrome.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -26,6 +27,10 @@ constexpr int kPreviewSize = 32;
 ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Program Item Properties"));
 
+    // The banner, the coloured surfaces and the field styling the dialogs
+    // share; what is left here is this dialog's own form.
+    const DialogChrome chrome = applyDialogChrome(this, tr("Properties"));
+
     m_nameEdit = new QLineEdit(this);
     m_commandEdit = new QLineEdit(this);
     m_argsEdit = new QLineEdit(this);
@@ -33,18 +38,28 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_runnerCombo = new QComboBox(this);
     populateRunners(QString());
 
+    m_nameEdit->setPlaceholderText(tr("The name under the icon"));
+    m_commandEdit->setPlaceholderText(tr("Program, document or folder to open"));
+    m_argsEdit->setPlaceholderText(tr("Passed to the program as it starts"));
+    m_workDirEdit->setPlaceholderText(tr("Where the program starts out"));
+
     auto *commandBrowse = new QPushButton(tr("Browse..."), this);
     auto *commandRow = new QHBoxLayout;
+    commandRow->setSpacing(8);
     commandRow->addWidget(m_commandEdit);
     commandRow->addWidget(commandBrowse);
 
     auto *workDirBrowse = new QPushButton(tr("Browse..."), this);
     auto *workDirRow = new QHBoxLayout;
+    workDirRow->setSpacing(8);
     workDirRow->addWidget(m_workDirEdit);
     workDirRow->addWidget(workDirBrowse);
 
+    // The icon in a well of its own, so it reads as the thing being chosen
+    // rather than as a picture dropped beside a button.
     m_iconPreview = new QLabel(this);
-    m_iconPreview->setFixedSize(kPreviewSize, kPreviewSize);
+    m_iconPreview->setObjectName(QStringLiteral("iconWell"));
+    m_iconPreview->setFixedSize(kPreviewSize + 14, kPreviewSize + 14);
     m_iconPreview->setAlignment(Qt::AlignCenter);
     auto *changeIconButton = new QPushButton(tr("Change Icon..."), this);
     m_xpStyleCheck = new QCheckBox(tr("XP style"), this);
@@ -53,12 +68,20 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
                                   "own. Suits the flat artwork of 16-bit programs and .ico "
                                   "files best."));
     auto *iconRow = new QHBoxLayout;
+    iconRow->setSpacing(12);
     iconRow->addWidget(m_iconPreview);
     iconRow->addWidget(changeIconButton);
     iconRow->addWidget(m_xpStyleCheck);
     iconRow->addStretch();
 
     m_form = new QFormLayout;
+    // Labels down the right of their column and fields down the left of
+    // theirs, so the two make a single line each rather than a ragged pair.
+    m_form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    m_form->setHorizontalSpacing(kDialogLabelGap);
+    m_form->setVerticalSpacing(kDialogRowSpacing);
     m_form->addRow(tr("Description:"), m_nameEdit);
     m_form->addRow(tr("Command Line:"), commandRow);
     m_form->addRow(tr("Arguments:"), m_argsEdit);
@@ -67,10 +90,15 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    // OK is what the form is filled in for.
+    if (QPushButton *ok = buttons->button(QDialogButtonBox::Ok)) {
+        markDefaultButton(ok);
+        ok->setDefault(true);
+    }
 
-    auto *layout = new QVBoxLayout(this);
-    layout->addLayout(m_form);
-    layout->addWidget(buttons);
+    chrome.fields->addLayout(m_form);
+    chrome.fields->addStretch();
+    chrome.footer->addWidget(buttons);
 
     connect(m_commandEdit, &QLineEdit::textChanged, this,
             &ItemPropertiesDialog::updateRunnerVisibility);
@@ -83,7 +111,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    resize(420, sizeHint().height());
+    resize(520, sizeHint().height());
 }
 
 void ItemPropertiesDialog::setItem(const ProgramItem &item) {

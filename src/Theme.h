@@ -30,3 +30,10 @@ QColor readableTextOn(const QColor &background);
 
 const QVector<Theme> &builtinThemes();
 const Theme &themeByName(const QString &name);
+
+// The scheme the desktop is wearing at the moment, for the parts of the UI a
+// palette cannot carry -- a caption colour on something that paints its own
+// surface, a dialog's banner. Set as the theme is applied; anything that only
+// needs Window, Base or Highlight should keep taking them from the palette.
+const Theme &currentTheme();
+void setCurrentTheme(const QString &name);

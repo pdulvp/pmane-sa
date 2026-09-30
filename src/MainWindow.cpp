@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AlignmentGuides.h"
+#include "TextPromptDialog.h"
 #include "ApplicationPickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
@@ -16,7 +17,6 @@
 #include <QCloseEvent>
 #include <QDir>
 #include <QFile>
-#include <QInputDialog>
 #include <QKeySequence>
 #include <QLineEdit>
 #include <QMdiSubWindow>
@@ -157,11 +157,11 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
 }
 
 void MainWindow::newGroup() {
-    bool ok;
-    QString title = QInputDialog::getText(this, tr("New Program Group"), tr("Description:"),
-                                           QLineEdit::Normal, QString(), &ok);
-    if (!ok || title.trimmed().isEmpty()) return;
-    addGroupWindow(new GroupWindow(title.trimmed()));
+    bool ok = false;
+    const QString title = askForText(this, tr("New Program Group"), tr("New Group"),
+                                      tr("Description:"), QString(), &ok);
+    if (!ok || title.isEmpty()) return;
+    addGroupWindow(new GroupWindow(title));
 }
 
 void MainWindow::newItem() {
@@ -231,14 +231,11 @@ void MainWindow::renameGroup(QMdiSubWindow *sub) {
     if (!gw) return;
 
     bool ok = false;
-    const QString title = QInputDialog::getText(this, tr("Rename Program Group"),
-                                                 tr("Description:"), QLineEdit::Normal,
-                                                 gw->title(), &ok);
-    if (!ok) return;
-    const QString trimmed = title.trimmed();
-    if (trimmed.isEmpty() || trimmed == gw->title()) return;
+    const QString title = askForText(this, tr("Rename Program Group"), tr("Rename"),
+                                      tr("Description:"), gw->title(), &ok);
+    if (!ok || title.isEmpty() || title == gw->title()) return;
     // The caption and the minimized icon both follow titleChanged().
-    gw->setTitle(trimmed);
+    gw->setTitle(title);
 }
 
 void MainWindow::updateWindowMenu() {
@@ -312,10 +309,8 @@ QString MainWindow::askProfileName(const QString &windowTitle, const QString &in
     QString suggestion = initial;
     forever {
         bool ok = false;
-        const QString name =
-            QInputDialog::getText(this, windowTitle, tr("Profile name:"), QLineEdit::Normal,
-                                  suggestion, &ok)
-                .trimmed();
+        const QString name = askForText(this, windowTitle, tr("Profile"),
+                                         tr("Profile name:"), suggestion, &ok);
         if (!ok || name.isEmpty()) return {};
         // Leaving a rename dialog on the name it opened with is not a clash.
         if (!m_profiles.contains(name) || name == initial) return name;
@@ -638,6 +633,9 @@ void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
 void MainWindow::applyTheme(const QString &themeName) {
     const Theme &theme = themeByName(themeName);
     m_themeName = theme.name;
+    // So the dialogs, which paint surfaces no palette role covers, can reach
+    // the scheme too.
+    setCurrentTheme(m_themeName);
 
     m_mdiArea->setBackground(QBrush(theme.desktop));
 

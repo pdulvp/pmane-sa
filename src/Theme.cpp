@@ -54,3 +54,12 @@ const Theme &themeByName(const QString &name) {
     }
     return themes.first();
 }
+
+namespace {
+// Whatever was applied last, the first built-in until then.
+QString g_currentThemeName;
+} // namespace
+
+const Theme &currentTheme() { return themeByName(g_currentThemeName); }
+
+void setCurrentTheme(const QString &name) { g_currentThemeName = themeByName(name).name; }

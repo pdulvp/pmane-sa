@@ -1,9 +1,12 @@
 #include "ApplicationPickerDialog.h"
 
 #include "DesktopEntry.h"
+#include "DialogChrome.h"
 #include "ItemDetails.h"
 
 #include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
@@ -64,25 +67,45 @@ void disambiguateNames(QVector<ProgramItem> &applications) {
 ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Insert Application"));
 
+    // The banner, the coloured surfaces and the field styling the dialogs
+    // share; what is left here is the list and what narrows it.
+    const DialogChrome chrome = applyDialogChrome(this, tr("Insert Application"));
+
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setPlaceholderText(tr("Type to narrow the list"));
     m_filterEdit->setClearButtonEnabled(true);
+
+    auto *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(kDialogLabelGap);
+    form->setVerticalSpacing(kDialogRowSpacing);
+    form->addRow(tr("Find:"), m_filterEdit);
 
     m_list = new QListWidget(this);
     m_list->setIconSize(QSize(32, 32));
     m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->setUniformItemSizes(true);
+    m_list->setFrameShape(QFrame::NoFrame); // the style sheet draws the edge
+
+    // More than one can be taken at a time, which is not what a list of
+    // applications usually offers: worth saying once, quietly.
+    auto *hint = new QLabel(tr("Pick as many as you like: they all go into the group."), this);
+    markHintLabel(hint);
+    hint->setWordWrap(true);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     m_okButton = buttons->button(QDialogButtonBox::Ok);
     m_okButton->setText(tr("Insert"));
     m_okButton->setEnabled(false);
+    markDefaultButton(m_okButton);
+    m_okButton->setDefault(true);
 
-    auto *layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(tr("Find:"), this));
-    layout->addWidget(m_filterEdit);
-    layout->addWidget(m_list);
-    layout->addWidget(buttons);
+    chrome.fields->addLayout(form);
+    chrome.fields->addWidget(m_list, 1);
+    chrome.fields->addWidget(hint);
+    chrome.footer->addWidget(buttons);
 
     // Each application is worked out exactly the way a dropped file would be,
     // so the name and icon on show here are the ones the item will wear.
@@ -119,7 +142,7 @@ ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(pare
     // Typing goes to the filter wherever the focus is, so the list can be
     // narrowed without reaching for the mouse first.
     m_filterEdit->setFocus();
-    resize(360, 460);
+    resize(520, 520);
 }
 
 void ApplicationPickerDialog::applyFilter(const QString &text) {

@@ -1,7 +1,11 @@
 #include "ThemeDialog.h"
 
+#include "DialogChrome.h"
+
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QFrame>
+#include <QPushButton>
 #include <QFormLayout>
 #include <QLabel>
 #include <QPainter>
@@ -109,6 +113,11 @@ void ThemePreview::paintEvent(QPaintEvent *) {
 ThemeDialog::ThemeDialog(const QString &currentTheme, QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Colors"));
 
+    // The banner, the coloured surfaces and the field styling the dialogs
+    // share. This one is dressed in the scheme it is previewing, so the
+    // chrome is put on again whenever the choice changes.
+    const DialogChrome chrome = applyDialogChrome(this, tr("Colors"));
+
     m_combo = new QComboBox(this);
     for (const Theme &theme : builtinThemes()) {
         m_combo->addItem(theme.name);
@@ -116,25 +125,50 @@ ThemeDialog::ThemeDialog(const QString &currentTheme, QWidget *parent) : QDialog
     const int index = m_combo->findText(currentTheme);
     if (index >= 0) m_combo->setCurrentIndex(index);
 
+    auto *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(kDialogLabelGap);
+    form->setVerticalSpacing(kDialogRowSpacing);
+    form->addRow(tr("Color Scheme:"), m_combo);
+
+    auto *previewLabel = new QLabel(tr("Screen Element Preview:"), this);
+
     m_preview = new ThemePreview(this);
     m_preview->setTheme(themeByName(m_combo->currentText()));
+    // The miniature paints its own desktop right out to its edge, so the
+    // frame around it belongs to a holder: a border on the preview itself
+    // would be painted straight over.
+    auto *previewWell = new QFrame(this);
+    previewWell->setObjectName(QStringLiteral("previewWell"));
+    auto *wellLayout = new QVBoxLayout(previewWell);
+    wellLayout->setContentsMargins(1, 1, 1, 1);
+    wellLayout->addWidget(m_preview);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    if (QPushButton *ok = buttons->button(QDialogButtonBox::Ok)) {
+        markDefaultButton(ok);
+        ok->setDefault(true);
+    }
 
-    auto *layout = new QVBoxLayout(this);
-    auto *form = new QFormLayout;
-    form->addRow(tr("Color Scheme:"), m_combo);
-    layout->addLayout(form);
-    layout->addWidget(new QLabel(tr("Screen Element Preview:"), this));
-    layout->addWidget(m_preview, 1);
-    layout->addWidget(buttons);
+    chrome.fields->addLayout(form);
+    chrome.fields->addWidget(previewLabel);
+    chrome.fields->addWidget(previewWell, 1);
+    chrome.footer->addWidget(buttons);
 
     connect(m_combo, &QComboBox::currentTextChanged, this, [this](const QString &name) {
         m_preview->setTheme(themeByName(name));
+        // The desktop behind takes the scheme first, which is what sets the
+        // current theme; this dialog then puts it on too, so the colours
+        // being chosen are the ones being worn.
         emit themePreviewed(name);
+        refreshDialogChrome(this);
     });
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    resize(520, sizeHint().height());
 }
 
 QString ThemeDialog::selectedTheme() const {

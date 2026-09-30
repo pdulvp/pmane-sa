@@ -15,6 +15,10 @@ add_executable(progman-linux
     src/MainWindow.h
     src/DesktopArea.cpp
     src/DesktopArea.h
+    src/DialogChrome.cpp
+    src/DialogChrome.h
+    src/TextPromptDialog.cpp
+    src/TextPromptDialog.h
     src/AlignmentGuides.cpp
     src/AlignmentGuides.h
     src/ProfileManager.cpp

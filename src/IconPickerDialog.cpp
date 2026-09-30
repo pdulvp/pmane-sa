@@ -1,8 +1,11 @@
 #include "IconPickerDialog.h"
 
+#include "DialogChrome.h"
+
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -26,14 +29,27 @@ constexpr int kIconIndexRole = Qt::UserRole;
 IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Change Icon"));
 
+    // The banner, the coloured surfaces and the field styling the dialogs
+    // share; what is left here is the file and what it holds.
+    const DialogChrome chrome = applyDialogChrome(this, tr("Change Icon"));
+
     m_pathEdit = new QLineEdit(this);
+    m_pathEdit->setPlaceholderText(tr("Program, library or .ico file"));
     auto *browseButton = new QPushButton(tr("Browse..."), this);
     browseButton->setAutoDefault(false);
 
     auto *pathRow = new QHBoxLayout;
-    pathRow->addWidget(new QLabel(tr("File Name:"), this));
+    pathRow->setSpacing(8);
     pathRow->addWidget(m_pathEdit);
     pathRow->addWidget(browseButton);
+
+    auto *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(kDialogLabelGap);
+    form->setVerticalSpacing(kDialogRowSpacing);
+    form->addRow(tr("File Name:"), pathRow);
 
     m_list = new QListWidget(this);
     m_list->setViewMode(QListView::IconMode);
@@ -42,24 +58,33 @@ IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
     m_list->setResizeMode(QListView::Adjust);
     m_list->setMovement(QListView::Static);
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_list->setMinimumHeight(kCellSize * 2 + 12);
+    m_list->setMinimumHeight(kCellSize * 3 + 12);
+    m_list->setSpacing(4);
+    m_list->setFrameShape(QFrame::NoFrame); // the style sheet draws the edge
 
+    auto *listLabel = new QLabel(tr("Icons in this file:"), this);
+
+    // What came of reading the file, under the listing it describes.
     m_status = new QLabel(this);
+    markHintLabel(m_status);
+    m_status->setWordWrap(true);
 
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
     m_okButton = buttons->button(QDialogButtonBox::Ok);
     m_okButton->setEnabled(false);
+    markDefaultButton(m_okButton);
+    m_okButton->setDefault(true);
     QPushButton *defaultButton = buttons->button(QDialogButtonBox::RestoreDefaults);
     defaultButton->setText(tr("Default Icon"));
+    defaultButton->setAutoDefault(false);
     defaultButton->setToolTip(tr("Go back to the icon the item finds on its own."));
 
-    auto *layout = new QVBoxLayout(this);
-    layout->addLayout(pathRow);
-    layout->addWidget(new QLabel(tr("Current Icon:"), this));
-    layout->addWidget(m_list);
-    layout->addWidget(m_status);
-    layout->addWidget(buttons);
+    chrome.fields->addLayout(form);
+    chrome.fields->addWidget(listLabel);
+    chrome.fields->addWidget(m_list, 1);
+    chrome.fields->addWidget(m_status);
+    chrome.footer->addWidget(buttons);
 
     connect(browseButton, &QPushButton::clicked, this, &IconPickerDialog::browse);
     connect(m_pathEdit, &QLineEdit::editingFinished, this, &IconPickerDialog::reload);
@@ -73,7 +98,7 @@ IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
         accept();
     });
 
-    resize(420, 320);
+    resize(520, 400);
 }
 
 void IconPickerDialog::setSource(const QString &path, int index) {
@@ -99,6 +124,9 @@ void IconPickerDialog::reload() {
 
     for (const PeIconExtractor::IconInfo &info : m_icons) {
         auto *cell = new QListWidgetItem(info.icon, QString(), m_list);
+        // Every cell the same size, so a selection is a square around the
+        // icon rather than whatever room that one icon happened to take.
+        cell->setSizeHint(QSize(kCellSize, kCellSize));
         cell->setData(kIconIndexRole, info.index);
         cell->setToolTip(info.bitCount > 0
                              ? tr("%1 x %2, %3-bit")
