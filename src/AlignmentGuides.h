@@ -23,6 +23,13 @@ public:
     // from further off than it is held, so the line arrives first and the
     // hold is never a surprise.
     static constexpr int kShowDistance = 20;
+    // A band rather than a hairline, drawn centred on the position it stands
+    // for, and see-through enough to read a group's icons through. A line
+    // merely within reach is faint; the one the edge is actually being held
+    // on comes up solid, so which is which is readable while dragging.
+    static constexpr int kLineWidth = 3;
+    static constexpr int kNearAlpha = 90;
+    static constexpr int kHeldAlpha = 230;
     static constexpr int kSnapDistance = 10;
 
     explicit AlignmentGuides(QWidget *parent = nullptr);
@@ -53,4 +60,6 @@ private:
     QVector<int> m_ys;
     QVector<int> m_shownXs;  // the ones within reach, which are the ones drawn
     QVector<int> m_shownYs;
+    QVector<int> m_heldXs;   // and of those, the ones an edge is sitting on
+    QVector<int> m_heldYs;
 };
