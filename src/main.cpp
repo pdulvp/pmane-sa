@@ -51,13 +51,16 @@ int main(int argc, char *argv[]) {
     parser.setApplicationDescription(
         QCoreApplication::translate("main", "A Progman-style launcher for Windows programs."));
     parser.addHelpOption();
-    QCommandLineOption profileOption(
-        {QStringLiteral("p"), QStringLiteral("profile")},
-        QCoreApplication::translate("main", "Open <profile> instead of the one last used."),
-        QStringLiteral("profile"));
-    parser.addOption(profileOption);
+    // Screens were called profiles once, and shortcuts written then still
+    // pass --profile: both names reach the same option.
+    QCommandLineOption screenOption(
+        {QStringLiteral("s"), QStringLiteral("screen"), QStringLiteral("p"),
+         QStringLiteral("profile")},
+        QCoreApplication::translate("main", "Open <screen> instead of the one last used."),
+        QStringLiteral("screen"));
+    parser.addOption(screenOption);
     parser.process(app);
-    const QString profile = parser.value(profileOption);
+    const QString screen = parser.value(screenOption);
 
     // Only one Program Manager at a time. The name is per-user so separate
     // logins do not collide over the socket in the temp directory.
@@ -69,10 +72,10 @@ int main(int argc, char *argv[]) {
         probe.connectToServer(serverName);
         if (probe.waitForConnected(300)) {
             // Someone answered, so an instance is live: ask it to come
-            // forward -- switching profile on the way, if one was asked for
+            // forward -- switching screen on the way, if one was asked for
             // -- and leave rather than opening a second window.
-            probe.write(profile.isEmpty() ? QByteArray("raise")
-                                          : QByteArray("profile:") + profile.toUtf8());
+            probe.write(screen.isEmpty() ? QByteArray("raise")
+                                         : QByteArray("screen:") + screen.toUtf8());
             probe.waitForBytesWritten(300);
             return 0;
         }
@@ -84,7 +87,7 @@ int main(int argc, char *argv[]) {
     QLocalServer server;
     server.listen(serverName);
 
-    MainWindow window(profile);
+    MainWindow window(screen);
     window.show();
 
     QObject::connect(&server, &QLocalServer::newConnection, &window, [&server, &window]() {
@@ -94,9 +97,12 @@ int main(int argc, char *argv[]) {
         const QByteArray request = client->readAll();
         client->deleteLater();
 
-        static const QByteArray prefix("profile:");
-        if (request.startsWith(prefix)) {
-            window.switchToProfile(QString::fromUtf8(request.mid(prefix.size())));
+        // "profile:" is what an instance from before the rename would send,
+        // which is worth answering while one is still running.
+        for (const QByteArray &prefix : {QByteArray("screen:"), QByteArray("profile:")}) {
+            if (!request.startsWith(prefix)) continue;
+            window.switchToScreen(QString::fromUtf8(request.mid(prefix.size())));
+            break;
         }
         window.setWindowState((window.windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
         window.raise();

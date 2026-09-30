@@ -30,7 +30,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 
-MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWindow(parent) {
+MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
 
     // No window manager caption: the menu strip carries the title and the
@@ -51,12 +51,12 @@ MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWi
 
     buildMenus();
     // --profile on the command line wins over whatever was open last.
-    if (!startupProfile.isEmpty() && m_profiles.contains(startupProfile)) {
-        m_profiles.setCurrent(startupProfile);
+    if (!startupScreen.isEmpty() && m_screens.contains(startupScreen)) {
+        m_screens.setCurrent(startupScreen);
     }
     applyTheme(builtinThemes().first().name);
     load();
-    rebuildProfileMenu();
+    rebuildScreenMenu();
     updateWindowTitle();
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
@@ -109,9 +109,9 @@ void MainWindow::buildMenus() {
     m_saveOnExitAction->setCheckable(true);
     m_saveOnExitAction->setChecked(true);
 
-    m_profileMenu = bar->addMenu(tr("&Profiles"));
-    m_profileGroup = new QActionGroup(this);
-    m_profileGroup->setExclusive(true);
+    m_screenMenu = bar->addMenu(tr("&Screens"));
+    m_screenGroup = new QActionGroup(this);
+    m_screenGroup->setExclusive(true);
 
     m_windowMenu = bar->addMenu(tr("&Window"));
     connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
@@ -272,53 +272,53 @@ void MainWindow::updateWindowMenu() {
     }
 }
 
-void MainWindow::rebuildProfileMenu() {
-    // The menu owns the per-profile actions, so clearing it deletes them and
+void MainWindow::rebuildScreenMenu() {
+    // The menu owns the per-screen actions, so clearing it deletes them and
     // they fall out of the exclusive group on the way.
-    m_profileMenu->clear();
+    m_screenMenu->clear();
 
-    const QStringList names = m_profiles.names();
+    const QStringList names = m_screens.names();
     for (int i = 0; i < names.size(); ++i) {
         const QString &name = names[i];
-        QAction *act = m_profileMenu->addAction(name);
+        QAction *act = m_screenMenu->addAction(name);
         act->setCheckable(true);
-        act->setChecked(name == m_profiles.current());
+        act->setChecked(name == m_screens.current());
         // The first nine are a keystroke away, in menu order.
         if (i < 9) act->setShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_1 + i)));
-        m_profileGroup->addAction(act);
-        connect(act, &QAction::triggered, this, [this, name]() { switchToProfile(name); });
+        m_screenGroup->addAction(act);
+        connect(act, &QAction::triggered, this, [this, name]() { switchToScreen(name); });
     }
 
-    m_profileMenu->addSeparator();
-    m_profileMenu->addAction(tr("&New Profile..."), this, &MainWindow::newProfile);
-    m_profileMenu->addAction(tr("D&uplicate Profile..."), this, &MainWindow::duplicateProfile);
-    m_profileMenu->addAction(tr("&Rename Profile..."), this, &MainWindow::renameProfile);
-    QAction *del = m_profileMenu->addAction(tr("&Delete Profile..."), this,
-                                            &MainWindow::deleteProfile);
-    // There is always one profile to fall back on, so the last cannot go.
+    m_screenMenu->addSeparator();
+    m_screenMenu->addAction(tr("&New Screen..."), this, &MainWindow::newScreen);
+    m_screenMenu->addAction(tr("D&uplicate Screen..."), this, &MainWindow::duplicateScreen);
+    m_screenMenu->addAction(tr("&Rename Screen..."), this, &MainWindow::renameScreen);
+    QAction *del = m_screenMenu->addAction(tr("&Delete Screen..."), this,
+                                            &MainWindow::deleteScreen);
+    // There is always one screen to fall back on, so the last cannot go.
     del->setEnabled(names.size() > 1);
-    m_profileMenu->addSeparator();
-    m_profileMenu->addAction(tr("&Save Profile Now"), QKeySequence::Save, this,
+    m_screenMenu->addSeparator();
+    m_screenMenu->addAction(tr("&Save Screen Now"), QKeySequence::Save, this,
                              &MainWindow::save);
 }
 
 void MainWindow::updateWindowTitle() {
-    setWindowTitle(tr("Program Manager - %1").arg(m_profiles.current()));
-    m_mdiArea->setProfileName(m_profiles.current());
+    setWindowTitle(tr("Program Manager - %1").arg(m_screens.current()));
+    m_mdiArea->setScreenName(m_screens.current());
 }
 
-QString MainWindow::askProfileName(const QString &windowTitle, const QString &initial) {
+QString MainWindow::askScreenName(const QString &windowTitle, const QString &initial) {
     QString suggestion = initial;
     forever {
         bool ok = false;
-        const QString name = askForText(this, windowTitle, tr("Profile"),
-                                         tr("Profile name:"), suggestion, &ok);
+        const QString name = askForText(this, windowTitle, tr("Screen"),
+                                         tr("Screen name:"), suggestion, &ok);
         if (!ok || name.isEmpty()) return {};
         // Leaving a rename dialog on the name it opened with is not a clash.
-        if (!m_profiles.contains(name) || name == initial) return name;
+        if (!m_screens.contains(name) || name == initial) return name;
 
         QMessageBox::warning(this, windowTitle,
-                             tr("A profile named '%1' already exists.").arg(name));
+                             tr("A screen named '%1' already exists.").arg(name));
         suggestion = name;
     }
 }
@@ -329,7 +329,7 @@ void MainWindow::clearDesktop() {
     m_minimizedOrder.clear();
 
     // Deleted rather than closeAllSubWindows()'d: a close is only a request,
-    // and the windows would still be alive when the next profile's groups
+    // and the windows would still be alive when the next screen's groups
     // opened on top of them.
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) delete sub;
     // After the deletions, so a resize on the way out cannot file geometry
@@ -337,76 +337,76 @@ void MainWindow::clearDesktop() {
     m_normalGeometry.clear();
 }
 
-void MainWindow::switchToProfile(const QString &name) {
-    if (!m_profiles.contains(name) || name == m_profiles.current()) {
-        rebuildProfileMenu(); // re-check the radio button a stray click moved
+void MainWindow::switchToScreen(const QString &name) {
+    if (!m_screens.contains(name) || name == m_screens.current()) {
+        rebuildScreenMenu(); // re-check the radio button a stray click moved
         return;
     }
 
     save();
     clearDesktop();
-    m_profiles.setCurrent(name);
+    m_screens.setCurrent(name);
     load();
-    rebuildProfileMenu();
+    rebuildScreenMenu();
     updateWindowTitle();
 }
 
-void MainWindow::newProfile() {
-    const QString name = askProfileName(tr("New Profile"), QString());
-    if (name.isEmpty() || !m_profiles.create(name)) return;
+void MainWindow::newScreen() {
+    const QString name = askScreenName(tr("New Screen"), QString());
+    if (name.isEmpty() || !m_screens.create(name)) return;
 
     save();
     clearDesktop();
-    m_profiles.setCurrent(name);
+    m_screens.setCurrent(name);
     // Nothing saved under this name yet, so load() lays out a fresh desktop.
     load();
-    rebuildProfileMenu();
+    rebuildScreenMenu();
     updateWindowTitle();
 }
 
-void MainWindow::duplicateProfile() {
-    const QString source = m_profiles.current();
+void MainWindow::duplicateScreen() {
+    const QString source = m_screens.current();
     // Copied from disk, so what is on screen has to be written out first.
     save();
 
-    const QString name = askProfileName(tr("Duplicate Profile"),
+    const QString name = askScreenName(tr("Duplicate Screen"),
                                         tr("%1 (copy)").arg(source));
-    if (name.isEmpty() || !m_profiles.duplicate(source, name)) return;
+    if (name.isEmpty() || !m_screens.duplicate(source, name)) return;
 
-    m_profiles.setCurrent(name);
-    rebuildProfileMenu();
+    m_screens.setCurrent(name);
+    rebuildScreenMenu();
     updateWindowTitle();
 }
 
-void MainWindow::renameProfile() {
-    const QString from = m_profiles.current();
-    const QString to = askProfileName(tr("Rename Profile"), from);
+void MainWindow::renameScreen() {
+    const QString from = m_screens.current();
+    const QString to = askScreenName(tr("Rename Screen"), from);
     if (to.isEmpty() || to == from) return;
-    if (!m_profiles.rename(from, to)) return;
+    if (!m_screens.rename(from, to)) return;
 
-    rebuildProfileMenu();
+    rebuildScreenMenu();
     updateWindowTitle();
 }
 
-void MainWindow::deleteProfile() {
-    const QString name = m_profiles.current();
-    if (m_profiles.names().size() <= 1) {
-        QMessageBox::information(this, tr("Delete Profile"),
-                                 tr("'%1' is the only profile; there has to be one.").arg(name));
+void MainWindow::deleteScreen() {
+    const QString name = m_screens.current();
+    if (m_screens.names().size() <= 1) {
+        QMessageBox::information(this, tr("Delete Screen"),
+                                 tr("'%1' is the only screen; there has to be one.").arg(name));
         return;
     }
 
     const auto reply = QMessageBox::question(
-        this, tr("Delete Profile"),
-        tr("Delete profile '%1' and all the groups in it?").arg(name));
+        this, tr("Delete Screen"),
+        tr("Delete screen '%1' and all the groups in it?").arg(name));
     if (reply != QMessageBox::Yes) return;
 
-    if (!m_profiles.remove(name)) return;
+    if (!m_screens.remove(name)) return;
 
-    // remove() already moved current on to a surviving profile.
+    // remove() already moved current on to a surviving screen.
     clearDesktop();
     load();
-    rebuildProfileMenu();
+    rebuildScreenMenu();
     updateWindowTitle();
 }
 
@@ -548,7 +548,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
         // Each step of the resize arrives as a geometry change; a move drags
         // all four edges at once and is left alone.
-        // Cascade, tile and loading a profile resize windows too; only a
+        // Cascade, tile and loading a screen resize windows too; only a
         // resize the pointer is carrying out is worth lining up. The hold is
         // left until this resize has been seen through -- a geometry set from
         // inside the subwindow's own resize does not survive it -- and `sub`
@@ -750,9 +750,9 @@ void MainWindow::createDefaultGroups() {
 }
 
 void MainWindow::load() {
-    const QString path = m_profiles.filePath(m_profiles.current());
+    const QString path = m_screens.filePath(m_screens.current());
     if (path.isEmpty() || !QFile::exists(path)) {
-        // A profile that has never been saved starts on the stock desktop.
+        // A screen that has never been saved starts on the stock desktop.
         applyTheme(builtinThemes().first().name);
         createDefaultGroups();
         return;
@@ -764,13 +764,13 @@ void MainWindow::load() {
     // XP icon styling used to be one switch for the whole Program Manager.
     // A desktop saved back then carries no per-item setting, so the switch is
     // read one last time and handed to the items it used to restyle; saving
-    // the profile again writes them out individually and drops the key.
+    // the screen again writes them out individually and drops the key.
     const bool globalXpIcons = settings.value("xpStyleIcons", false).toBool();
 
     // Where the Program Manager window itself was last left. saveGeometry
     // carries the screen and the maximized state, not just a rectangle.
     // Only honoured at startup: moving the window out from under someone
-    // mid-session, just because they switched profile, would be rude.
+    // mid-session, just because they switched screen, would be rude.
     const QByteArray windowGeometry = settings.value("windowGeometry").toByteArray();
     if (!windowGeometry.isEmpty() && !isVisible()) restoreGeometry(windowGeometry);
 
@@ -813,7 +813,7 @@ void MainWindow::load() {
 }
 
 void MainWindow::save() {
-    const QString path = m_profiles.filePath(m_profiles.current());
+    const QString path = m_screens.filePath(m_screens.current());
     if (path.isEmpty()) return;
 
     QSettings settings(path, QSettings::IniFormat);

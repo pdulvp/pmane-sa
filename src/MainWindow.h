@@ -5,7 +5,7 @@
 #include <QMainWindow>
 
 #include "AlignmentGuides.h"
-#include "ProfileManager.h"
+#include "ScreenManager.h"
 
 class QActionGroup;
 class QMdiSubWindow;
@@ -20,15 +20,15 @@ class TitleBar;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    // startupProfile, when given and known, overrides the profile that was
+    // startupScreen, when given and known, overrides the screen that was
     // open last.
-    explicit MainWindow(const QString &startupProfile = QString(), QWidget *parent = nullptr);
+    explicit MainWindow(const QString &startupScreen = QString(), QWidget *parent = nullptr);
     ~MainWindow() override;
 
 public slots:
-    // Loads a profile by name, saving whatever is on screen first. Also how
+    // Loads a screen by name, saving whatever is on the desktop first. Also how
     // a second launch with --profile reaches the running instance.
-    void switchToProfile(const QString &name);
+    void switchToScreen(const QString &name);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -55,10 +55,10 @@ private slots:
     // they take.
     void editRunners();
     void about();
-    void newProfile();
-    void duplicateProfile();
-    void renameProfile();
-    void deleteProfile();
+    void newScreen();
+    void duplicateScreen();
+    void renameScreen();
+    void deleteScreen();
 
 private:
     void buildMenus();
@@ -67,16 +67,16 @@ private:
     // systemctl one; the desktop is saved first for the two that end the
     // session.
     void requestSystemState(const QString &verb, const QString &question, bool endsSession);
-    void rebuildProfileMenu();
+    void rebuildScreenMenu();
     void updateWindowTitle();
     GroupWindow *activeGroup() const;
     QMdiSubWindow *addGroupWindow(GroupWindow *group);
     void load();
     void save();
-    // Tears the desktop down to bare background, ready for another profile.
+    // Tears the desktop down to bare background, ready for another screen.
     void clearDesktop();
-    // Asks for a profile name, rejecting blanks and names already in use.
-    QString askProfileName(const QString &windowTitle, const QString &initial);
+    // Asks for a screen name, rejecting blanks and names already in use.
+    QString askScreenName(const QString &windowTitle, const QString &initial);
     void createDefaultGroups();
     void applyTheme(const QString &themeName);
 
@@ -95,9 +95,9 @@ private:
 
     DesktopArea *m_mdiArea;
     QMenu *m_windowMenu;
-    QMenu *m_profileMenu;
-    // Keeps the one radio button beside the open profile exclusive.
-    QActionGroup *m_profileGroup;
+    QMenu *m_screenMenu;
+    // Keeps the one radio button beside the open screen exclusive.
+    QActionGroup *m_screenGroup;
     QAction *m_saveOnExitAction;
     // The menu bar, the window title and the caption buttons in one strip.
     TitleBar *m_titleBar;
@@ -111,7 +111,7 @@ private:
     // does not come back round as another step of the resize.
     bool m_snapping = false;
     QString m_themeName;
-    ProfileManager m_profiles;
+    ScreenManager m_screens;
 
     // Groups shown as desktop icons instead of stub title bars, in the order
     // they were minimized.

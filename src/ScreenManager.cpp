@@ -1,4 +1,4 @@
-#include "ProfileManager.h"
+#include "ScreenManager.h"
 
 #include <QDir>
 #include <QFile>
@@ -8,58 +8,64 @@
 
 namespace {
 
-const char *kIndexFile = "profiles.ini";
+const char *kIndexFile = "screens.ini";
+// The same index under the name it had while screens were called profiles.
+const char *kLegacyIndexFile = "profiles.ini";
 const char *kLegacyFile = "groups.ini";
 const char *kDefaultName = "Default";
 
-// Profile names are free text, so the file they are stored in is a slug of
+// Screen names are free text, so the file they are stored in is a slug of
 // the name rather than the name itself.
 QString slug(const QString &name) {
     static const QRegularExpression unsafe(QStringLiteral("[^a-z0-9]+"));
     QString s = name.toLower().replace(unsafe, QStringLiteral("-"));
     while (s.startsWith('-')) s.remove(0, 1);
     while (s.endsWith('-')) s.chop(1);
-    return s.isEmpty() ? QStringLiteral("profile") : s;
+    return s.isEmpty() ? QStringLiteral("screen") : s;
 }
 
 } // namespace
 
-ProfileManager::ProfileManager() {
+ScreenManager::ScreenManager() {
     QDir().mkpath(configDir());
     loadIndex();
-    if (m_entries.isEmpty()) seedFirstProfile();
+    if (m_entries.isEmpty()) seedFirstScreen();
     if (indexOf(m_current) < 0) m_current = m_entries.first().name;
 }
 
-QString ProfileManager::configDir() const {
+QString ScreenManager::configDir() const {
     return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
 }
 
-QString ProfileManager::indexPath() const {
+QString ScreenManager::indexPath() const {
     return configDir() + QLatin1Char('/') + QLatin1String(kIndexFile);
 }
 
-int ProfileManager::indexOf(const QString &name) const {
+QString ScreenManager::legacyIndexPath() const {
+    return configDir() + QLatin1Char('/') + QLatin1String(kLegacyIndexFile);
+}
+
+int ScreenManager::indexOf(const QString &name) const {
     for (int i = 0; i < m_entries.size(); ++i) {
         if (m_entries[i].name.compare(name, Qt::CaseInsensitive) == 0) return i;
     }
     return -1;
 }
 
-QStringList ProfileManager::names() const {
+QStringList ScreenManager::names() const {
     QStringList list;
     list.reserve(m_entries.size());
     for (const Entry &entry : m_entries) list.append(entry.name);
     return list;
 }
 
-QString ProfileManager::filePath(const QString &name) const {
+QString ScreenManager::filePath(const QString &name) const {
     const int i = indexOf(name);
     if (i < 0) return {};
     return configDir() + QLatin1Char('/') + m_entries[i].file;
 }
 
-QString ProfileManager::uniqueFileName(const QString &name) const {
+QString ScreenManager::uniqueFileName(const QString &name) const {
     const QString base = slug(name);
     QString candidate = base + QStringLiteral(".ini");
     for (int n = 2; ; ++n) {
@@ -75,11 +81,17 @@ QString ProfileManager::uniqueFileName(const QString &name) const {
     }
 }
 
-void ProfileManager::loadIndex() {
-    if (!QFile::exists(indexPath())) return;
+void ScreenManager::loadIndex() {
+    // The index written when these were profiles is read the once, and saved
+    // back out as screens.ini the next time anything changes. The desktops
+    // themselves are the per-screen .ini files, which are not touched: the
+    // old index is left where it is rather than deleted.
+    const bool legacy = !QFile::exists(indexPath()) && QFile::exists(legacyIndexPath());
+    if (!legacy && !QFile::exists(indexPath())) return;
 
-    QSettings settings(indexPath(), QSettings::IniFormat);
-    const int count = settings.beginReadArray(QStringLiteral("Profiles"));
+    QSettings settings(legacy ? legacyIndexPath() : indexPath(), QSettings::IniFormat);
+    const int count = settings.beginReadArray(legacy ? QStringLiteral("Profiles")
+                                                     : QStringLiteral("Screens"));
     for (int i = 0; i < count; ++i) {
         settings.setArrayIndex(i);
         Entry entry;
@@ -91,13 +103,14 @@ void ProfileManager::loadIndex() {
     }
     settings.endArray();
     m_current = settings.value(QStringLiteral("current")).toString();
+    if (legacy) saveIndex();
 }
 
-void ProfileManager::saveIndex() const {
+void ScreenManager::saveIndex() const {
     QSettings settings(indexPath(), QSettings::IniFormat);
     settings.clear();
     settings.setValue(QStringLiteral("current"), m_current);
-    settings.beginWriteArray(QStringLiteral("Profiles"), m_entries.size());
+    settings.beginWriteArray(QStringLiteral("Screens"), m_entries.size());
     for (int i = 0; i < m_entries.size(); ++i) {
         settings.setArrayIndex(i);
         settings.setValue(QStringLiteral("name"), m_entries[i].name);
@@ -106,10 +119,10 @@ void ProfileManager::saveIndex() const {
     settings.endArray();
 }
 
-void ProfileManager::seedFirstProfile() {
+void ScreenManager::seedFirstScreen() {
     Entry entry;
     entry.name = QLatin1String(kDefaultName);
-    // A desktop saved before profiles existed becomes the default profile,
+    // A desktop saved before there were screens becomes the default screen,
     // read straight out of the file it is already in.
     entry.file = QFile::exists(configDir() + QLatin1Char('/') + QLatin1String(kLegacyFile))
                      ? QLatin1String(kLegacyFile)
@@ -119,7 +132,7 @@ void ProfileManager::seedFirstProfile() {
     saveIndex();
 }
 
-bool ProfileManager::create(const QString &name) {
+bool ScreenManager::create(const QString &name) {
     const QString trimmed = name.trimmed();
     if (trimmed.isEmpty() || indexOf(trimmed) >= 0) return false;
 
@@ -128,13 +141,13 @@ bool ProfileManager::create(const QString &name) {
     return true;
 }
 
-bool ProfileManager::duplicate(const QString &source, const QString &name) {
+bool ScreenManager::duplicate(const QString &source, const QString &name) {
     const QString trimmed = name.trimmed();
     const int from = indexOf(source);
     if (from < 0 || trimmed.isEmpty() || indexOf(trimmed) >= 0) return false;
 
     const QString file = uniqueFileName(trimmed);
-    // A profile that was never saved has no file yet; the copy then simply
+    // A screen that was never saved has no file yet; the copy then simply
     // starts out empty as well.
     const QString sourcePath = configDir() + QLatin1Char('/') + m_entries[from].file;
     if (QFile::exists(sourcePath) &&
@@ -147,7 +160,7 @@ bool ProfileManager::duplicate(const QString &source, const QString &name) {
     return true;
 }
 
-bool ProfileManager::rename(const QString &from, const QString &to) {
+bool ScreenManager::rename(const QString &from, const QString &to) {
     const QString trimmed = to.trimmed();
     const int i = indexOf(from);
     if (i < 0 || trimmed.isEmpty()) return false;
@@ -164,7 +177,7 @@ bool ProfileManager::rename(const QString &from, const QString &to) {
     return true;
 }
 
-bool ProfileManager::remove(const QString &name) {
+bool ScreenManager::remove(const QString &name) {
     const int i = indexOf(name);
     if (i < 0 || m_entries.size() <= 1) return false;
 
@@ -175,7 +188,7 @@ bool ProfileManager::remove(const QString &name) {
     return true;
 }
 
-void ProfileManager::setCurrent(const QString &name) {
+void ScreenManager::setCurrent(const QString &name) {
     if (indexOf(name) < 0) return;
     m_current = m_entries[indexOf(name)].name; // canonical spelling
     saveIndex();

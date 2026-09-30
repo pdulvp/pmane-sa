@@ -25,8 +25,8 @@ add_executable(progman-linux
     src/RunnersDialog.h
     src/AlignmentGuides.cpp
     src/AlignmentGuides.h
-    src/ProfileManager.cpp
-    src/ProfileManager.h
+    src/ScreenManager.cpp
+    src/ScreenManager.h
     src/GroupWindow.cpp
     src/GroupWindow.h
     src/ApplicationPickerDialog.cpp

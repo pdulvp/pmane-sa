@@ -7,15 +7,15 @@
 
 DesktopArea::DesktopArea(QWidget *parent) : QMdiArea(parent) {}
 
-void DesktopArea::setProfileName(const QString &name) {
-    if (m_profileName == name) return;
-    m_profileName = name;
+void DesktopArea::setScreenName(const QString &name) {
+    if (m_screenName == name) return;
+    m_screenName = name;
     viewport()->update();
 }
 
 void DesktopArea::paintEvent(QPaintEvent *event) {
     QMdiArea::paintEvent(event);
-    if (m_profileName.isEmpty()) return;
+    if (m_screenName.isEmpty()) return;
 
     QPainter painter(viewport());
     painter.setRenderHint(QPainter::TextAntialiasing);
@@ -39,5 +39,5 @@ void DesktopArea::paintEvent(QPaintEvent *event) {
     const QRect area = viewport()->rect().adjusted(
         margin, margin, -margin, -(MinimizedGroupIcon::kCellHeight + margin));
     if (!area.isValid()) return;
-    painter.drawText(area, Qt::AlignRight | Qt::AlignBottom, m_profileName);
+    painter.drawText(area, Qt::AlignRight | Qt::AlignBottom, m_screenName);
 }
