@@ -19,6 +19,10 @@ add_executable(progman-linux
     src/DialogChrome.h
     src/TextPromptDialog.cpp
     src/TextPromptDialog.h
+    src/Runners.cpp
+    src/Runners.h
+    src/RunnersDialog.cpp
+    src/RunnersDialog.h
     src/AlignmentGuides.cpp
     src/AlignmentGuides.h
     src/ProfileManager.cpp

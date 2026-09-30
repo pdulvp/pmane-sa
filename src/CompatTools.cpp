@@ -1,5 +1,7 @@
 #include "CompatTools.h"
 
+#include "Runners.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -95,13 +97,53 @@ const CompatTool *compatToolById(const QString &id) {
 
 QString protonPrefixFor(const QString &exePath) {
     const QFileInfo info(exePath);
-    // Named after the executable so the directory is recognisable, keyed by
-    // a digest of its full path so two games of the same name stay apart.
+
+    // Where they all live: whatever Options > Runners says, and the
+    // application's own data directory until somebody says otherwise.
+    const QString ours = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                         QStringLiteral("/prefixes");
+    const Runner *wine = runnerById(QStringLiteral("wine"));
+    const QString base = (wine && !wine->prefixesDir.isEmpty()) ? wine->prefixesDir : ours;
+
+    // Two programs of the same name must not share one install, so the path
+    // they were started from settles it.
     const QByteArray digest =
         QCryptographicHash::hash(info.absoluteFilePath().toUtf8(), QCryptographicHash::Sha1);
-    const QString name =
-        info.completeBaseName() + QLatin1Char('-') + QString::fromLatin1(digest.toHex().left(8));
+    const QString hash = QString::fromLatin1(digest.toHex().left(8));
 
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-           QStringLiteral("/prefixes/") + name;
+    // Prefixes made before these folders were given readable names are still
+    // where they were: a game's saves live in there.
+    const QString legacy =
+        ours + QLatin1Char('/') + info.completeBaseName() + QLatin1Char('-') + hash;
+    if (QFileInfo::exists(legacy)) return legacy;
+
+    // Otherwise a name worth reading in a file manager: the program, under
+    // the folder it was installed in, which is what tells two copies of the
+    // same game apart at a glance.
+    const QString title = info.dir().dirName();
+    QString name = title.isEmpty() || title == info.completeBaseName()
+                       ? info.completeBaseName()
+                       : title + QStringLiteral(" - ") + info.completeBaseName();
+    name.replace(QLatin1Char('/'), QLatin1Char('-'));
+
+    // A marker naming the program the prefix was built for, so a second
+    // program that would have taken the same folder is given one of its own
+    // instead of moving into this one.
+    const QString path = base + QLatin1Char('/') + name;
+    const QString marker = path + QStringLiteral("/.program");
+    QFile markerFile(marker);
+    if (QFileInfo::exists(path)) {
+        if (markerFile.open(QIODevice::ReadOnly)) {
+            const QString owner = QString::fromUtf8(markerFile.readAll()).trimmed();
+            markerFile.close();
+            if (owner == info.absoluteFilePath()) return path;
+        }
+        return path + QStringLiteral(" (") + hash + QLatin1Char(')');
+    }
+
+    if (QDir().mkpath(path) && markerFile.open(QIODevice::WriteOnly)) {
+        markerFile.write(info.absoluteFilePath().toUtf8());
+        markerFile.close();
+    }
+    return path;
 }

@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AlignmentGuides.h"
+#include "RunnersDialog.h"
 #include "TextPromptDialog.h"
 #include "ApplicationPickerDialog.h"
 #include "DesktopArea.h"
@@ -102,6 +103,7 @@ void MainWindow::buildMenus() {
 
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
+    optionsMenu->addAction(tr("&Runners..."), this, &MainWindow::editRunners);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
@@ -682,6 +684,15 @@ void MainWindow::applyTheme(const QString &themeName) {
         icon->setPalette(subPal);
         icon->setDesktopColor(theme.desktop);
     }
+}
+
+void MainWindow::editRunners() {
+    RunnersDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    // Kept with the rest of the settings and used from the next launch on --
+    // items already on the desktop are unchanged, what they are started with
+    // being worked out each time they are run.
+    setRunners(dialog.runners());
 }
 
 void MainWindow::chooseColors() {

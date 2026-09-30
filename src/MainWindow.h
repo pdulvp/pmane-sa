@@ -51,6 +51,9 @@ private slots:
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();
+    // What each kind of file is started with: the programs and the file types
+    // they take.
+    void editRunners();
     void about();
     void newProfile();
     void duplicateProfile();

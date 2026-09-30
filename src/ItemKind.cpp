@@ -1,30 +1,34 @@
 #include "ItemKind.h"
 
+#include "Runners.h"
+
 #include <QFileInfo>
 #include <QStringList>
 
+namespace {
+// Which file types belong to a kind is the runner's business now: it is set
+// in Options > Runners, so a machine that plays its ROMs from a different
+// extension says so there rather than here.
+bool claimedBy(const char *id, const QString &path) {
+    const Runner *runner = runnerById(QLatin1String(id));
+    return runner && runner->handles(path);
+}
+} // namespace
+
 bool isWindowsExecutable(const QString &path) {
-    return path.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive);
+    return claimedBy("wine", path);
 }
 
 bool isDosBoxConfig(const QString &path) {
-    return path.endsWith(QLatin1String(".conf"), Qt::CaseInsensitive);
+    return claimedBy("dosbox", path);
 }
 
 bool isScummVmGame(const QString &path) {
-    return path.endsWith(QLatin1String(".trs"), Qt::CaseInsensitive);
+    return claimedBy("scummvm", path);
 }
 
 bool isRetroArchRom(const QString &path) {
-    static const QStringList extensions = {
-        QStringLiteral(".nes"), QStringLiteral(".z64"), QStringLiteral(".n64"),
-        QStringLiteral(".sfc"), QStringLiteral(".gb"),  QStringLiteral(".gba"),
-        QStringLiteral(".gcm"), QStringLiteral(".iso"),
-    };
-    for (const QString &extension : extensions) {
-        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
-    }
-    return false;
+    return claimedBy("retroarch", path);
 }
 
 bool isFolder(const QString &path) {
@@ -49,6 +53,6 @@ bool isDocument(const QString &path) {
 }
 
 bool isLaunchable(const QString &path) {
-    return isWindowsExecutable(path) || isDosBoxConfig(path) || isScummVmGame(path) ||
-           isRetroArchRom(path) || isDesktopEntry(path) || isDocument(path) || isFolder(path);
+    return runnerForPath(path) != nullptr || isDesktopEntry(path) || isDocument(path) ||
+           isFolder(path);
 }
