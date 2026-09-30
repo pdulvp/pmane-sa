@@ -15,6 +15,8 @@ add_executable(progman-linux
     src/MainWindow.h
     src/DesktopArea.cpp
     src/DesktopArea.h
+    src/AlignmentGuides.cpp
+    src/AlignmentGuides.h
     src/ProfileManager.cpp
     src/ProfileManager.h
     src/GroupWindow.cpp

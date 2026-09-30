@@ -4,6 +4,7 @@
 #include <QList>
 #include <QMainWindow>
 
+#include "AlignmentGuides.h"
 #include "ProfileManager.h"
 
 class QActionGroup;
@@ -77,6 +78,12 @@ private:
     void applyTheme(const QString &themeName);
 
     QPalette captionPalette(const QPalette &base) const;
+    // While a group is resized, holds the edge being dragged to the sides of
+    // the groups around it. Called for each step of the resize; does nothing
+    // outside one.
+    void snapWhileResizing(QMdiSubWindow *sub,
+                           int reach = AlignmentGuides::kSnapDistance);
+
     void minimizeToIcon(QMdiSubWindow *sub);
     void restoreFromIcon(QMdiSubWindow *sub);
     void arrangeMinimizedIcons();
@@ -91,6 +98,15 @@ private:
     QAction *m_saveOnExitAction;
     // The menu bar, the window title and the caption buttons in one strip.
     TitleBar *m_titleBar;
+    // The alignment lines shown while a group is resized, and the group
+    // being resized with the size it was when the drag began -- what says
+    // which of its edges are the ones being dragged.
+    AlignmentGuides *m_guides;
+    QMdiSubWindow *m_resizingSub = nullptr;
+    QRect m_resizeStartGeometry;
+    // Set while a snap is being applied, so the geometry we set ourselves
+    // does not come back round as another step of the resize.
+    bool m_snapping = false;
     QString m_themeName;
     ProfileManager m_profiles;
 

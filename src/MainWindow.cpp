@@ -1,4 +1,6 @@
 #include "MainWindow.h"
+
+#include "AlignmentGuides.h"
 #include "ApplicationPickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
@@ -10,6 +12,7 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QDir>
 #include <QFile>
@@ -24,6 +27,7 @@
 #include <QSettings>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QTimer>
 
 MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
@@ -41,6 +45,8 @@ MainWindow::MainWindow(const QString &startupProfile, QWidget *parent) : QMainWi
     m_mdiArea = new DesktopArea(this);
     m_mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
     setCentralWidget(m_mdiArea);
+    // A sibling of the group windows, so it can be raised in front of them.
+    m_guides = new AlignmentGuides(m_mdiArea->viewport());
 
     buildMenus();
     // --profile on the command line wins over whatever was open last.
@@ -519,6 +525,42 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     }
 
     if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
+        // A drag of this group has begun: which edges it moves, and so which
+        // of them are to be lined up with the neighbours, is whatever has
+        // changed by the time the geometry comes through.
+        if (event->type() == QEvent::MouseButtonPress) {
+            m_resizingSub = sub;
+            m_resizeStartGeometry = sub->geometry();
+            QVector<int> xs;
+            QVector<int> ys;
+            for (QMdiSubWindow *other : m_mdiArea->subWindowList()) {
+                if (other == sub || !other->isVisible()) continue;
+                if (other->isMinimized() || m_minimizedIcons.contains(other)) continue;
+                const QRect rect = other->geometry();
+                xs << rect.left() << rect.right() + 1;
+                ys << rect.top() << rect.bottom() + 1;
+            }
+            m_guides->setGuides(xs, ys);
+        }
+        // Letting go is the answer to the line that is showing: whatever the
+        // pointer was still a few pixels off, the edge lands on it.
+        if (event->type() == QEvent::MouseButtonRelease) {
+            snapWhileResizing(sub, AlignmentGuides::kShowDistance);
+            m_resizingSub = nullptr;
+            m_guides->clear();
+        }
+        // Each step of the resize arrives as a geometry change; a move drags
+        // all four edges at once and is left alone.
+        // Cascade, tile and loading a profile resize windows too; only a
+        // resize the pointer is carrying out is worth lining up. The hold is
+        // left until this resize has been seen through -- a geometry set from
+        // inside the subwindow's own resize does not survive it -- and `sub`
+        // as the context means a group closed in between drops it.
+        if (event->type() == QEvent::Resize &&
+            (QApplication::mouseButtons() & Qt::LeftButton)) {
+            QTimer::singleShot(0, sub, [this, sub] { snapWhileResizing(sub); });
+        }
+
         // A group's caption has no maximize box, so double clicking it is
         // free for what a caption double click is otherwise no use for here:
         // renaming the group. Anywhere else on the subwindow -- its own
@@ -549,6 +591,36 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::snapWhileResizing(QMdiSubWindow *sub, int reach) {
+    if (sub != m_resizingSub || m_snapping) return;
+
+    // Shift asks for the size under the pointer and nothing else: the lines
+    // stay up, as something to judge the edge against by eye, but no edge is
+    // held on one. A reach nothing can be within is what leaves them drawn
+    // and inert.
+    if (QApplication::keyboardModifiers() & Qt::ShiftModifier) reach = -1;
+
+    const QRect rect = sub->geometry();
+    // A move drags all four edges at once, and holding two opposite ones to
+    // different lines would resize what was only being carried about.
+    if (rect.size() == m_resizeStartGeometry.size()) return;
+
+    Qt::Edges edges;
+    if (rect.left() != m_resizeStartGeometry.left()) edges |= Qt::LeftEdge;
+    if (rect.right() != m_resizeStartGeometry.right()) edges |= Qt::RightEdge;
+    if (rect.top() != m_resizeStartGeometry.top()) edges |= Qt::TopEdge;
+    if (rect.bottom() != m_resizeStartGeometry.bottom()) edges |= Qt::BottomEdge;
+    if (!edges) return;
+
+    const QSize minimum = sub->minimumSizeHint().expandedTo(sub->minimumSize());
+    const QRect held = m_guides->apply(rect, edges, minimum, reach);
+    if (held == rect) return;
+
+    m_snapping = true;
+    sub->setGeometry(held);
+    m_snapping = false;
 }
 
 void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
