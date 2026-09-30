@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 
 #include "AlignmentGuides.h"
-#include "RunnersDialog.h"
+#include "LaunchersDialog.h"
 #include "TextPromptDialog.h"
 #include "ApplicationPickerDialog.h"
 #include "DesktopArea.h"
@@ -103,7 +103,7 @@ void MainWindow::buildMenus() {
 
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
-    optionsMenu->addAction(tr("&Runners..."), this, &MainWindow::editRunners);
+    optionsMenu->addAction(tr("&Launchers..."), this, &MainWindow::editLaunchers);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
@@ -686,13 +686,13 @@ void MainWindow::applyTheme(const QString &themeName) {
     }
 }
 
-void MainWindow::editRunners() {
-    RunnersDialog dialog(this);
+void MainWindow::editLaunchers() {
+    LaunchersDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted) return;
     // Kept with the rest of the settings and used from the next launch on --
     // items already on the desktop are unchanged, what they are started with
     // being worked out each time they are run.
-    setRunners(dialog.runners());
+    setLaunchers(dialog.launchers());
 }
 
 void MainWindow::chooseColors() {
@@ -793,7 +793,7 @@ void MainWindow::load() {
             item.command = settings.value("command").toString();
             item.arguments = settings.value("arguments").toString();
             item.workingDir = settings.value("workingDir").toString();
-            item.runner = settings.value("runner").toString();
+            item.launcher = settings.value("launcher").toString();
             item.iconIndex = settings.value("iconIndex", -1).toInt();
             item.iconSource = settings.value("iconSource").toString();
             item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
@@ -848,7 +848,7 @@ void MainWindow::save() {
             settings.setValue("arguments", items[j].arguments);
             settings.setValue("workingDir", items[j].workingDir);
             // Only written when set, so a plain wine item stays as it was.
-            if (!items[j].runner.isEmpty()) settings.setValue("runner", items[j].runner);
+            if (!items[j].launcher.isEmpty()) settings.setValue("launcher", items[j].launcher);
             // Likewise the icon: only an item wearing one somebody picked out
             // of the several its file holds has anything to remember.
             if (items[j].iconIndex >= 0) {

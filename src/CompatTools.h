@@ -20,6 +20,8 @@ const QVector<CompatTool> &installedCompatTools();
 // The tool with this id, or nullptr if it is not installed (any more).
 const CompatTool *compatToolById(const QString &id);
 
-// Where one executable's Proton prefix lives. A prefix per executable, so
-// two games cannot tread on each other's bottle.
-QString protonPrefixFor(const QString &exePath);
+// Where one executable's Proton prefix lives, under `baseDir` -- the folder
+// the launcher profile keeps its prefixes in, or this application's own data
+// directory when that is empty. A prefix per executable, so two games cannot
+// tread on each other's bottle.
+QString protonPrefixFor(const QString &exePath, const QString &baseDir = QString());

@@ -21,7 +21,7 @@ public:
         CommandRole,
         ArgumentsRole,
         WorkingDirRole,
-        RunnerRole,
+        LauncherRole,
         IconIndexRole,
         IconSourceRole,
         XpStyleRole,

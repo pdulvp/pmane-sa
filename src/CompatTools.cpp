@@ -1,7 +1,5 @@
 #include "CompatTools.h"
 
-#include "Runners.h"
-
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -95,15 +93,14 @@ const CompatTool *compatToolById(const QString &id) {
     return nullptr;
 }
 
-QString protonPrefixFor(const QString &exePath) {
+QString protonPrefixFor(const QString &exePath, const QString &baseDir) {
     const QFileInfo info(exePath);
 
-    // Where they all live: whatever Options > Runners says, and the
-    // application's own data directory until somebody says otherwise.
+    // Where they all live: the folder the launcher profile names, and the
+    // application's own data directory until one does.
     const QString ours = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
                          QStringLiteral("/prefixes");
-    const Runner *wine = runnerById(QStringLiteral("wine"));
-    const QString base = (wine && !wine->prefixesDir.isEmpty()) ? wine->prefixesDir : ours;
+    const QString base = baseDir.isEmpty() ? ours : baseDir;
 
     // Two programs of the same name must not share one install, so the path
     // they were started from settles it.

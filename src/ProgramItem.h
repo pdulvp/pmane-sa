@@ -10,10 +10,10 @@ struct ProgramItem {
     QString command;       // Path to the .exe (or other file) to run under wine
     QString arguments;     // Extra command line arguments
     QString workingDir;    // Working directory when launched
-    // Which compatibility layer runs a Windows executable: empty for the
-    // system wine, otherwise the id of an installed Steam compatibility
-    // tool (a Proton build). Ignored for anything but an .exe.
-    QString runner;
+    // Which launcher profile starts this item, as "<launcher>/<profile>" --
+    // one of the ones set up in Options > Launchers. Empty means whichever
+    // profile its launcher leads with, and so does a profile since deleted.
+    QString launcher;
     QIcon icon;            // Icon extracted from the executable
     bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork
     // Whether this icon is drawn the Windows XP way: tipped into a shallow

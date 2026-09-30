@@ -1,17 +1,17 @@
 #include "ItemKind.h"
 
-#include "Runners.h"
+#include "Launchers.h"
 
 #include <QFileInfo>
 #include <QStringList>
 
 namespace {
-// Which file types belong to a kind is the runner's business now: it is set
-// in Options > Runners, so a machine that plays its ROMs from a different
+// Which file types belong to a kind is the launcher's business now: it is set
+// in Options > Launchers, so a machine that plays its ROMs from a different
 // extension says so there rather than here.
 bool claimedBy(const char *id, const QString &path) {
-    const Runner *runner = runnerById(QLatin1String(id));
-    return runner && runner->handles(path);
+    const Launcher *launcher = launcherById(QLatin1String(id));
+    return launcher && launcher->handles(path);
 }
 } // namespace
 
@@ -53,6 +53,6 @@ bool isDocument(const QString &path) {
 }
 
 bool isLaunchable(const QString &path) {
-    return runnerForPath(path) != nullptr || isDesktopEntry(path) || isDocument(path) ||
+    return launcherForPath(path) != nullptr || isDesktopEntry(path) || isDocument(path) ||
            isFolder(path);
 }

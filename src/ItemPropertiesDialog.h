@@ -25,16 +25,15 @@ private slots:
     // Picks one of the several icons the item's executable or .ico holds,
     // the way Progman's own "Change Icon" did.
     void changeIcon();
-    // Only a Windows executable goes through Wine or Proton -- DOSBox
-    // configs, ScummVM games, ROMs and documents each have a launcher of
-    // their own -- so the row is there only when it has something to say.
-    void updateRunnerVisibility();
+    // Which launchers take this file changes with the command, and the row
+    // is there only when there is more than one of them to choose between.
+    void updateLauncherVisibility();
 
 private:
-    // Lists the system wine plus every installed Proton build, and keeps a
-    // tool the item names but that is no longer installed rather than
-    // silently rewriting the item to wine.
-    void populateRunners(const QString &selected);
+    // Lists the launcher profiles that take the file named in the command,
+    // and keeps a profile the item names but that is no longer set up rather
+    // than silently repointing the item.
+    void populateLaunchers(const QString &selected);
 
     // Shows the icon the item would end up with. Called after anything that
     // may have changed it -- never on every keystroke, since working it out
@@ -45,11 +44,11 @@ private:
     QLineEdit *m_commandEdit;
     QLineEdit *m_argsEdit;
     QLineEdit *m_workDirEdit;
-    QComboBox *m_runnerCombo;
+    QComboBox *m_launcherCombo;
     QLabel *m_iconPreview;
     QCheckBox *m_xpStyleCheck;
     QFormLayout *m_form;
-    bool m_runnerRowShown = true;
+    bool m_launcherRowShown = true;
     // The item being edited, carrying the fields the dialog does not show --
     // its icon and where that came from -- through to item().
     ProgramItem m_item;

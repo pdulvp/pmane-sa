@@ -77,7 +77,7 @@ void GroupWindow::rebuildList() {
         listItem->setData(IconListWidget::CommandRole, it.command);
         listItem->setData(IconListWidget::ArgumentsRole, it.arguments);
         listItem->setData(IconListWidget::WorkingDirRole, it.workingDir);
-        listItem->setData(IconListWidget::RunnerRole, it.runner);
+        listItem->setData(IconListWidget::LauncherRole, it.launcher);
         // So an item dragged to another group keeps the icon somebody picked
         // for it, rather than being worked out again from its command.
         listItem->setData(IconListWidget::IconIndexRole, it.iconIndex);

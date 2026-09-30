@@ -1,10 +1,10 @@
 #include "ItemPropertiesDialog.h"
 
-#include "CompatTools.h"
 #include "IconEffect.h"
 #include "IconPickerDialog.h"
 #include "ItemDetails.h"
 #include "PeIconExtractor.h"
+#include "Launchers.h"
 #include "DialogChrome.h"
 
 #include <QCheckBox>
@@ -35,8 +35,8 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_commandEdit = new QLineEdit(this);
     m_argsEdit = new QLineEdit(this);
     m_workDirEdit = new QLineEdit(this);
-    m_runnerCombo = new QComboBox(this);
-    populateRunners(QString());
+    m_launcherCombo = new QComboBox(this);
+    populateLaunchers(QString());
 
     m_nameEdit->setPlaceholderText(tr("The name under the icon"));
     m_commandEdit->setPlaceholderText(tr("Program, document or folder to open"));
@@ -86,7 +86,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->addRow(tr("Command Line:"), commandRow);
     m_form->addRow(tr("Arguments:"), m_argsEdit);
     m_form->addRow(tr("Working Directory:"), workDirRow);
-    m_form->addRow(tr("Run With:"), m_runnerCombo);
+    m_form->addRow(tr("Run with:"), m_launcherCombo);
     m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -101,8 +101,8 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     chrome.footer->addWidget(buttons);
 
     connect(m_commandEdit, &QLineEdit::textChanged, this,
-            &ItemPropertiesDialog::updateRunnerVisibility);
-    updateRunnerVisibility();
+            &ItemPropertiesDialog::updateLauncherVisibility);
+    updateLauncherVisibility();
 
     connect(commandBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseCommand);
     connect(changeIconButton, &QPushButton::clicked, this, &ItemPropertiesDialog::changeIcon);
@@ -120,9 +120,9 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_commandEdit->setText(item.command);
     m_argsEdit->setText(item.arguments);
     m_workDirEdit->setText(item.workingDir);
-    populateRunners(item.runner);
+    populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
-    updateRunnerVisibility();
+    updateLauncherVisibility();
     refreshIconPreview();
 }
 
@@ -166,39 +166,50 @@ void ItemPropertiesDialog::changeIcon() {
     refreshIconPreview();
 }
 
-void ItemPropertiesDialog::populateRunners(const QString &selected) {
-    m_runnerCombo->clear();
-    m_runnerCombo->addItem(tr("Wine (system)"), QString());
-    for (const CompatTool &tool : installedCompatTools()) {
-        m_runnerCombo->addItem(tool.displayName, tool.id);
+void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
+    m_launcherCombo->clear();
+    // Every launcher profile that takes this kind of file. There is always at
+    // least one, since a launcher keeps the profile it shipped with.
+    const QVector<LauncherChoice> choices = launchersFor(m_commandEdit->text().trimmed());
+    for (const LauncherChoice &choice : choices) {
+        m_launcherCombo->addItem(choice.label, choice.id);
     }
 
     if (selected.isEmpty()) {
-        m_runnerCombo->setCurrentIndex(0);
+        // Nothing chosen yet: the one its launcher leads with, which is what
+        // would have started it anyway.
+        m_launcherCombo->setCurrentIndex(0);
         return;
     }
 
-    const int index = m_runnerCombo->findData(selected);
+    const int index = m_launcherCombo->findData(selected);
     if (index >= 0) {
-        m_runnerCombo->setCurrentIndex(index);
+        m_launcherCombo->setCurrentIndex(index);
         return;
     }
-    // The build this item was set up with has since been removed or
-    // renamed. Offer it anyway, so saving the dialog does not quietly
-    // demote the item to plain wine.
-    m_runnerCombo->addItem(tr("%1 (not installed)").arg(selected), selected);
-    m_runnerCombo->setCurrentIndex(m_runnerCombo->count() - 1);
+    // The profile this item was set up with has since been deleted, or the
+    // command now points at a file it does not take. Offered anyway, so that
+    // saving the dialog does not quietly repoint the item.
+    m_launcherCombo->addItem(tr("%1 (no longer set up)").arg(selected), selected);
+    m_launcherCombo->setCurrentIndex(m_launcherCombo->count() - 1);
 }
 
-void ItemPropertiesDialog::updateRunnerVisibility() {
-    const bool show =
-        m_commandEdit->text().trimmed().endsWith(QLatin1String(".exe"), Qt::CaseInsensitive);
-    if (show == m_runnerRowShown) return;
+void ItemPropertiesDialog::updateLauncherVisibility() {
+    // The row is there whenever some launcher takes this kind of file, so
+    // that what starts an item is readable even where there is only the one
+    // profile to start it with.
+    const QString chosen = m_launcherCombo->currentData().toString();
+    const bool show = !launchersFor(m_commandEdit->text().trimmed()).isEmpty() ||
+                      !chosen.isEmpty();
 
-    m_runnerRowShown = show;
-    m_form->setRowVisible(m_runnerCombo, show);
-    // The dialog is a row shorter or taller now. Resized only on the flip,
-    // not on every keystroke in the command line.
+    // The list follows the command, which may now name a different kind of
+    // file altogether.
+    populateLaunchers(chosen);
+
+    if (show == m_launcherRowShown) return;
+    m_launcherRowShown = show;
+    m_form->setRowVisible(m_launcherCombo, show);
+    // The dialog is a row shorter or taller now.
     resize(width(), sizeHint().height());
 }
 
@@ -210,7 +221,7 @@ ProgramItem ItemPropertiesDialog::item() const {
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
     it.workingDir = m_workDirEdit->text().trimmed();
-    it.runner = m_runnerCombo->currentData().toString();
+    it.launcher = m_launcherCombo->currentData().toString();
     it.xpStyleIcon = m_xpStyleCheck->isChecked();
     return it;
 }

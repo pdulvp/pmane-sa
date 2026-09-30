@@ -3,7 +3,7 @@
 #include "CompatTools.h"
 #include "DesktopEntry.h"
 #include "ItemKind.h"
-#include "Runners.h"
+#include "Launchers.h"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -36,21 +36,23 @@ struct Invocation {
     QString error;
 };
 
-Invocation protonInvocation(const ProgramItem &item, const QStringList &extraArgs) {
+Invocation protonInvocation(const ProgramItem &item, const LauncherProfile &profile,
+                            const QStringList &extraArgs) {
     Invocation call;
 
-    const CompatTool *tool = compatToolById(item.runner);
+    const CompatTool *tool = compatToolById(profile.compatToolId);
     if (!tool) {
-        call.error = tr("'%1' is set to run with '%2', which is no longer installed under "
-                        "Steam's compatibilitytools.d.")
-                         .arg(item.name, item.runner);
+        call.error = tr("'%1' is set to run with '%2', whose Proton build ('%3') is no longer "
+                        "installed under Steam's compatibilitytools.d.")
+                         .arg(item.name, profile.name, profile.compatToolId);
         return call;
     }
 
     // Proton keeps the wine prefix in STEAM_COMPAT_DATA_PATH and builds it
     // on first run; it refuses to start without one. The path is per
-    // executable, so each program gets its own bottle.
-    const QString prefix = protonPrefixFor(item.command);
+    // executable, so each program gets its own bottle -- under whichever
+    // folder the profile keeps them in.
+    const QString prefix = protonPrefixFor(item.command, profile.prefixesDir);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the Proton prefix at '%1'.").arg(prefix);
         return call;
@@ -124,23 +126,30 @@ QString launchProgramItem(const ProgramItem &item) {
     const QStringList extraArgs = QProcess::splitCommand(item.arguments);
 
     Invocation call;
-    if (isWindowsExecutable(item.command) && !item.runner.isEmpty()) {
-        call = protonInvocation(item, extraArgs);
-    } else if (isDesktopEntry(item.command)) {
+    const Launcher *launcher = nullptr;
+    const LauncherProfile *profile = nullptr;
+    launcherForItem(item.command, item.launcher, &launcher, &profile);
+
+    if (isDesktopEntry(item.command)) {
         call = desktopEntryInvocation(item, extraArgs);
-    } else if (const Runner *runner = runnerForPath(item.command)) {
-        // Whatever Options > Runners says this file type is played by: the
-        // program, its arguments with the item's path filled in, and the
-        // interactive shell around it when the program is an alias.
-        const RunnerCommand command = runnerCommandFor(*runner, item.command, extraArgs);
+    } else if (!launcher || !profile) {
+        call.error = tr("Nothing is set up to run '%1'. Options > Launchers says which file "
+                        "types each launcher takes.")
+                         .arg(item.command);
+    } else if (launcher->usesCompatTools && !profile->compatToolId.isEmpty()) {
+        // A Proton build is not simply another program to run: it wants a
+        // prefix of its own and the environment that points at it.
+        call = protonInvocation(item, *profile, extraArgs);
+    } else {
+        // The profile's own program, its arguments with the item's path
+        // filled in, and the interactive shell around it when the program is
+        // an alias.
+        const LauncherCommand command =
+            launcherCommandFor(*launcher, *profile, item.command, extraArgs);
         call.program = command.program;
         call.args = command.args;
         call.failureHint = tr("Could not launch '%1' with %2 ('%3').")
-                               .arg(item.command, runner->name, runner->command);
-    } else {
-        call.error = tr("Nothing is set up to run '%1'. Options > Runners says which file "
-                        "types each runner takes.")
-                         .arg(item.command);
+                               .arg(item.command, profile->name, launcher->command);
     }
 
     if (!call.error.isEmpty()) return call.error;

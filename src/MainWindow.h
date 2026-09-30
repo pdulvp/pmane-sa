@@ -53,7 +53,7 @@ private slots:
     void chooseColors();
     // What each kind of file is started with: the programs and the file types
     // they take.
-    void editRunners();
+    void editLaunchers();
     void about();
     void newScreen();
     void duplicateScreen();
