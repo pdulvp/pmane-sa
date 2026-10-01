@@ -798,6 +798,9 @@ void MainWindow::load() {
             item.iconSource = settings.value("iconSource").toString();
             item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
             item.windowScalePercent = settings.value("windowScalePercent", 100).toInt();
+            item.windowScaleMode = settings.value("windowScaleMode").toString() == "wineDpi"
+                                       ? WindowScaleMode::WineDpi
+                                       : WindowScaleMode::Gamescope;
             const QSize native = settings.value("nativeSize").toSize();
             if (native.isValid() && !native.isEmpty()) item.nativeSize = native;
             group->addProgramItem(item);
@@ -866,6 +869,9 @@ void MainWindow::save() {
             // and on again does not mean measuring again.
             if (items[j].windowScalePercent > 100) {
                 settings.setValue("windowScalePercent", items[j].windowScalePercent);
+                if (items[j].windowScaleMode == WindowScaleMode::WineDpi) {
+                    settings.setValue("windowScaleMode", "wineDpi");
+                }
             }
             if (items[j].nativeSize.isValid() && !items[j].nativeSize.isEmpty()) {
                 settings.setValue("nativeSize", items[j].nativeSize);

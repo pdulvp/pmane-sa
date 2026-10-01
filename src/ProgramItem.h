@@ -4,6 +4,8 @@
 #include <QIcon>
 #include <QSize>
 
+#include "WindowScale.h"
+
 // A single launchable entry inside a Program Group (equivalent to a
 // PROGRAM ITEM in windows 3.1's progman.ini).
 struct ProgramItem {
@@ -21,6 +23,11 @@ struct ProgramItem {
     // be measured from a window it has actually put up, so it is kept here
     // once found rather than guessed at every launch.
     int windowScalePercent = 100;
+    // How that scale is achieved. Gamescope scales the picture and needs
+    // `nativeSize`; wine's own scaling tells the program to draw bigger and
+    // needs nothing measured, which is the only thing that works for a
+    // window the program lets you resize.
+    WindowScaleMode windowScaleMode = WindowScaleMode::Gamescope;
     QSize nativeSize;
     QIcon icon;            // Icon extracted from the executable
     bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork

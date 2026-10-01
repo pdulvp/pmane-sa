@@ -64,9 +64,17 @@ private:
     QPushButton *m_measureButton;
     QLabel *m_nativeSizeLabel;
     QSize m_nativeSize;
+    // The scale as chosen, kept apart from the combo: the list is rebuilt
+    // whenever the launcher changes, and the choice has to survive that.
+    int m_scalePercent = 100;
+    WindowScaleMode m_scaleMode = WindowScaleMode::Gamescope;
     QLabel *m_iconPreview;
     QCheckBox *m_xpStyleCheck;
     QFormLayout *m_form;
+    // Which entry of the scale combo is wine's own scaling rather than
+    // gamescope's.
+    static constexpr int kScaleModeRole = Qt::UserRole + 1;
+
     bool m_launcherRowShown = true;
     bool m_scaleRowShown = true;
     // The item being edited, carrying the fields the dialog does not show --

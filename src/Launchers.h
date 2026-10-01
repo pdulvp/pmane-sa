@@ -62,6 +62,10 @@ struct Launcher {
     // it was written for, which on a modern screen may be very small. An
     // emulator does its own scaling and wants none of this.
     bool usesWindowScale = false;
+    // Whether wine's own scaling is available through it: wine reads
+    // WINE_DPI_SCALE and the prefix's DPI, where a Proton build handles
+    // scaling its own way and should not be told otherwise.
+    bool usesDpiScale = false;
     bool usesCores = false;      // an emulator that has to be told the core
 
     // Where the prefixes its runners build are kept -- one to a program,
@@ -108,8 +112,10 @@ struct LauncherChoice {
     QString label;
     // Whether what it names keeps a wine prefix of its own.
     bool usesPrefixes = false;
-    // Whether an item run by it can be scaled up.
+    // Whether an item run by it can be scaled up, and whether wine's own
+    // scaling is one of the ways.
     bool usesWindowScale = false;
+    bool usesDpiScale = false;
 };
 // Everything that can open this file: every runner of every launcher that
 // claims it, so an item can be pointed at one of them.

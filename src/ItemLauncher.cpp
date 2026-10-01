@@ -41,8 +41,38 @@ struct Invocation {
 // Runs the program inside gamescope, which draws it at its own size and
 // scales the result. Nothing about the program's own command line changes:
 // gamescope takes it whole, after a "--".
+// Wine's own scaling: the program is told it is on a higher-resolution
+// screen and draws itself bigger. Two things say so -- the variable wine
+// reads at startup, and the DPI recorded in the prefix, which is what the
+// fonts follow.
+//
+// Run for every wine launch, not only a scaled one: the DPI lives in the
+// prefix and stays there, so turning scaling off has to put it back. Left
+// alone when it is already right, which is the ordinary case and costs
+// nothing to establish.
+void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &launcher,
+                  const LauncherRunner &runner) {
+    if (!launcher.usesDpiScale) return;
+
+    const bool scaling = item.windowScaleMode == WindowScaleMode::WineDpi &&
+                         item.windowScalePercent > 100;
+    const int wanted = scaling ? wineLogPixels(item.windowScalePercent) : kDefaultLogPixels;
+
+    if (scaling) {
+        if (call.env.isEmpty()) call.env = QProcessEnvironment::systemEnvironment();
+        call.env.insert(QStringLiteral("WINE_DPI_SCALE"),
+                        wineDpiScaleValue(item.windowScalePercent));
+    }
+
+    setPrefixDpi(runner.command, protonPrefixFor(item.command, launcher.prefixesDir), wanted);
+}
+
+// Gamescope's scaling, which wraps the program rather than telling it
+// anything. Wine's own scaling is handled by applyWineDpi(), which runs
+// whether or not anything is being scaled.
 void applyWindowScale(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
     if (item.windowScalePercent <= 100 || !launcher.usesWindowScale) return;
+    if (item.windowScaleMode != WindowScaleMode::Gamescope) return;
 
     const QString scale = windowScaleLabel(item.windowScalePercent);
     if (!gamescopeAvailable()) {
@@ -203,6 +233,7 @@ QString launchProgramItem(const ProgramItem &item) {
         call.failureHint =
             tr("Could not launch '%1' with %2.").arg(item.command, runner->name);
         applyWinePrefix(call, item, *launcher);
+        applyWineDpi(call, item, *launcher, *runner);
         applyWindowScale(call, item, *launcher);
     }
 

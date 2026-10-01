@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QTextStream>
 #include <QStandardPaths>
 
 namespace {
@@ -25,9 +26,15 @@ bool gamescopeAvailable() {
     return !QStandardPaths::findExecutable(QStringLiteral("gamescope")).isEmpty();
 }
 
-const QVector<int> &windowScales() {
-    static const QVector<int> scales = {100, 110, 120, 150, 200};
-    return scales;
+QVector<WindowScaleOption> windowScaleOptions(bool wineDpi) {
+    QVector<WindowScaleOption> options;
+    for (int percent : {100, 110, 120, 150, 200}) {
+        options.append({percent, WindowScaleMode::Gamescope});
+    }
+    // Last, after the scales that always work: this one depends on the
+    // program playing along.
+    if (wineDpi) options.append({200, WindowScaleMode::WineDpi});
+    return options;
 }
 
 QString windowScaleLabel(int percent) {
@@ -37,6 +44,134 @@ QString windowScaleLabel(int percent) {
     // One decimal, and no trailing zero: 1.5x rather than 1.50x.
     return QCoreApplication::translate("WindowScale", "%1x")
         .arg(QString::number(percent / 100.0, 'g', 2));
+}
+
+QString windowScaleLabel(const WindowScaleOption &option) {
+    if (option.mode == WindowScaleMode::Gamescope) return windowScaleLabel(option.percent);
+    return QCoreApplication::translate("WindowScale", "%1 (wine DPI)")
+        .arg(windowScaleLabel(option.percent));
+}
+
+QString wineDpiScaleValue(int percent) {
+    if (percent % 100 == 0) return QString::number(percent / 100);
+    return QString::number(percent / 100.0, 'g', 2);
+}
+
+int wineLogPixels(int percent) {
+    return qRound(double(kDefaultLogPixels) * percent / 100.0);
+}
+
+QStringList wineLogPixelsRegistryArgs(int logPixels) {
+    return {QStringLiteral("reg"),
+            QStringLiteral("add"),
+            QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Desktop"),
+            QStringLiteral("/v"),
+            QStringLiteral("LogPixels"),
+            QStringLiteral("/t"),
+            QStringLiteral("REG_DWORD"),
+            QStringLiteral("/d"),
+            QString::number(logPixels),
+            QStringLiteral("/f")};
+}
+
+QStringList wineDpiRegistryArgs(int percent) {
+    return wineLogPixelsRegistryArgs(wineLogPixels(percent));
+}
+
+int prefixLogPixels(const QString &prefixDir) {
+    QFile registry(prefixDir + QStringLiteral("/user.reg"));
+    if (!registry.open(QIODevice::ReadOnly | QIODevice::Text)) return 0;
+
+    // Sections are [Control Panel\\Desktop] and the like, one key per line.
+    // The value is wanted from that section alone: LogPixels appears under
+    // others too, meaning something else there.
+    static const QRegularExpression value(
+        QStringLiteral("^\"LogPixels\"=dword:([0-9a-fA-F]+)"));
+    bool inDesktop = false;
+    QTextStream in(&registry);
+    while (!in.atEnd()) {
+        const QString line = in.readLine();
+        if (line.startsWith(QLatin1Char('['))) {
+            inDesktop = line.startsWith(QLatin1String("[Control Panel\\\\Desktop]"));
+            continue;
+        }
+        if (!inDesktop) continue;
+        const QRegularExpressionMatch match = value.match(line);
+        if (match.hasMatch()) return match.captured(1).toInt(nullptr, 16);
+    }
+    return 0;
+}
+
+bool prefixExists(const QString &prefixDir) {
+    // drive_c is there as soon as the prefix is built. The registry files are
+    // not: wine keeps the registry in the running wineserver and writes it
+    // out only when that exits, so user.reg is no test of whether a prefix
+    // exists -- only of whether one has been flushed.
+    return QFileInfo(prefixDir + QStringLiteral("/drive_c")).isDir();
+}
+
+void initialisePrefix(const QString &wineCommand, const QString &prefixDir) {
+    if (prefixExists(prefixDir)) return;
+
+    QProcess boot;
+    boot.setProgram(wineCommand);
+    boot.setArguments({QStringLiteral("wineboot"), QStringLiteral("-u")});
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("WINEPREFIX"), prefixDir);
+    boot.setProcessEnvironment(env);
+    boot.start();
+    // Building a prefix from nothing is slow -- it unpacks a Windows
+    // installation -- and there is no use measuring before it is done.
+    if (boot.waitForStarted(10000)) boot.waitForFinished(300000);
+
+    // And then the server is stopped, which is what writes the registry out:
+    // until it does, there is nothing on disk to read the prefix's DPI from.
+    stopWineserver(wineCommand, prefixDir);
+}
+
+void setPrefixDpi(const QString &wineCommand, const QString &prefixDir, int logPixels) {
+    const int recorded = prefixLogPixels(prefixDir);
+    if (recorded == logPixels) return;
+    // Nothing recorded means the default, so there is nothing to put back.
+    if (logPixels == kDefaultLogPixels && recorded == 0) return;
+
+    // Best effort: a program still runs, at the wrong size, if the registry
+    // will not take it, and failing over a font size would be the wrong
+    // trade.
+    QProcess reg;
+    reg.setProgram(wineCommand);
+    reg.setArguments(wineLogPixelsRegistryArgs(logPixels));
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("WINEPREFIX"), prefixDir);
+    reg.setProcessEnvironment(env);
+    reg.start();
+    if (reg.waitForStarted(5000)) reg.waitForFinished(60000);
+
+    // The server started to do the writing read the old value as it came up
+    // and would hand it to the program next started, so it is stopped again.
+    stopWineserver(wineCommand, prefixDir);
+}
+
+void stopWineserver(const QString &wineCommand, const QString &prefixDir) {
+    // Beside the wine that will be used, so that a wine kept in a directory
+    // of its own stops its own server rather than the system one's.
+    QString server;
+    if (wineCommand.contains(QLatin1Char('/'))) {
+        const QString beside =
+            QFileInfo(wineCommand).absolutePath() + QStringLiteral("/wineserver");
+        if (QFileInfo(beside).isExecutable()) server = beside;
+    }
+    if (server.isEmpty()) server = QStandardPaths::findExecutable(QStringLiteral("wineserver"));
+    if (server.isEmpty()) return;
+
+    QProcess kill;
+    kill.setProgram(server);
+    kill.setArguments({QStringLiteral("-k")});
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("WINEPREFIX"), prefixDir);
+    kill.setProcessEnvironment(env);
+    kill.start();
+    if (kill.waitForStarted(5000)) kill.waitForFinished(10000);
 }
 
 QSize scaledSize(const QSize &native, int percent) {
@@ -116,6 +251,24 @@ bool parseWindowLine(const QString &line, WindowLine *out) {
     return true;
 }
 
+// Wine's own furniture, which is not the program: the desktop it keeps, the
+// dialogs it puts up while building a prefix, the services behind it. One of
+// these can be most of a screen wide, so it must never be mistaken for the
+// program being measured. winevdm is deliberately not here -- a 16-bit
+// program's windows really do belong to it.
+bool isWineInfrastructure(const WindowLine &window) {
+    static const QStringList classes = {
+        QStringLiteral("explorer.exe"), QStringLiteral("rundll32.exe"),
+        QStringLiteral("wineboot.exe"), QStringLiteral("msiexec.exe"),
+        QStringLiteral("services.exe"), QStringLiteral("winemenubuilder.exe"),
+        QStringLiteral("wine"),         QStringLiteral("winedevice.exe"),
+    };
+    for (const QString &name : classes) {
+        if (window.windowClass.compare(name, Qt::CaseInsensitive) == 0) return true;
+    }
+    return false;
+}
+
 // The frames a reparenting window manager puts round other people's windows.
 // Their size is the decoration, not the program.
 bool isWindowManagerFrame(const WindowLine &window) {
@@ -185,7 +338,12 @@ QSize measureNewWindow(const QStringList &before, const QString &classHint, int 
                 window.windowClass.compare(classHint, Qt::CaseInsensitive) == 0) {
                 if (area(window.size) > area(matching)) matching = window.size;
             }
-            if (area(window.size) > area(anyNew)) anyNew = window.size;
+            // The fallback is for a program whose class we guessed wrongly,
+            // not for wine's own windows: one of those would otherwise win
+            // on size alone.
+            if (!isWineInfrastructure(window) && area(window.size) > area(anyNew)) {
+                anyNew = window.size;
+            }
         }
 
         if (anyNew.width() * anyNew.height() > fallback.width() * fallback.height()) {

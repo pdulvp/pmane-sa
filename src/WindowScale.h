@@ -17,12 +17,79 @@
 // without it.
 bool gamescopeAvailable();
 
-// The scales on offer, as percentages: a whole number keeps the arithmetic
-// exact where a fraction of a pixel would not.
-const QVector<int> &windowScales();
+// The two ways of making a program bigger, which are not the same thing.
+//
+// Gamescope renders the program at its own size and scales the picture: the
+// program knows nothing about it, so everything grows together and nothing
+// can be laid out wrongly. Blown up, though, it is the same number of pixels.
+//
+// Wine's own scaling tells the program it is on a higher-resolution screen,
+// by WINE_DPI_SCALE and the DPI recorded in the prefix. The program then
+// draws itself bigger -- real pixels, sharp text -- but only as well as it
+// was written to: a program from Windows 3.x may not honour it at all, or
+// may honour it and misplace things.
+enum class WindowScaleMode { Gamescope, WineDpi };
 
-// How a scale reads to a person: 100 -> "1x", 110 -> "1.1x".
+// One entry in the list of scales an item can be set to.
+struct WindowScaleOption {
+    int percent = 100;
+    WindowScaleMode mode = WindowScaleMode::Gamescope;
+};
+
+// The scales to offer. `wineDpi` adds wine's own scaling to the list, which
+// only the wine launcher can do -- a Proton build handles its own.
+QVector<WindowScaleOption> windowScaleOptions(bool wineDpi);
+
+// How a scale reads to a person: 100 -> "1x", 110 -> "1.1x", and wine's own
+// scaling named apart from gamescope's.
 QString windowScaleLabel(int percent);
+QString windowScaleLabel(const WindowScaleOption &option);
+
+// What wine is told about the screen it is drawing on: the value of
+// WINE_DPI_SCALE, and the dots per inch to record in the prefix. 96 is what
+// Windows calls 100%, so a doubled program is 192.
+QString wineDpiScaleValue(int percent);
+int wineLogPixels(int percent);
+
+// What dots per inch is the default -- what Windows calls 100%, and what a
+// prefix that has never been told otherwise uses.
+constexpr int kDefaultLogPixels = 96;
+
+// The command that writes a DPI into the prefix's registry. Wine reads it
+// when a program starts, so it has to be there before one does.
+QStringList wineDpiRegistryArgs(int percent);
+// The same, for a DPI given outright rather than as a scale.
+QStringList wineLogPixelsRegistryArgs(int logPixels);
+
+// The DPI a prefix currently records, or 0 if it records none -- which means
+// the default. Read straight out of the prefix's user.reg, a text file, so
+// that finding out costs nothing: starting wine to ask would cost as much as
+// setting it.
+int prefixLogPixels(const QString &prefixDir);
+
+// Stops the wineserver looking after a prefix, so that the next program
+// started there gets a fresh one. Wine reads the DPI as a server comes up
+// and keeps it: without this, a program started just after the DPI changed
+// still draws at the old one.
+void stopWineserver(const QString &wineCommand, const QString &prefixDir);
+
+// Makes `prefixDir` record `logPixels`, and stops its wineserver if anything
+// had to change. Does nothing when the prefix already agrees, which costs no
+// wine startup at all -- the value is read out of a text file.
+//
+// Both launching and measuring go through here: a program has to be measured
+// at the DPI it will be run at, and in the prefix it will be run in, or the
+// size measured is not the size it draws.
+void setPrefixDpi(const QString &wineCommand, const QString &prefixDir, int logPixels);
+
+// Whether a prefix has been built: wine writes user.reg as it builds one.
+bool prefixExists(const QString &prefixDir);
+
+// Builds a prefix, waiting for it to finish. Wine would do it anyway on the
+// first program started there, but it puts up windows of its own while it
+// does -- a rundll32 dialog the better part of a screen wide -- and those
+// must be over and done with before anything is measured.
+void initialisePrefix(const QString &wineCommand, const QString &prefixDir);
 
 // The size a window comes out at, which is what the scale is really for.
 QSize scaledSize(const QSize &native, int percent);

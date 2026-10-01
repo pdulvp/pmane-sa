@@ -1,9 +1,13 @@
 #include "ItemPropertiesDialog.h"
 
+#include "CompatTools.h"
 #include "WindowScale.h"
+
+#include <QDir>
 
 #include <QCoreApplication>
 #include <QProcess>
+#include <QSignalBlocker>
 
 #include "IconEffect.h"
 #include "IconPickerDialog.h"
@@ -98,9 +102,8 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     // is run inside gamescope instead, which draws it at its own size and
     // scales what comes out.
     m_scaleCombo = new QComboBox(this);
-    for (int percent : windowScales()) {
-        m_scaleCombo->addItem(windowScaleLabel(percent), percent);
-    }
+    // Filled in by updateScaleRow(), which knows whether what the item is
+    // run with can do wine's own scaling.
 
     m_measureButton = new QPushButton(tr("Measure"), this);
     m_measureButton->setAutoDefault(false);
@@ -122,8 +125,13 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 
     connect(m_measureButton, &QPushButton::clicked, this,
             &ItemPropertiesDialog::measureWindow);
-    connect(m_scaleCombo, &QComboBox::currentIndexChanged, this,
-            [this](int) { refreshNativeSizeLabel(); });
+    connect(m_scaleCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+        m_scalePercent = m_scaleCombo->currentData().toInt();
+        m_scaleMode = m_scaleCombo->currentData(kScaleModeRole).toInt() == 1
+                          ? WindowScaleMode::WineDpi
+                          : WindowScaleMode::Gamescope;
+        refreshNativeSizeLabel();
+    });
     m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -162,9 +170,8 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_commandEdit->setText(item.command);
     m_argsEdit->setText(item.arguments);
     m_nativeSize = item.nativeSize;
-    const int scaleIndex = m_scaleCombo->findData(qMax(item.windowScalePercent, 100));
-    m_scaleCombo->setCurrentIndex(scaleIndex >= 0 ? scaleIndex : 0);
-    refreshNativeSizeLabel();
+    m_scalePercent = qMax(item.windowScalePercent, 100);
+    m_scaleMode = item.windowScaleMode;
     m_workDirEdit->setText(item.workingDir);
     populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
@@ -241,20 +248,41 @@ void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
 }
 
 void ItemPropertiesDialog::updateScaleRow() {
-    // Scaling belongs to the launchers that run Windows programs, so the row
-    // follows what has just been picked rather than the file type.
+    // Scaling belongs to the launchers that run Windows programs, and wine's
+    // own scaling only to wine, so both the row and the list it offers follow
+    // what has just been picked.
     bool scalable = false;
+    bool wineDpi = false;
     const QString selected = m_launcherCombo->currentData().toString();
     for (const LauncherChoice &choice : launchersFor(m_commandEdit->text().trimmed())) {
         if (choice.id == selected) {
             scalable = choice.usesWindowScale;
+            wineDpi = choice.usesDpiScale;
             break;
         }
     }
-    if (scalable == m_scaleRowShown) return;
-    m_scaleRowShown = scalable;
-    m_form->setRowVisible(m_scaleRow, scalable);
-    resize(width(), sizeHint().height());
+
+    // Rebuilt rather than filtered, and the choice put back where it still
+    // exists: moving a wine item to Proton has to drop wine's own scaling.
+    const QSignalBlocker blocker(m_scaleCombo);
+    m_scaleCombo->clear();
+    int selectedIndex = 0;
+    const QVector<WindowScaleOption> options = windowScaleOptions(wineDpi);
+    for (int i = 0; i < options.size(); ++i) {
+        const WindowScaleOption &option = options[i];
+        m_scaleCombo->addItem(windowScaleLabel(option), option.percent);
+        m_scaleCombo->setItemData(i, option.mode == WindowScaleMode::WineDpi ? 1 : 0,
+                                  kScaleModeRole);
+        if (option.percent == m_scalePercent && option.mode == m_scaleMode) selectedIndex = i;
+    }
+    m_scaleCombo->setCurrentIndex(selectedIndex);
+    refreshNativeSizeLabel();
+
+    if (scalable != m_scaleRowShown) {
+        m_scaleRowShown = scalable;
+        m_form->setRowVisible(m_scaleRow, scalable);
+        resize(width(), sizeHint().height());
+    }
 }
 
 void ItemPropertiesDialog::measureWindow() {
@@ -275,6 +303,39 @@ void ItemPropertiesDialog::measureWindow() {
     // again once it has been measured.
     const LauncherCommand call = launcherCommandFor(*launcher, *runner, command, {});
 
+    // In the prefix it will be run in, and at the size it will be run at.
+    // Without the first it would be measured in whatever wine's default
+    // prefix happens to be set to; without the second, a program left scaled
+    // by wine's own DPI would measure as the bigger window it is drawing,
+    // and that figure would then be handed to gamescope as its own size.
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (launcher->usesPrefixes) {
+        const QString prefix = protonPrefixFor(command, launcher->prefixesDir);
+        if (!QDir().mkpath(prefix)) {
+            m_nativeSizeLabel->setText(tr("Could not create its prefix"));
+            return;
+        }
+        env.insert(QStringLiteral("WINEPREFIX"), prefix);
+
+        // A prefix that does not exist yet is built by the first program
+        // started in it, and wine puts up windows of its own while doing so
+        // -- one of them most of a screen wide. Built here instead, and
+        // waited for, so that none of that is still on screen to be measured
+        // instead of the program.
+        if (!prefixExists(prefix)) {
+            m_measureButton->setEnabled(false);
+            m_nativeSizeLabel->setText(tr("Setting up its wine prefix, the first time only..."));
+            QCoreApplication::processEvents();
+            initialisePrefix(runner->command, prefix);
+            m_measureButton->setEnabled(true);
+        }
+        if (launcher->usesDpiScale) {
+            m_nativeSizeLabel->setText(tr("Putting its scale back first..."));
+            QCoreApplication::processEvents();
+            setPrefixDpi(runner->command, prefix, kDefaultLogPixels);
+        }
+    }
+
     // What is already on the display, so that whatever the program puts up
     // can be told apart from it.
     const QStringList before = windowSnapshot();
@@ -283,6 +344,7 @@ void ItemPropertiesDialog::measureWindow() {
     program.setProgram(call.program);
     program.setArguments(call.args);
     program.setWorkingDirectory(QFileInfo(command).absolutePath());
+    program.setProcessEnvironment(env);
     program.start();
     if (!program.waitForStarted(5000)) {
         m_nativeSizeLabel->setText(tr("Could not start it"));
@@ -316,6 +378,20 @@ void ItemPropertiesDialog::measureWindow() {
 void ItemPropertiesDialog::refreshNativeSizeLabel() {
     const int percent = m_scaleCombo->currentData().toInt();
     const bool measured = m_nativeSize.isValid() && !m_nativeSize.isEmpty();
+    const bool wineDpi = m_scaleCombo->currentData(kScaleModeRole).toInt() == 1;
+
+    // Wine is simply told to draw bigger, so there is nothing to measure --
+    // and nothing fixed about the result, which is the point: a window the
+    // program lets you resize stays resizable.
+    m_measureButton->setEnabled(!wineDpi);
+    if (wineDpi) {
+        m_nativeSizeLabel->setText(
+            tr("The program draws itself bigger, at %1 dpi. Nothing to measure, and a "
+               "resizable window stays resizable -- but a program that ignores DPI will "
+               "ignore this.")
+                .arg(wineLogPixels(percent)));
+        return;
+    }
 
     if (!measured) {
         m_nativeSizeLabel->setText(percent > 100 ? tr("Measure it first") : QString());
@@ -367,6 +443,9 @@ ProgramItem ItemPropertiesDialog::item() const {
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
     it.windowScalePercent = m_scaleCombo->currentData().toInt();
+    it.windowScaleMode = m_scaleCombo->currentData(kScaleModeRole).toInt() == 1
+                             ? WindowScaleMode::WineDpi
+                             : WindowScaleMode::Gamescope;
     it.nativeSize = m_nativeSize;
     it.workingDir = m_workDirEdit->text().trimmed();
     it.launcher = m_launcherCombo->currentData().toString();

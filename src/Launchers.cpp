@@ -271,6 +271,7 @@ QVector<Launcher> defaultLaunchers() {
     wine.extensions = {QStringLiteral("exe")};
     wine.usesPrefixes = true;
     wine.usesWindowScale = true;
+    wine.usesDpiScale = true;
     wine.arguments = QStringLiteral("{file}");
     result << wine;
 
@@ -417,7 +418,7 @@ QVector<LauncherChoice> launchersFor(const QString &path) {
                 }
             }
             choices.append({launcherId(*launcher, runner), label, launcher->usesPrefixes,
-                            launcher->usesWindowScale});
+                            launcher->usesWindowScale, launcher->usesDpiScale});
         }
     }
     return choices;
