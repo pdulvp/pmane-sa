@@ -5,22 +5,21 @@
 
 #include "Launchers.h"
 
-class QCheckBox;
-class QComboBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
-class QListWidget;
 class QPushButton;
-class QStackedWidget;
 class QTableWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 
-// "Launchers": what each kind of file is started with. A tree down the left --
-// a launcher, with its launcher profiles under it -- and whatever the row
-// selected there has to be said about it on the right: the file types and the
-// shared tables on a launcher, the command line and the options on a profile.
+// "Launchers": what each kind of file is started with. The launchers down the
+// left, and what the one selected there has to be said about it on the right:
+// the file types it claims, the programs that can act as it, and the folders
+// it keeps things in.
+//
+// Nothing here is a command line. How a launcher is handed a file belongs to
+// the launcher, and a program's own arguments belong to the item.
 class LaunchersDialog : public QDialog {
     Q_OBJECT
 public:
@@ -30,66 +29,48 @@ public:
     QVector<Launcher> launchers() const { return m_launchers; }
 
 private:
-    // Which row of the tree is which, kept on the item itself: a launcher
-    // carries its index, a profile its launcher's index and its own.
-    enum Role { LauncherRole = Qt::UserRole, ProfileRole };
+    // Which launcher a row stands for, kept on the row itself.
+    enum Role { LauncherRole = Qt::UserRole };
 
     void buildLauncherPage();
-    void buildProfilePage();
-    // A profile is renamed where its name is: on its row in the tree, by
-    // double click or through the menu on a right click.
-    void renameSelectedProfile();
-    void showTreeMenu(const QPoint &pos);
-    void onTreeItemChanged(QTreeWidgetItem *item, int column);
-    void rebuildTree(int selectLauncher, int selectProfile);
+    // One row of the runners table. A wine or a Proton build read off the
+    // machine is shown but not edited.
+    void addRunnerRow(const LauncherRunner &runner);
+    bool runnerRowIsDiscovered(int row) const;
+    // How many rows are this dialog's own, the discovered ones being the
+    // machine's: the last of those cannot be removed.
+    int editableRunnerRows() const;
+    void browseForRunner();
+
+    void buildTree(int selectLauncher);
     // Reads the page on show back into the launcher it belongs to, which is
     // what makes moving between rows keep what was typed.
     void commitCurrentPage();
     void showPageFor(QTreeWidgetItem *item);
-    void addProfile();
-    void duplicateProfile();
-    void removeProfile();
-    // Which launcher and profile the selected row stands for; profile -1 on a
-    // launcher row.
-    void currentSelection(int *launcher, int *profile) const;
 
     QVector<Launcher> m_launchers;
 
     QTreeWidget *m_tree;
-    QStackedWidget *m_stack;
-    QPushButton *m_addButton;
-    QPushButton *m_duplicateButton;
-    QPushButton *m_removeButton;
 
-    // The launcher page.
+    // The launcher page: the only page there is.
     QWidget *m_launcherPage;
     QLabel *m_launcherName;
     QLabel *m_launcherDescription;
     QLineEdit *m_extensions;
-    QLineEdit *m_launcherCommand;
-    QLineEdit *m_launcherArguments;
-    QCheckBox *m_launcherUseShell;
     QFormLayout *m_launcherForm;
-    QLabel *m_launcherPlaceholders;
+    QLabel *m_runnersTitle;
+    QTableWidget *m_runners;
+    QPushButton *m_runnerAdd;
+    QPushButton *m_runnerRemove;
+    QPushButton *m_runnerBrowse;
+    QLabel *m_runnersNote;
+    QWidget *m_prefixesBox;
+    QLineEdit *m_prefixesDir;
     QWidget *m_coresBox;
     QLineEdit *m_coresDir;
     QTableWidget *m_cores;
-    QWidget *m_buildsBox;
-    QListWidget *m_builds;
 
-    // The profile page.
-    QWidget *m_profilePage;
-    QFormLayout *m_profileForm;
-    QLabel *m_profileHeading;
-    QLineEdit *m_extraArguments;
-    QComboBox *m_compatTool;
-    QLineEdit *m_prefixesDir;
-    QLineEdit *m_baseConfig;
-    QLineEdit *m_core;
-    QLabel *m_placeholders;
-
-    // The row the fields on show belong to, so they can be written back
+    // The launcher the fields on show belong to, so they can be written back
     // before another row takes their place.
     int m_editingLauncher = -1;
-    int m_editingProfile = -1;
 };

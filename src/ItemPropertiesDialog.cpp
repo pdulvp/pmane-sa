@@ -1,5 +1,10 @@
 #include "ItemPropertiesDialog.h"
 
+#include "WindowScale.h"
+
+#include <QCoreApplication>
+#include <QProcess>
+
 #include "IconEffect.h"
 #include "IconPickerDialog.h"
 #include "ItemDetails.h"
@@ -84,9 +89,41 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->setVerticalSpacing(kDialogRowSpacing);
     m_form->addRow(tr("Description:"), m_nameEdit);
     m_form->addRow(tr("Command Line:"), commandRow);
-    m_form->addRow(tr("Arguments:"), m_argsEdit);
+    m_form->addRow(tr("Program arguments:"), m_argsEdit);
     m_form->addRow(tr("Working Directory:"), workDirRow);
     m_form->addRow(tr("Run with:"), m_launcherCombo);
+
+    // How big to run it. A program written for a 640x480 screen is a postage
+    // stamp on a modern one, and nothing in wine will scale it: the program
+    // is run inside gamescope instead, which draws it at its own size and
+    // scales what comes out.
+    m_scaleCombo = new QComboBox(this);
+    for (int percent : windowScales()) {
+        m_scaleCombo->addItem(windowScaleLabel(percent), percent);
+    }
+
+    m_measureButton = new QPushButton(tr("Measure"), this);
+    m_measureButton->setAutoDefault(false);
+    m_measureButton->setToolTip(
+        tr("Runs the program once, at its own size, to see how big a window it puts up. "
+           "Close it when it appears -- or it will close itself once measured."));
+
+    m_nativeSizeLabel = new QLabel(this);
+    markHintLabel(m_nativeSizeLabel);
+
+    m_scaleRow = new QWidget(this);
+    auto *scaleLayout = new QHBoxLayout(m_scaleRow);
+    scaleLayout->setContentsMargins(0, 0, 0, 0);
+    scaleLayout->setSpacing(8);
+    scaleLayout->addWidget(m_scaleCombo);
+    scaleLayout->addWidget(m_measureButton);
+    scaleLayout->addWidget(m_nativeSizeLabel, 1);
+    m_form->addRow(tr("Window size:"), m_scaleRow);
+
+    connect(m_measureButton, &QPushButton::clicked, this,
+            &ItemPropertiesDialog::measureWindow);
+    connect(m_scaleCombo, &QComboBox::currentIndexChanged, this,
+            [this](int) { refreshNativeSizeLabel(); });
     m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -102,6 +139,11 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 
     connect(m_commandEdit, &QLineEdit::textChanged, this,
             &ItemPropertiesDialog::updateLauncherVisibility);
+    // Only the scale row follows the choice. Going through
+    // updateLauncherVisibility() here would refill the list, and a list that
+    // reacts to its own refilling never stops.
+    connect(m_launcherCombo, &QComboBox::currentIndexChanged, this,
+            [this](int) { updateScaleRow(); });
     updateLauncherVisibility();
 
     connect(commandBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseCommand);
@@ -119,6 +161,10 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_nameEdit->setText(item.name);
     m_commandEdit->setText(item.command);
     m_argsEdit->setText(item.arguments);
+    m_nativeSize = item.nativeSize;
+    const int scaleIndex = m_scaleCombo->findData(qMax(item.windowScalePercent, 100));
+    m_scaleCombo->setCurrentIndex(scaleIndex >= 0 ? scaleIndex : 0);
+    refreshNativeSizeLabel();
     m_workDirEdit->setText(item.workingDir);
     populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
@@ -194,6 +240,103 @@ void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
     m_launcherCombo->setCurrentIndex(m_launcherCombo->count() - 1);
 }
 
+void ItemPropertiesDialog::updateScaleRow() {
+    // Scaling belongs to the launchers that run Windows programs, so the row
+    // follows what has just been picked rather than the file type.
+    bool scalable = false;
+    const QString selected = m_launcherCombo->currentData().toString();
+    for (const LauncherChoice &choice : launchersFor(m_commandEdit->text().trimmed())) {
+        if (choice.id == selected) {
+            scalable = choice.usesWindowScale;
+            break;
+        }
+    }
+    if (scalable == m_scaleRowShown) return;
+    m_scaleRowShown = scalable;
+    m_form->setRowVisible(m_scaleRow, scalable);
+    resize(width(), sizeHint().height());
+}
+
+void ItemPropertiesDialog::measureWindow() {
+    const QString command = m_commandEdit->text().trimmed();
+    if (command.isEmpty()) return;
+
+    const Launcher *launcher = nullptr;
+    const LauncherRunner *runner = nullptr;
+    launcherForItem(command, m_launcherCombo->currentData().toString(), &launcher, &runner);
+    if (!launcher || !runner) {
+        m_nativeSizeLabel->setText(tr("Nothing is set up to run this"));
+        return;
+    }
+
+    // Started here rather than through launchProgramItem(), for two reasons:
+    // it must run outside gamescope -- inside one it has an X server of its
+    // own, where its window cannot be seen -- and it has to be ours to close
+    // again once it has been measured.
+    const LauncherCommand call = launcherCommandFor(*launcher, *runner, command, {});
+
+    // What is already on the display, so that whatever the program puts up
+    // can be told apart from it.
+    const QStringList before = windowSnapshot();
+
+    QProcess program;
+    program.setProgram(call.program);
+    program.setArguments(call.args);
+    program.setWorkingDirectory(QFileInfo(command).absolutePath());
+    program.start();
+    if (!program.waitForStarted(5000)) {
+        m_nativeSizeLabel->setText(tr("Could not start it"));
+        return;
+    }
+
+    m_measureButton->setEnabled(false);
+    m_nativeSizeLabel->setText(tr("Waiting for its window..."));
+    // So the message is on screen while the program is starting up, the wait
+    // itself being a blocking one.
+    QCoreApplication::processEvents();
+
+    const QSize measured = measureNewWindow(before, wineWindowClass(command), 30000);
+
+    program.terminate();
+    if (!program.waitForFinished(3000)) program.kill();
+
+    m_measureButton->setEnabled(true);
+    if (measured.isValid() && !measured.isEmpty()) {
+        m_nativeSize = measured;
+        // Something was learned, so offer to use it: at its own size there
+        // would have been nothing to measure for.
+        if (m_scaleCombo->currentData().toInt() == 100) m_scaleCombo->setCurrentIndex(1);
+    }
+    refreshNativeSizeLabel();
+    if (!measured.isValid() || measured.isEmpty()) {
+        m_nativeSizeLabel->setText(tr("No window appeared -- try running it first"));
+    }
+}
+
+void ItemPropertiesDialog::refreshNativeSizeLabel() {
+    const int percent = m_scaleCombo->currentData().toInt();
+    const bool measured = m_nativeSize.isValid() && !m_nativeSize.isEmpty();
+
+    if (!measured) {
+        m_nativeSizeLabel->setText(percent > 100 ? tr("Measure it first") : QString());
+    } else if (percent > 100) {
+        const QSize out = scaledSize(m_nativeSize, percent);
+        m_nativeSizeLabel->setText(tr("%1x%2 shown at %3x%4")
+                                       .arg(m_nativeSize.width())
+                                       .arg(m_nativeSize.height())
+                                       .arg(out.width())
+                                       .arg(out.height()));
+    } else {
+        m_nativeSizeLabel->setText(
+            tr("%1x%2").arg(m_nativeSize.width()).arg(m_nativeSize.height()));
+    }
+    // Nothing to scale without gamescope, so say so rather than offering it.
+    if (!gamescopeAvailable()) {
+        m_scaleCombo->setEnabled(false);
+        m_nativeSizeLabel->setText(tr("Scaling needs gamescope, which is not installed"));
+    }
+}
+
 void ItemPropertiesDialog::updateLauncherVisibility() {
     // The row is there whenever some launcher takes this kind of file, so
     // that what starts an item is readable even where there is only the one
@@ -205,6 +348,9 @@ void ItemPropertiesDialog::updateLauncherVisibility() {
     // The list follows the command, which may now name a different kind of
     // file altogether.
     populateLaunchers(chosen);
+
+    // Read after the list was refilled, which may have moved the selection.
+    updateScaleRow();
 
     if (show == m_launcherRowShown) return;
     m_launcherRowShown = show;
@@ -220,6 +366,8 @@ ProgramItem ItemPropertiesDialog::item() const {
     it.name = m_nameEdit->text().trimmed();
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
+    it.windowScalePercent = m_scaleCombo->currentData().toInt();
+    it.nativeSize = m_nativeSize;
     it.workingDir = m_workDirEdit->text().trimmed();
     it.launcher = m_launcherCombo->currentData().toString();
     it.xpStyleIcon = m_xpStyleCheck->isChecked();

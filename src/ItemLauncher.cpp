@@ -1,5 +1,7 @@
 #include "ItemLauncher.h"
 
+#include "WindowScale.h"
+
 #include "CompatTools.h"
 #include "DesktopEntry.h"
 #include "ItemKind.h"
@@ -36,23 +38,51 @@ struct Invocation {
     QString error;
 };
 
-Invocation protonInvocation(const ProgramItem &item, const LauncherProfile &profile,
-                            const QStringList &extraArgs) {
+// Runs the program inside gamescope, which draws it at its own size and
+// scales the result. Nothing about the program's own command line changes:
+// gamescope takes it whole, after a "--".
+void applyWindowScale(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
+    if (item.windowScalePercent <= 100 || !launcher.usesWindowScale) return;
+
+    const QString scale = windowScaleLabel(item.windowScalePercent);
+    if (!gamescopeAvailable()) {
+        call.error = tr("'%1' is set to run at %2 its own size, which needs gamescope. It "
+                        "is not installed.")
+                         .arg(item.name, scale);
+        return;
+    }
+    if (!item.nativeSize.isValid() || item.nativeSize.isEmpty()) {
+        call.error = tr("'%1' is set to run at %2 its own size, but that size is not known "
+                        "yet. Its properties has a Measure button, which runs it once to "
+                        "find out.")
+                         .arg(item.name, scale);
+        return;
+    }
+
+    const QStringList wrapped =
+        gamescopeCommand(item.nativeSize, item.windowScalePercent, call.program, call.args);
+    if (wrapped.isEmpty()) return;
+    call.program = QStringLiteral("gamescope");
+    call.args = wrapped;
+}
+
+Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
+                            const LauncherRunner &runner, const QStringList &extraArgs) {
     Invocation call;
 
-    const CompatTool *tool = compatToolById(profile.compatToolId);
+    const CompatTool *tool = compatToolById(runner.compatToolId);
     if (!tool) {
-        call.error = tr("'%1' is set to run with '%2', whose Proton build ('%3') is no longer "
+        call.error = tr("'%1' is set to run with the Proton build '%2', which is no longer "
                         "installed under Steam's compatibilitytools.d.")
-                         .arg(item.name, profile.name, profile.compatToolId);
+                         .arg(item.name, runner.compatToolId);
         return call;
     }
 
     // Proton keeps the wine prefix in STEAM_COMPAT_DATA_PATH and builds it
     // on first run; it refuses to start without one. The path is per
     // executable, so each program gets its own bottle -- under whichever
-    // folder the profile keeps them in.
-    const QString prefix = protonPrefixFor(item.command, profile.prefixesDir);
+    // folder the launcher keeps them in.
+    const QString prefix = protonPrefixFor(item.command, launcher.prefixesDir);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the Proton prefix at '%1'.").arg(prefix);
         return call;
@@ -65,7 +95,22 @@ Invocation protonInvocation(const ProgramItem &item, const LauncherProfile &prof
     call.env.insert(QStringLiteral("STEAM_COMPAT_DATA_PATH"), prefix);
     // Proton reads this to find the runtime beside the Steam client.
     call.env.insert(QStringLiteral("STEAM_COMPAT_CLIENT_INSTALL_PATH"), tool->steamPath);
+    applyWindowScale(call, item, launcher);
     return call;
+}
+
+// A wine prefix per program, the way Proton gets one: two games cannot tread
+// on each other's C: drive, and a prefix built for one is not disturbed by
+// the next. Left to wine's own default when the launcher names no folder.
+void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
+    if (!launcher.usesPrefixes) return;
+    const QString prefix = protonPrefixFor(item.command, launcher.prefixesDir);
+    if (!QDir().mkpath(prefix)) {
+        call.error = tr("Could not create the wine prefix at '%1'.").arg(prefix);
+        return;
+    }
+    if (call.env.isEmpty()) call.env = QProcessEnvironment::systemEnvironment();
+    call.env.insert(QStringLiteral("WINEPREFIX"), prefix);
 }
 
 // A .desktop file is a recipe for starting an application rather than an
@@ -127,29 +172,38 @@ QString launchProgramItem(const ProgramItem &item) {
 
     Invocation call;
     const Launcher *launcher = nullptr;
-    const LauncherProfile *profile = nullptr;
-    launcherForItem(item.command, item.launcher, &launcher, &profile);
+    const LauncherRunner *runner = nullptr;
+    launcherForItem(item.command, item.launcher, &launcher, &runner);
 
     if (isDesktopEntry(item.command)) {
         call = desktopEntryInvocation(item, extraArgs);
-    } else if (!launcher || !profile) {
+    } else if (!launcher || !runner) {
         call.error = tr("Nothing is set up to run '%1'. Options > Launchers says which file "
                         "types each launcher takes.")
                          .arg(item.command);
-    } else if (launcher->usesCompatTools && !profile->compatToolId.isEmpty()) {
-        // A Proton build is not simply another program to run: it wants a
-        // prefix of its own and the environment that points at it.
-        call = protonInvocation(item, *profile, extraArgs);
+    } else if (runner->isCompatTool()) {
+        // A Proton build is a runner like any other to pick, but not to
+        // start: it wants a prefix of its own and the environment that
+        // points at it, so its command line is not what runs.
+        call = protonInvocation(item, *launcher, *runner, extraArgs);
+    } else if (runner->command.isEmpty()) {
+        call.error = tr("'%1' names no program to run '%2' with. Options > Launchers is "
+                        "where the programs it can use are listed.")
+                         .arg(launcher->name, item.command);
     } else {
-        // The profile's own program, its arguments with the item's path
+        // The runner's program, the launcher's arguments with the item's path
         // filled in, and the interactive shell around it when the program is
         // an alias.
         const LauncherCommand command =
-            launcherCommandFor(*launcher, *profile, item.command, extraArgs);
+            launcherCommandFor(*launcher, *runner, item.command, extraArgs);
         call.program = command.program;
         call.args = command.args;
-        call.failureHint = tr("Could not launch '%1' with %2 ('%3').")
-                               .arg(item.command, profile->name, launcher->command);
+        // Named by the program actually started, which is what would have to
+        // be put right.
+        call.failureHint =
+            tr("Could not launch '%1' with %2.").arg(item.command, runner->name);
+        applyWinePrefix(call, item, *launcher);
+        applyWindowScale(call, item, *launcher);
     }
 
     if (!call.error.isEmpty()) return call.error;

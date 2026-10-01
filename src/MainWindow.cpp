@@ -797,6 +797,9 @@ void MainWindow::load() {
             item.iconIndex = settings.value("iconIndex", -1).toInt();
             item.iconSource = settings.value("iconSource").toString();
             item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
+            item.windowScalePercent = settings.value("windowScalePercent", 100).toInt();
+            const QSize native = settings.value("nativeSize").toSize();
+            if (native.isValid() && !native.isEmpty()) item.nativeSize = native;
             group->addProgramItem(item);
         }
         settings.endArray();
@@ -858,6 +861,15 @@ void MainWindow::save() {
                 }
             }
             if (items[j].xpStyleIcon) settings.setValue("xpStyleIcon", true);
+            // Only a program being scaled has anything to remember about it,
+            // and the size is kept whatever the scale, so that turning it off
+            // and on again does not mean measuring again.
+            if (items[j].windowScalePercent > 100) {
+                settings.setValue("windowScalePercent", items[j].windowScalePercent);
+            }
+            if (items[j].nativeSize.isValid() && !items[j].nativeSize.isEmpty()) {
+                settings.setValue("nativeSize", items[j].nativeSize);
+            }
         }
         settings.endArray();
     }

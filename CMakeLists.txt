@@ -58,6 +58,8 @@ add_executable(progman-linux
     src/IconEffect.h
     src/Theme.cpp
     src/Theme.h
+    src/WindowScale.cpp
+    src/WindowScale.h
     src/TitleBar.cpp
     src/TitleBar.h
     src/WindowEdges.cpp

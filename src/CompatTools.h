@@ -25,3 +25,17 @@ const CompatTool *compatToolById(const QString &id);
 // directory when that is empty. A prefix per executable, so two games cannot
 // tread on each other's bottle.
 QString protonPrefixFor(const QString &exePath, const QString &baseDir = QString());
+
+// One wine installed on the machine: the system wine on the PATH, or a build
+// dropped under /opt or kept by Lutris. Wine runs a Windows program directly,
+// where a Proton build wraps it in Steam's runtime, so the two are listed
+// apart.
+struct WineBuild {
+    QString id;          // stable across sessions, and stored with the item
+    QString displayName; // "Wine (system)", "wine-9.0-staging"
+    QString command;     // the wine binary to run
+};
+
+// Every wine found on this machine, the system one first. Scanned once per
+// session, like the Proton builds beside it.
+const QVector<WineBuild> &installedWineBuilds();

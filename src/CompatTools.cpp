@@ -1,5 +1,6 @@
 #include "CompatTools.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -49,6 +50,52 @@ QString readDisplayName(const QString &toolDir) {
     return {};
 }
 
+// Where a wine that is not the system one tends to live. Lutris and the
+// distribution packages of several builds both keep them as a directory per
+// version with the binary under bin/.
+QStringList wineSearchRoots() {
+    const QString home = QDir::homePath();
+    return {
+        QStringLiteral("/opt"),
+        QStringLiteral("/usr/lib/wine"),
+        home + QStringLiteral("/.local/share/lutris/runners/wine"),
+        home + QStringLiteral("/.var/app/net.lutris.Lutris/data/lutris/runners/wine"),
+    };
+}
+
+QVector<WineBuild> scanWineBuilds() {
+    QVector<WineBuild> builds;
+    QStringList seen; // the same build is often reachable by several paths
+
+    // The one on the PATH first: it is what "wine" means on this machine,
+    // and the one a desktop that has never been configured should get.
+    const QString system = QStandardPaths::findExecutable(QStringLiteral("wine"));
+    if (!system.isEmpty()) {
+        builds.append({QStringLiteral("system"),
+                       QCoreApplication::translate("CompatTools", "Wine (system)"), system});
+        seen << QFileInfo(system).canonicalFilePath();
+    }
+
+    for (const QString &root : wineSearchRoots()) {
+        const QStringList entries =
+            QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QString &entry : entries) {
+            // Either <root>/<build>/bin/wine or <root>/<build>/wine, which is
+            // how the two layouts in the wild differ.
+            const QString dir = root + QLatin1Char('/') + entry;
+            QString binary = dir + QStringLiteral("/bin/wine");
+            if (!QFileInfo(binary).isExecutable()) binary = dir + QStringLiteral("/wine");
+            if (!QFileInfo(binary).isExecutable()) continue;
+
+            const QString resolved = QFileInfo(binary).canonicalFilePath();
+            if (seen.contains(resolved)) continue;
+            seen << resolved;
+            builds.append({entry, entry, binary});
+        }
+    }
+    return builds;
+}
+
 QVector<CompatTool> scanCompatTools() {
     QVector<CompatTool> tools;
     for (const QString &steamPath : steamInstallPaths()) {
@@ -83,6 +130,11 @@ QVector<CompatTool> scanCompatTools() {
 const QVector<CompatTool> &installedCompatTools() {
     static const QVector<CompatTool> tools = scanCompatTools();
     return tools;
+}
+
+const QVector<WineBuild> &installedWineBuilds() {
+    static const QVector<WineBuild> builds = scanWineBuilds();
+    return builds;
 }
 
 const CompatTool *compatToolById(const QString &id) {

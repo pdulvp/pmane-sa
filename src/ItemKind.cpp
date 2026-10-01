@@ -53,6 +53,6 @@ bool isDocument(const QString &path) {
 }
 
 bool isLaunchable(const QString &path) {
-    return launcherForPath(path) != nullptr || isDesktopEntry(path) || isDocument(path) ||
+    return !launchersForPath(path).isEmpty() || isDesktopEntry(path) || isDocument(path) ||
            isFolder(path);
 }
