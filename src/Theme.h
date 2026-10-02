@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QIcon>
 #include <QString>
 #include <QVector>
 
@@ -27,6 +28,17 @@ struct Theme {
 // it -- a minimized group's label, the menu strip -- has to hold up either
 // way.
 QColor readableTextOn(const QColor &background);
+
+// A desktop's own icon by name, recoloured to `ink`.
+//
+// The icons a current desktop ships are "symbolic": one flat colour, meant
+// to be tinted by whoever draws them. Left alone they come out near-black,
+// which is invisible on a dark caption and wrong on a coloured one -- so
+// each is given the colour of whatever surface it is going to sit on.
+//
+// The names are tried in order, so a desktop that has only the older
+// spelling still gets an icon. Null when none of them is installed.
+QIcon tintedIcon(const QStringList &names, const QColor &ink);
 
 const QVector<Theme> &builtinThemes();
 const Theme &themeByName(const QString &name);

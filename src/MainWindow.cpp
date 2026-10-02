@@ -100,16 +100,16 @@ void MainWindow::buildMenus() {
     fileMenu->addAction(tr("&Rename Group..."), this, [this] { renameGroup(); });
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
     fileMenu->addSeparator();
-    fileMenu->addAction(tr("S&uspend Computer"), this, [this] {
+    m_suspendAction = fileMenu->addAction(tr("S&uspend Computer"), this, [this] {
         requestSystemState(QStringLiteral("suspend"), tr("Suspend the computer?"), false);
     });
-    fileMenu->addAction(tr("&Restart Computer"), this, [this] {
+    m_restartAction = fileMenu->addAction(tr("&Restart Computer"), this, [this] {
         requestSystemState(QStringLiteral("reboot"),
                             tr("Restart the computer? Anything not saved, here or in another "
                                "application, will be lost."),
                             true);
     });
-    fileMenu->addAction(tr("Shut Do&wn Computer"), this, [this] {
+    m_shutdownAction = fileMenu->addAction(tr("Shut Do&wn Computer"), this, [this] {
         requestSystemState(QStringLiteral("poweroff"),
                             tr("Shut the computer down? Anything not saved, here or in another "
                                "application, will be lost."),
@@ -777,6 +777,28 @@ void MainWindow::applyTheme(const QString &themeName) {
     };
     for (QAction *action : m_titleBar->menuBar()->actions()) {
         if (QMenu *menu = action->menu()) paletteMenu(menu);
+    }
+
+    // The desktop's own icons for the three that act on the machine, in the
+    // menu's ink. Suspend has no icon of its own in the usual sets, so the
+    // moon a desktop uses for night stands in for it.
+    const QColor menuInk = theme.buttonText;
+    if (m_suspendAction) {
+        m_suspendAction->setIcon(tintedIcon({QStringLiteral("system-suspend-symbolic"),
+                                             QStringLiteral("weather-clear-night-symbolic"),
+                                             QStringLiteral("system-suspend")},
+                                            menuInk));
+    }
+    if (m_restartAction) {
+        m_restartAction->setIcon(tintedIcon({QStringLiteral("system-reboot-symbolic"),
+                                             QStringLiteral("view-refresh-symbolic"),
+                                             QStringLiteral("system-reboot")},
+                                            menuInk));
+    }
+    if (m_shutdownAction) {
+        m_shutdownAction->setIcon(tintedIcon({QStringLiteral("system-shutdown-symbolic"),
+                                              QStringLiteral("system-shutdown")},
+                                             menuInk));
     }
 
     // Styles draw the MDI child captions from the subwindow's own

@@ -2,8 +2,11 @@
 
 #include <QWidget>
 
+class CalendarPane;
 class QLabel;
 class QMenuBar;
+class QSlider;
+class QTimer;
 class QToolButton;
 
 // The menu bar and the title bar in one strip, the way current desktop
@@ -46,6 +49,12 @@ private:
     // The time and date, written the way this system writes them.
     void updateClock();
     void updateMaximizeButton();
+    // Reads the mixer and puts what it says on the slider and the button.
+    // The volume is the desktop's, not ours: the keyboard's volume keys and
+    // the shell's own slider move it too.
+    void refreshVolume();
+    // The speaker glyph for a level, and what the button says it will do.
+    void updateVolumeIcon(int value, bool muted);
     // Where the title is drawn: the space left between the menus and the
     // window buttons.
     QRect titleArea() const;
@@ -56,7 +65,16 @@ private:
     // anyway -- see DesktopShell.h. Only there on a desktop that has a
     // search to hand over to.
     QToolButton *m_searchButton = nullptr;
+    // The machine's output volume, where there is a mixer to ask. The
+    // button mutes and shows how loud it is; the slider sets it.
+    QToolButton *m_volumeButton = nullptr;
+    QSlider *m_volumeSlider = nullptr;
+    QTimer *m_volumeWatch = nullptr;
+
     QLabel *m_clock;
+    // Drops out of the clock: the month, with what the desktop's calendars
+    // have in it. Built the first time it is asked for.
+    CalendarPane *m_calendar = nullptr;
     QToolButton *m_minimizeButton;
     QToolButton *m_maximizeButton;
     QToolButton *m_closeButton;

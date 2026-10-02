@@ -66,6 +66,12 @@ add_executable(progman-linux
     src/SteamLibrary.h
     src/DesktopShell.cpp
     src/DesktopShell.h
+    src/SystemVolume.cpp
+    src/SystemVolume.h
+    src/CalendarEvents.cpp
+    src/CalendarEvents.h
+    src/CalendarPane.cpp
+    src/CalendarPane.h
     src/SearchProvider.cpp
     src/SearchProvider.h
     src/SteamGamePickerDialog.cpp

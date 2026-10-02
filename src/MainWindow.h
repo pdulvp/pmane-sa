@@ -110,6 +110,13 @@ private:
 
     DesktopArea *m_mdiArea;
     QMenu *m_windowMenu;
+    // Kept so their icons can be recoloured when the scheme changes: a menu
+    // is drawn on the scheme's button colour, and a one-colour icon has to
+    // be given ink that reads against it.
+    QAction *m_suspendAction = nullptr;
+    QAction *m_restartAction = nullptr;
+    QAction *m_shutdownAction = nullptr;
+
     QMenu *m_screenMenu;
     // Keeps the one radio button beside the open screen exclusive.
     QActionGroup *m_screenGroup;

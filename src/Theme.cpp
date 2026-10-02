@@ -1,5 +1,8 @@
 #include "Theme.h"
 
+#include <QPainter>
+#include <QPixmap>
+
 namespace {
 
 Theme make(const QString &name, const char *desktop, const char *titleActive,
@@ -26,6 +29,36 @@ Theme make(const QString &name, const char *desktop, const char *titleActive,
 
 QColor readableTextOn(const QColor &background) {
     return (background.isValid() && background.lightnessF() > 0.55) ? Qt::black : Qt::white;
+}
+
+QIcon tintedIcon(const QStringList &names, const QColor &ink) {
+    QIcon source;
+    for (const QString &name : names) {
+        source = QIcon::fromTheme(name);
+        if (!source.isNull()) break;
+    }
+    if (source.isNull()) return {};
+
+    // Each size the icon offers, painted through: the shape is kept and the
+    // colour thrown away, which is what tinting a one-colour icon means.
+    QIcon tinted;
+    for (int size : {16, 22, 24, 32, 48}) {
+        QPixmap artwork = source.pixmap(size, size);
+        if (artwork.isNull()) continue;
+
+        QPixmap coloured(artwork.size());
+        coloured.setDevicePixelRatio(artwork.devicePixelRatio());
+        coloured.fill(Qt::transparent);
+
+        QPainter painter(&coloured);
+        painter.drawPixmap(0, 0, artwork);
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(coloured.rect(), ink);
+        painter.end();
+
+        tinted.addPixmap(coloured);
+    }
+    return tinted;
 }
 
 const QVector<Theme> &builtinThemes() {
