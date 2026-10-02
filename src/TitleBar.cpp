@@ -39,9 +39,7 @@ constexpr int kClockMargin = 10;
 // title the middle of the strip.
 constexpr int kVolumeWidth = 135;
 constexpr int kVolumeMargin = 6;
-// How often the mixer is asked, for the volume keys and the shell's own
-// slider moving it behind our back.
-constexpr int kVolumeInterval = 3000;
+
 
 
 // The short time format has no seconds in it, but the minute still has to
@@ -109,10 +107,10 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         clickToSet->setParent(m_volumeSlider);
         m_volumeSlider->setStyle(clickToSet);
 
-        m_volumeWatch = new QTimer(this);
-        m_volumeWatch->setInterval(kVolumeInterval);
-        connect(m_volumeWatch, &QTimer::timeout, this, &TitleBar::refreshVolume);
-        m_volumeWatch->start();
+        m_volumeWatch = new SystemVolumeWatch(this);
+        connect(m_volumeWatch, &SystemVolumeWatch::changed, this, [this] {
+            if (!m_movingVolume) refreshVolume();
+        });
         refreshVolume();
     }
 
@@ -196,19 +194,24 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         // what is heard follows the hand. The watch is held off meanwhile:
         // reading back mid-drag would fight whoever is dragging.
         connect(m_volumeSlider, &QSlider::sliderPressed, this,
-                [this] { m_volumeWatch->stop(); });
-        connect(m_volumeSlider, &QSlider::sliderReleased, this,
-                [this] { m_volumeWatch->start(); });
+                [this] { m_movingVolume = true; });
+        connect(m_volumeSlider, &QSlider::sliderReleased, this, [this] {
+            m_movingVolume = false;
+            refreshVolume();
+        });
         connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int value) {
             setSystemVolume(value / 100.0);
             // Unmuting is what moving the slider means, mute being a way of
-            // saying "not now" rather than "zero".
-            if (value > 0 && systemVolumeMuted()) setSystemVolumeMuted(false);
+            // saying "not now" rather than "zero". Told outright rather than
+            // asked first: asking would mean waiting, and setting it unmuted
+            // when it already is costs nothing.
+            if (value > 0) setSystemVolumeMuted(false);
             updateVolumeIcon(value, false);
         });
         connect(m_volumeButton, &QToolButton::clicked, this, [this] {
-            setSystemVolumeMuted(!systemVolumeMuted());
-            refreshVolume();
+            setSystemVolumeMuted(!m_volumeMuted);
+            m_volumeMuted = !m_volumeMuted;
+            updateVolumeIcon(m_volumeSlider->value(), m_volumeMuted);
         });
     }
 
@@ -255,7 +258,7 @@ void TitleBar::applyPalette(const QPalette &palette) {
         m_volumeSlider->setPalette(palette);
         // Repainted in the new colours, the glyph being drawn by the style
         // against the palette it had when it was made.
-        updateVolumeIcon(m_volumeSlider->value(), systemVolumeMuted());
+        updateVolumeIcon(m_volumeSlider->value(), m_volumeMuted);
     }
     for (QToolButton *button : {m_minimizeButton, m_maximizeButton, m_closeButton}) {
         button->setPalette(palette);
@@ -308,14 +311,17 @@ QRect TitleBar::titleArea() const {
 void TitleBar::refreshVolume() {
     if (!m_volumeSlider) return;
 
-    const double volume = systemVolume();
-    if (volume < 0.0) return; // the mixer went away; leave what is shown
-    const bool muted = systemVolumeMuted();
-
-    // Set without telling the mixer again: this is the mixer talking to us.
-    const QSignalBlocker blocker(m_volumeSlider);
-    m_volumeSlider->setValue(qRound(volume * 100.0));
-    updateVolumeIcon(m_volumeSlider->value(), muted);
+    // Asked without waiting: the answer comes back when it comes back, and
+    // nothing here stops meanwhile.
+    readSystemVolume(this, [this](double volume, bool muted) {
+        if (!m_volumeSlider || m_movingVolume) return;
+        m_volumeMuted = muted;
+        // Set without telling the mixer again: this is the mixer talking to
+        // us, not us to it.
+        const QSignalBlocker blocker(m_volumeSlider);
+        m_volumeSlider->setValue(qRound(volume * 100.0));
+        updateVolumeIcon(m_volumeSlider->value(), muted);
+    });
 }
 
 void TitleBar::updateDarkIcon() {
