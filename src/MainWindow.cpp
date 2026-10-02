@@ -26,6 +26,8 @@
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QMessageBox>
+
+#include <functional>
 #include <QSettings>
 #include <QProcess>
 #include <QStandardPaths>
@@ -76,8 +78,17 @@ void MainWindow::buildMenus() {
     QMenuBar *bar = m_titleBar->menuBar();
 
     QMenu *fileMenu = bar->addMenu(tr("&File"));
-    fileMenu->addAction(tr("&New Program Group..."), this, &MainWindow::newGroup);
-    fileMenu->addAction(tr("New &Item..."), this, &MainWindow::newItem);
+
+    // Everything that puts something new on the desktop, in one place: an
+    // empty group, an empty item, and the two that fill an item in from
+    // somewhere the machine already knows about.
+    QMenu *newMenu = fileMenu->addMenu(tr("&New"));
+    newMenu->addAction(tr("Program &Group..."), this, &MainWindow::newGroup);
+    newMenu->addAction(tr("&Item..."), this, &MainWindow::newItem);
+    newMenu->addSeparator();
+    newMenu->addAction(tr("&Application..."), this, &MainWindow::insertApplication);
+    newMenu->addAction(tr("&Steam Game..."), this, &MainWindow::insertSteamGame);
+
     fileMenu->addAction(tr("&Rename Group..."), this, [this] { renameGroup(); });
     fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
     fileMenu->addSeparator();
@@ -99,9 +110,6 @@ void MainWindow::buildMenus() {
     fileMenu->addSeparator();
     fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
 
-    QMenu *insertMenu = bar->addMenu(tr("&Insert"));
-    insertMenu->addAction(tr("&Application..."), this, &MainWindow::insertApplication);
-    insertMenu->addAction(tr("&Steam Game..."), this, &MainWindow::insertSteamGame);
 
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
@@ -684,9 +692,18 @@ void MainWindow::applyTheme(const QString &themeName) {
     m_titleBar->applyPalette(stripPal);
 
     // What drops out of the strip is an ordinary menu, in the ordinary window
-    // colours: only the bar itself wears the desktop's.
+    // colours: only the bar itself wears the desktop's. Submenus with it,
+    // since a platform theme hands each menu a palette of its own and that
+    // outranks the application's -- so one left out would open in the
+    // desktop's colours rather than the scheme's.
+    const std::function<void(QMenu *)> paletteMenu = [&](QMenu *menu) {
+        menu->setPalette(pal);
+        for (QAction *action : menu->actions()) {
+            if (QMenu *submenu = action->menu()) paletteMenu(submenu);
+        }
+    };
     for (QAction *action : m_titleBar->menuBar()->actions()) {
-        if (QMenu *menu = action->menu()) menu->setPalette(pal);
+        if (QMenu *menu = action->menu()) paletteMenu(menu);
     }
 
     // Styles draw the MDI child captions from the subwindow's own
