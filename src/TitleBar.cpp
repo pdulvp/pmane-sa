@@ -1,5 +1,6 @@
 #include "TitleBar.h"
 
+#include "CalculatorPane.h"
 #include "CalendarPane.h"
 #include "DesktopShell.h"
 #include "SystemVolume.h"
@@ -115,6 +116,11 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         refreshVolume();
     }
 
+    // Beside the date, since both are things to glance at rather than
+    // applications to open.
+    m_calculatorButton = captionButton(this, QStyle::SP_FileDialogDetailedView);
+    m_calculatorButton->setToolTip(tr("Calculator"));
+
     m_clock = new QLabel(this);
     m_clock->setContentsMargins(kClockMargin, 0, kClockMargin, 0);
     m_clock->setAlignment(Qt::AlignCenter);
@@ -160,6 +166,7 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         layout->addWidget(m_volumeSlider);
         layout->addSpacing(kVolumeMargin);
     }
+    layout->addWidget(m_calculatorButton);
     layout->addWidget(m_clock);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
@@ -168,6 +175,15 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     if (m_searchButton) {
         connect(m_searchButton, &QToolButton::clicked, this, [] { openDesktopSearch(); });
     }
+
+    connect(m_calculatorButton, &QToolButton::clicked, this, [this] {
+        if (!m_calculator) m_calculator = new CalculatorPane(this);
+        if (m_calculator->isVisible()) {
+            m_calculator->hide();
+        } else {
+            m_calculator->popUpAt(m_calculatorButton);
+        }
+    });
 
     connect(m_darkButton, &QToolButton::clicked, this, [this] {
         // Said rather than done: the scheme is the window's to apply, and
@@ -226,6 +242,13 @@ void TitleBar::applyPalette(const QPalette &palette) {
     if (m_darkButton) {
         m_darkButton->setPalette(palette);
         updateDarkIcon();
+    }
+    if (m_calculatorButton) {
+        m_calculatorButton->setPalette(palette);
+        const QIcon sums = tintedIcon({QStringLiteral("accessories-calculator-symbolic"),
+                                       QStringLiteral("accessories-calculator")},
+                                      ink);
+        if (!sums.isNull()) m_calculatorButton->setIcon(sums);
     }
     if (m_volumeButton) {
         m_volumeButton->setPalette(palette);

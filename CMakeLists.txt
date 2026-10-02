@@ -72,6 +72,8 @@ add_executable(progman-linux
     src/CalendarEvents.h
     src/CalendarPane.cpp
     src/CalendarPane.h
+    src/CalculatorPane.cpp
+    src/CalculatorPane.h
     src/SearchProvider.cpp
     src/SearchProvider.h
     src/SteamGamePickerDialog.cpp

@@ -2,10 +2,12 @@
 
 #include <QWidget>
 
+class CalculatorPane;
 class CalendarPane;
 class QLabel;
 class QMenuBar;
 class QSlider;
+class SystemVolumeWatch;
 class QTimer;
 class QToolButton;
 
@@ -80,7 +82,17 @@ private:
     QToolButton *m_darkButton = nullptr;
     QToolButton *m_volumeButton = nullptr;
     QSlider *m_volumeSlider = nullptr;
-    QTimer *m_volumeWatch = nullptr;
+    // Told when the mixer moves rather than asking after it.
+    SystemVolumeWatch *m_volumeWatch = nullptr;
+    // Set while the slider is under the hand: the mixer is being moved by
+    // us, and reading it back mid-drag would fight whoever is dragging.
+    bool m_movingVolume = false;
+    // What the mixer last said, so the mute button does not have to ask.
+    bool m_volumeMuted = false;
+
+    // Sums, beside the month: the same kind of pane out of the same strip.
+    QToolButton *m_calculatorButton = nullptr;
+    CalculatorPane *m_calculator = nullptr;
 
     QLabel *m_clock;
     // Drops out of the clock: the month, with what the desktop's calendars
