@@ -113,6 +113,10 @@ private:
     // outside one.
     void snapWhileResizing(QMdiSubWindow *sub,
                            int reach = AlignmentGuides::kSnapDistance);
+    // The same while a group is being carried: the lines are its
+    // neighbours' sides, and the whole window is shifted onto them rather
+    // than any one edge being held.
+    void snapWhileMoving(QMdiSubWindow *sub, int reach = AlignmentGuides::kSnapDistance);
 
     void minimizeToIcon(QMdiSubWindow *sub);
     void restoreFromIcon(QMdiSubWindow *sub);

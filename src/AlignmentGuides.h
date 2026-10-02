@@ -49,7 +49,13 @@ public:
     // during a resize asks for.
     QRect apply(const QRect &rect, Qt::Edges edges, const QSize &minimumSize,
                 int reach = kSnapDistance);
-    // The resize is over: the lines go away and the guides are forgotten.
+    // The same for a group being carried rather than resized: all four
+    // sides move together, so the whole rectangle is shifted onto whichever
+    // lines its sides come near, and its size is never touched. Either axis
+    // may find a line without the other.
+    QRect applyMove(const QRect &rect, int reach = kSnapDistance);
+
+    // The drag is over: the lines go away and the guides are forgotten.
     void clear();
 
 protected:

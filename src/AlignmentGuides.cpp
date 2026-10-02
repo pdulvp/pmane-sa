@@ -2,6 +2,8 @@
 
 #include <QPainter>
 
+#include <climits>
+
 #include <algorithm>
 
 namespace {
@@ -51,6 +53,61 @@ void AlignmentGuides::setGuides(const QVector<int> &xs, const QVector<int> &ys) 
     m_shownYs.clear();
     m_heldXs.clear();
     m_heldYs.clear();
+}
+
+QRect AlignmentGuides::applyMove(const QRect &rect, int reach) {
+    QVector<int> shownXs;
+    QVector<int> shownYs;
+    QVector<int> heldXs;
+    QVector<int> heldYs;
+
+    // Both sides of each axis are offered: a group being carried lines up
+    // with its neighbour whether it is its left side meeting their left or
+    // its right side meeting their left. The nearer of the two wins, so the
+    // one the hand is closer to is the one that takes.
+    const auto shift = [&](int near, int far, const QVector<int> &guides,
+                           QVector<int> &shown, QVector<int> &heldOn) {
+        addGuidesWithin(shown, guides, near, kShowDistance);
+        addGuidesWithin(shown, guides, far, kShowDistance);
+
+        const int atNear = nearestGuide(guides, near, reach);
+        const int atFar = nearestGuide(guides, far, reach);
+        const int byNear = atNear >= 0 ? atNear - near : INT_MAX;
+        const int byFar = atFar >= 0 ? atFar - far : INT_MAX;
+        if (byNear == INT_MAX && byFar == INT_MAX) return 0;
+
+        if (qAbs(byNear) <= qAbs(byFar)) {
+            addOnce(heldOn, atNear);
+            return byNear;
+        }
+        addOnce(heldOn, atFar);
+        return byFar;
+    };
+
+    // A rectangle's right() is its last pixel, so the line its right side
+    // sits on is one past it -- the same convention the resize uses.
+    const int dx = shift(rect.left(), rect.right() + 1, m_xs, shownXs, heldXs);
+    const int dy = shift(rect.top(), rect.bottom() + 1, m_ys, shownYs, heldYs);
+
+    if (shownXs != m_shownXs || shownYs != m_shownYs || heldXs != m_heldXs ||
+        heldYs != m_heldYs) {
+        m_shownXs = shownXs;
+        m_shownYs = shownYs;
+        m_heldXs = heldXs;
+        m_heldYs = heldYs;
+        update();
+    }
+
+    if (m_shownXs.isEmpty() && m_shownYs.isEmpty()) {
+        hide();
+    } else if (parentWidget()) {
+        setGeometry(parentWidget()->rect());
+        raise();
+        show();
+    }
+
+    // Carried, never resized: the size is whatever it was.
+    return rect.translated(dx, dy);
 }
 
 QRect AlignmentGuides::apply(const QRect &rect, Qt::Edges edges, const QSize &minimumSize,

@@ -771,6 +771,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         // Letting go is the answer to the line that is showing: whatever the
         // pointer was still a few pixels off, the edge lands on it.
         if (event->type() == QEvent::MouseButtonRelease) {
+            // Whichever it was: one of the two does nothing, each being
+            // told apart by whether the size changed.
+            snapWhileMoving(sub, AlignmentGuides::kShowDistance);
             snapWhileResizing(sub, AlignmentGuides::kShowDistance);
             m_resizingSub = nullptr;
             m_guides->clear();
@@ -785,6 +788,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         if (event->type() == QEvent::Resize &&
             (QApplication::mouseButtons() & Qt::LeftButton)) {
             QTimer::singleShot(0, sub, [this, sub] { snapWhileResizing(sub); });
+        }
+        // And each step of a carry arrives as a move. Loading a screen and
+        // undoing an arrangement move windows too; only one the pointer is
+        // carrying is worth lining up.
+        if (event->type() == QEvent::Move &&
+            (QApplication::mouseButtons() & Qt::LeftButton)) {
+            QTimer::singleShot(0, sub, [this, sub] { snapWhileMoving(sub); });
         }
 
         // A group's caption has no maximize box, so double clicking it is
@@ -821,6 +831,25 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::snapWhileMoving(QMdiSubWindow *sub, int reach) {
+    if (sub != m_resizingSub || m_snapping) return;
+
+    // Shift asks for the position under the pointer and nothing else: the
+    // lines stay up to judge by eye, but nothing is held on one.
+    if (QApplication::keyboardModifiers() & Qt::ShiftModifier) reach = -1;
+
+    const QRect rect = sub->geometry();
+    // Only a carry: anything that changed the size is the resize's business.
+    if (rect.size() != m_resizeStartGeometry.size()) return;
+
+    const QRect held = m_guides->applyMove(rect, reach);
+    if (held == rect) return;
+
+    m_snapping = true;
+    sub->setGeometry(held);
+    m_snapping = false;
 }
 
 void MainWindow::snapWhileResizing(QMdiSubWindow *sub, int reach) {
