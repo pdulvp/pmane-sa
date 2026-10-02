@@ -85,6 +85,11 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // menus sit straight on this widget's background.
     m_menuBar->setStyleSheet(QStringLiteral("QMenuBar { background: transparent; }"));
 
+    // Beside the volume: the two things about the machine the strip offers
+    // to change.
+    m_darkButton = captionButton(this, QStyle::SP_DialogResetButton);
+    m_darkButton->setToolTip(tr("Dark colours"));
+
     // Only where there is a mixer to talk to.
     if (systemVolumeAvailable()) {
         m_volumeButton = captionButton(this, QStyle::SP_MediaVolume);
@@ -149,6 +154,7 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     if (m_searchButton) layout->addWidget(m_searchButton);
     layout->addWidget(m_menuBar);
     layout->addStretch();
+    layout->addWidget(m_darkButton);
     if (m_volumeButton) {
         layout->addWidget(m_volumeButton);
         layout->addWidget(m_volumeSlider);
@@ -162,6 +168,12 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     if (m_searchButton) {
         connect(m_searchButton, &QToolButton::clicked, this, [] { openDesktopSearch(); });
     }
+
+    connect(m_darkButton, &QToolButton::clicked, this, [this] {
+        // Said rather than done: the scheme is the window's to apply, and
+        // every palette in the application goes with it.
+        emit darkModeToggled(!darkMode());
+    });
 
     if (m_volumeSlider) {
         // While a slider is being dragged the mixer is told as it moves, so
@@ -210,6 +222,10 @@ void TitleBar::applyPalette(const QPalette &palette) {
                                         QStringLiteral("system-search")},
                                        ink);
         if (!glass.isNull()) m_searchButton->setIcon(glass);
+    }
+    if (m_darkButton) {
+        m_darkButton->setPalette(palette);
+        updateDarkIcon();
     }
     if (m_volumeButton) {
         m_volumeButton->setPalette(palette);
@@ -277,6 +293,22 @@ void TitleBar::refreshVolume() {
     const QSignalBlocker blocker(m_volumeSlider);
     m_volumeSlider->setValue(qRound(volume * 100.0));
     updateVolumeIcon(m_volumeSlider->value(), muted);
+}
+
+void TitleBar::updateDarkIcon() {
+    if (!m_darkButton) return;
+
+    // The moon to go dark, the sun to come back: what the button will do,
+    // not what is on now.
+    const QColor ink = palette().color(QPalette::WindowText);
+    const QStringList names =
+        darkMode() ? QStringList{QStringLiteral("weather-clear-symbolic"),
+                                 QStringLiteral("display-brightness-symbolic")}
+                   : QStringList{QStringLiteral("weather-clear-night-symbolic"),
+                                 QStringLiteral("night-light-symbolic")};
+    const QIcon icon = tintedIcon(names, ink);
+    if (!icon.isNull()) m_darkButton->setIcon(icon);
+    m_darkButton->setToolTip(darkMode() ? tr("Light colours") : tr("Dark colours"));
 }
 
 void TitleBar::updateVolumeIcon(int value, bool muted) {

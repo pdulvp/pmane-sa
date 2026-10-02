@@ -34,6 +34,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QVariantAnimation>
 
 MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
@@ -69,6 +70,23 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     // they are loaded.
     m_searchProvider = new SearchProvider(this);
     m_searchProvider->registerOnBus();
+
+    // Long enough that a drag is one change, short enough that the undo is
+    // there by the time anyone reaches for it.
+    m_layoutSettle = new QTimer(this);
+    m_layoutSettle->setSingleShot(true);
+    m_layoutSettle->setInterval(400);
+    connect(m_layoutSettle, &QTimer::timeout, this, &MainWindow::recordLayoutChange);
+    m_layoutNow = currentLayout();
+    updateLayoutActions();
+
+    connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
+        setDarkMode(dark);
+        // Every palette in the application comes from the scheme, so the
+        // whole thing is put on again rather than patched.
+        applyTheme(m_themeName);
+        save();
+    });
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
@@ -131,6 +149,25 @@ void MainWindow::buildMenus() {
     m_screenGroup = new QActionGroup(this);
     m_screenGroup->setExclusive(true);
 
+    // Undoing a move is what anyone wants after dragging a group somewhere
+    // by accident; cascading them all is what nobody wants. Owned by the
+    // window so the Window menu can be rebuilt around them.
+    m_undoAction = new QAction(tr("&Undo Arrangement"), this);
+    m_undoAction->setShortcut(QKeySequence::Undo);
+    m_undoAction->setShortcutContext(Qt::ApplicationShortcut);
+    connect(m_undoAction, &QAction::triggered, this, &MainWindow::undoLayoutChange);
+
+    m_redoAction = new QAction(tr("&Redo Arrangement"), this);
+    m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(tr("Ctrl+Y"))});
+    m_redoAction->setShortcutContext(Qt::ApplicationShortcut);
+    connect(m_redoAction, &QAction::triggered, this, &MainWindow::redoLayoutChange);
+
+    // On the window as well as in the menu, so the shortcuts answer before
+    // the menu has ever been opened.
+    addAction(m_undoAction);
+    addAction(m_redoAction);
+    updateLayoutActions();
+
     m_windowMenu = bar->addMenu(tr("&Window"));
     connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
 
@@ -173,6 +210,8 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
             });
 
     sub->show();
+    // The arrangements remembered were of a different set of windows.
+    forgetLayoutHistory();
     return sub;
 }
 
@@ -256,6 +295,10 @@ void MainWindow::deleteGroup() {
 
     m_normalGeometry.remove(sub);
     delete sub; // owns and deletes the GroupWindow child widget too
+
+    // a group taken away: the arrangements remembered no longer describe
+    // what is on screen.
+    forgetLayoutHistory();
 }
 
 void MainWindow::renameGroup(QMdiSubWindow *sub) {
@@ -280,7 +323,13 @@ void MainWindow::updateWindowMenu() {
     restore->setEnabled(isMaximized());
     m_windowMenu->addSeparator();
 
-    m_windowMenu->addAction(tr("&Cascade"), m_mdiArea, &QMdiArea::cascadeSubWindows);
+    // Added rather than created: this menu is emptied and built again every
+    // time it opens, and a menu deletes the actions it owns. These belong to
+    // the window, so that they keep the enabled state the history gives them
+    // and their shortcuts work whether or not the menu has been opened.
+    m_windowMenu->addAction(m_undoAction);
+    m_windowMenu->addAction(m_redoAction);
+    m_windowMenu->addSeparator();
     m_windowMenu->addAction(tr("&Tile"), m_mdiArea, &QMdiArea::tileSubWindows);
     m_windowMenu->addSeparator();
 
@@ -366,6 +415,10 @@ void MainWindow::clearDesktop() {
     // After the deletions, so a resize on the way out cannot file geometry
     // against a window that is already gone.
     m_normalGeometry.clear();
+
+    // the desktop emptied: the arrangements remembered no longer describe
+    // what is on screen.
+    forgetLayoutHistory();
 }
 
 QString MainWindow::currentScreen() const {
@@ -603,6 +656,86 @@ void MainWindow::clearGroupSelections() {
     }
 }
 
+MainWindow::LayoutSnapshot MainWindow::currentLayout() const {
+    LayoutSnapshot layout;
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        // Where a minimized group would go back to, not where its icon sits:
+        // undoing a move should put it back where it was, whether or not it
+        // happens to be minimized now.
+        layout.geometry.append(m_normalGeometry.value(sub, sub->geometry()));
+        layout.minimized.append(sub->isMinimized() || m_minimizedIcons.contains(sub));
+    }
+    return layout;
+}
+
+void MainWindow::applyLayout(const LayoutSnapshot &layout) {
+    const QList<QMdiSubWindow *> windows = m_mdiArea->subWindowList();
+    if (windows.size() != layout.geometry.size()) return;
+
+    m_applyingLayout = true;
+    for (int i = 0; i < windows.size(); ++i) {
+        QMdiSubWindow *sub = windows[i];
+        const bool wasMinimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
+        if (wasMinimized && !layout.minimized[i]) sub->showNormal();
+
+        m_normalGeometry[sub] = layout.geometry[i];
+        if (!layout.minimized[i]) sub->setGeometry(layout.geometry[i]);
+        if (!wasMinimized && layout.minimized[i]) sub->showMinimized();
+    }
+    m_applyingLayout = false;
+
+    m_layoutNow = currentLayout();
+    updateLayoutActions();
+}
+
+void MainWindow::recordLayoutChange() {
+    if (m_applyingLayout) return;
+
+    const LayoutSnapshot now = currentLayout();
+    // Only a gesture that moved something counts; a click that selects a
+    // group sends geometry events too.
+    if (now.geometry.size() != m_layoutNow.geometry.size() || now == m_layoutNow) {
+        m_layoutNow = now;
+        return;
+    }
+
+    m_layoutUndo.append(m_layoutNow);
+    // Deep enough to get out of real trouble, and still nothing: fifty
+    // arrangements of a dozen groups is a few thousand numbers.
+    constexpr int kMaxRemembered = 50;
+    while (m_layoutUndo.size() > kMaxRemembered) m_layoutUndo.removeFirst();
+    // Moving something by hand is a new branch: what was undone away is gone.
+    m_layoutRedo.clear();
+    m_layoutNow = now;
+    updateLayoutActions();
+}
+
+void MainWindow::undoLayoutChange() {
+    if (m_layoutUndo.isEmpty()) return;
+    m_layoutRedo.append(currentLayout());
+    const LayoutSnapshot previous = m_layoutUndo.takeLast();
+    applyLayout(previous);
+}
+
+void MainWindow::redoLayoutChange() {
+    if (m_layoutRedo.isEmpty()) return;
+    m_layoutUndo.append(currentLayout());
+    const LayoutSnapshot next = m_layoutRedo.takeLast();
+    applyLayout(next);
+}
+
+void MainWindow::updateLayoutActions() {
+    if (m_undoAction) m_undoAction->setEnabled(!m_layoutUndo.isEmpty());
+    if (m_redoAction) m_redoAction->setEnabled(!m_layoutRedo.isEmpty());
+}
+
+void MainWindow::forgetLayoutHistory() {
+    m_layoutUndo.clear();
+    m_layoutRedo.clear();
+    m_layoutNow = currentLayout();
+    updateLayoutActions();
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_mdiArea->viewport()) {
         if (event->type() == QEvent::Resize) arrangeMinimizedIcons();
@@ -681,6 +814,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             if (!collapsed && sub->isVisible()) {
                 m_normalGeometry[sub] = sub->geometry();
             }
+            // A drag arrives as a run of these. The arrangement is taken
+            // down once it has stopped moving, so one drag is one thing to
+            // undo rather than a hundred.
+            if (!m_applyingLayout && m_layoutSettle) m_layoutSettle->start();
         }
     }
     return QMainWindow::eventFilter(watched, event);
@@ -729,12 +866,55 @@ void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
 }
 
 void MainWindow::applyTheme(const QString &themeName) {
-    const Theme &theme = themeByName(themeName);
-    m_themeName = theme.name;
-    // So the dialogs, which paint surfaces no palette role covers, can reach
-    // the scheme too.
-    setCurrentTheme(m_themeName);
+    // Where it is coming from: the colours on screen, not what the desktop
+    // is set to. Dark mode is flipped before this is called, so asking the
+    // scheme would say the destination and there would be nothing to move.
+    const Theme from = m_wornTheme;
 
+    m_themeName = themeByName(themeName).name;
+    // So the dialogs, which paint surfaces no palette role covers, can reach
+    // the scheme too -- and so that what follows is the half being worn
+    // rather than the light one it was derived from.
+    setCurrentTheme(m_themeName);
+    const Theme to = currentTheme();
+
+    if (m_themeFade) m_themeFade->stop();
+
+    // Nothing to ease on the way in, and nothing to ease between when the
+    // colours are the same.
+    if (!isVisible() || !from.windowBg.isValid() || from.windowBg == to.windowBg) {
+        applyThemeColours(to);
+        return;
+    }
+
+    // Moved to rather than switched to: a desktop that changes colour
+    // between one frame and the next is startling, and the move itself says
+    // that it was this scheme and is now that one.
+    if (!m_themeFade) {
+        m_themeFade = new QVariantAnimation(this);
+        // Straight through, at one rate: an eased move slows at both ends,
+        // which on a flat colour reads as hesitating rather than as easing.
+        m_themeFade->setEasingCurve(QEasingCurve::Linear);
+    }
+    m_themeFade->setStartValue(0.0);
+    m_themeFade->setEndValue(1.0);
+    // Long enough to be seen as a move, short enough that nobody waits.
+    m_themeFade->setDuration(220);
+    m_themeFade->disconnect(this);
+    connect(m_themeFade, &QVariantAnimation::valueChanged, this,
+            [this, from, to](const QVariant &value) {
+                applyThemeColours(blendThemes(from, to, value.toReal()));
+            });
+    connect(m_themeFade, &QVariantAnimation::finished, this,
+            [this, to] { applyThemeColours(to); });
+    m_themeFade->start();
+}
+
+void MainWindow::applyThemeColours(const Theme &theme) {
+    // The frames of a change wear colours of their own; what the desktop is
+    // set to -- the scheme's name, its dark half -- is not touched here.
+    setCurrentThemeColours(theme);
+    m_wornTheme = theme;
     m_mdiArea->setBackground(QBrush(theme.desktop));
 
     QPalette pal;
@@ -880,12 +1060,14 @@ void MainWindow::load() {
     const QString path = m_screens.filePath(m_screens.current());
     if (path.isEmpty() || !QFile::exists(path)) {
         // A screen that has never been saved starts on the stock desktop.
+        setDarkMode(false);
         applyTheme(builtinThemes().first().name);
         createDefaultGroups();
         return;
     }
 
     QSettings settings(path, QSettings::IniFormat);
+    setDarkMode(settings.value("dark", false).toBool());
     applyTheme(settings.value("theme", builtinThemes().first().name).toString());
 
     // XP icon styling used to be one switch for the whole Program Manager.
@@ -953,6 +1135,7 @@ void MainWindow::save() {
     QSettings settings(path, QSettings::IniFormat);
     settings.clear();
     settings.setValue("theme", m_themeName);
+    settings.setValue("dark", darkMode());
     settings.setValue("windowGeometry", saveGeometry());
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();

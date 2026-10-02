@@ -27,6 +27,12 @@ public:
     // The menus live here; the window builds them as it always did.
     QMenuBar *menuBar() const { return m_menuBar; }
 
+signals:
+    // Asked for by the button beside the volume.
+    void darkModeToggled(bool dark);
+
+public:
+
     // Colours the whole strip. A platform theme can hand QMenuBar and the
     // buttons palettes of their own, which outrank the application's, so
     // each part is told the colour scheme rather than left to inherit it.
@@ -55,6 +61,8 @@ private:
     void refreshVolume();
     // The speaker glyph for a level, and what the button says it will do.
     void updateVolumeIcon(int value, bool muted);
+    // The sun or the moon, by which half of the scheme is on.
+    void updateDarkIcon();
     // Where the title is drawn: the space left between the menus and the
     // window buttons.
     QRect titleArea() const;
@@ -67,6 +75,9 @@ private:
     QToolButton *m_searchButton = nullptr;
     // The machine's output volume, where there is a mixer to ask. The
     // button mutes and shows how loud it is; the slider sets it.
+    // Turns the scheme's dark half on and off. The window applies it: the
+    // strip only says that it was asked for.
+    QToolButton *m_darkButton = nullptr;
     QToolButton *m_volumeButton = nullptr;
     QSlider *m_volumeSlider = nullptr;
     QTimer *m_volumeWatch = nullptr;

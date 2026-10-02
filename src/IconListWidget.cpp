@@ -11,6 +11,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
+
+#include "Theme.h"
 #include <QTextLayout>
 #include <QTextOption>
 #include <QUrl>
@@ -75,6 +77,10 @@ QStringList labelLines(const QString &text, const QFont &font, int width, int ma
 
 // Draws an icon centred over its label, with the selection highlight
 // hugging the text the way Progman did, rather than filling the cell.
+// How far the item artwork is taken down after dark. Enough to stop a grid
+// of bright icons glaring, not so far that they look switched off.
+constexpr qreal kDarkIconDim = 0.82;
+
 class ProgramItemDelegate : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
@@ -101,6 +107,14 @@ public:
                              cell.y() + kTopPadding, iconSize.width(), iconSize.height());
         const QIcon::Mode mode = selected ? QIcon::Selected : QIcon::Normal;
 
+        // Artwork drawn for a white desktop glares on a dark one: a 16-colour
+        // icon from 1992 has no soft edges to ease it in, so a run of them
+        // reads as a row of lamps. Taken down a little rather than recoloured
+        // -- they are pictures of things, and a muddied picture is worse than
+        // a bright one.
+        const qreal dim = darkMode() ? kDarkIconDim : 1.0;
+        if (dim < 1.0) painter->setOpacity(painter->opacity() * dim);
+
         const QSize native = icon.actualSize(QSize(512, 512));
         const bool overflowsSlightly =
             native.height() > iconRect.height() || native.width() > iconRect.width();
@@ -120,6 +134,8 @@ public:
             // 256px, which this scales down to the box.
             icon.paint(painter, iconRect, Qt::AlignHCenter | Qt::AlignBottom, mode);
         }
+
+        if (dim < 1.0) painter->setOpacity(painter->opacity() / dim);
 
         const int textTop = iconRect.bottom() + kIconTextGap;
         // The same width the grid measured the label at, so a name takes the

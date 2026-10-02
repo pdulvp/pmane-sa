@@ -4,6 +4,8 @@
 #include <QList>
 #include <QMainWindow>
 
+#include "Theme.h"
+
 #include "AlignmentGuides.h"
 #include "ScreenManager.h"
 
@@ -12,6 +14,7 @@ class QMdiSubWindow;
 class QMenu;
 class DesktopArea;
 class GroupWindow;
+class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
 class TitleBar;
@@ -94,6 +97,15 @@ private:
     QString askScreenName(const QString &windowTitle, const QString &initial);
     void createDefaultGroups();
     void applyTheme(const QString &themeName);
+    // Puts exactly these colours on, which is one frame of a change of
+    // scheme. applyTheme() decides what to move to; this does the moving.
+    void applyThemeColours(const Theme &theme);
+
+    QVariantAnimation *m_themeFade = nullptr;
+    // The colours actually on screen. currentTheme() says what the desktop
+    // is set to, which changes the moment dark mode is flipped -- this says
+    // what it still looks like, which is where a move has to start from.
+    Theme m_wornTheme;
 
     QPalette captionPalette(const QPalette &base) const;
     // While a group is resized, holds the edge being dragged to the sides of
@@ -116,6 +128,40 @@ private:
     QAction *m_suspendAction = nullptr;
     QAction *m_restartAction = nullptr;
     QAction *m_shutdownAction = nullptr;
+
+    // Where the group windows were: one entry per group, in the order the
+    // desktop holds them. Small enough -- a rectangle and a flag each --
+    // that keeping a long run of them costs nothing worth counting.
+    struct LayoutSnapshot {
+        QVector<QRect> geometry;
+        QVector<bool> minimized;
+        bool operator==(const LayoutSnapshot &other) const {
+            return geometry == other.geometry && minimized == other.minimized;
+        }
+        bool operator!=(const LayoutSnapshot &other) const { return !(*this == other); }
+    };
+
+    LayoutSnapshot currentLayout() const;
+    void applyLayout(const LayoutSnapshot &layout);
+    // Called as a move or a resize settles. One entry per gesture, not one
+    // per step of it, which is what the pause is for.
+    void recordLayoutChange();
+    void undoLayoutChange();
+    void redoLayoutChange();
+    void updateLayoutActions();
+    // A group added or taken away makes the remembered arrangements
+    // meaningless: they are a list of windows by position.
+    void forgetLayoutHistory();
+
+    QVector<LayoutSnapshot> m_layoutUndo;
+    QVector<LayoutSnapshot> m_layoutRedo;
+    LayoutSnapshot m_layoutNow;
+    QTimer *m_layoutSettle = nullptr;
+    // Set while an arrangement is being put back, so putting it back is not
+    // itself remembered as a change.
+    bool m_applyingLayout = false;
+    QAction *m_undoAction = nullptr;
+    QAction *m_redoAction = nullptr;
 
     QMenu *m_screenMenu;
     // Keeps the one radio button beside the open screen exclusive.

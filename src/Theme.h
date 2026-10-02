@@ -49,3 +49,28 @@ const Theme &themeByName(const QString &name);
 // needs Window, Base or Highlight should keep taking them from the palette.
 const Theme &currentTheme();
 void setCurrentTheme(const QString &name);
+
+// The same scheme after dark: the paper and the ink change places and the
+// surfaces go down to where a lit screen is comfortable in an unlit room,
+// while the colour the scheme is recognisable by -- its caption, its
+// highlight -- is kept. Rose stays rosy; it simply stops being bright.
+//
+// Derived rather than written out, so every scheme has a dark half without
+// anyone having to choose twelve more sets of colours.
+Theme darkVariant(const Theme &light);
+
+// Whether the desktop is wearing the dark half of its scheme. currentTheme()
+// answers with it, so anything that asks for the scheme gets the one on
+// show without having to know which half it is.
+bool darkMode();
+void setDarkMode(bool dark);
+
+// A scheme part way between two others, for moving from one to the next
+// without the whole desktop changing colour between one frame and the
+// following one. `t` runs 0 to 1, from `from` to `to`.
+Theme blendThemes(const Theme &from, const Theme &to, qreal t);
+
+// Wears exactly these colours, whatever scheme they came from. For the
+// frames of such a move: the name and the dark flag are left as they are,
+// so what the desktop is set to remains what it was asked for.
+void setCurrentThemeColours(const Theme &theme);
