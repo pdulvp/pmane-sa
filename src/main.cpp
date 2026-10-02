@@ -39,6 +39,12 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("progman-linux");
     QApplication::setApplicationName("progman-linux");
+    // What the desktop knows this application by. On Wayland it becomes the
+    // window's app_id, and a shell matches that against the .desktop file of
+    // the same name to work out which application a window belongs to --
+    // which is what lets it be pinned. Without it the app_id falls back to
+    // the executable's filename, so it would change with the binary's name.
+    QApplication::setDesktopFileName(QStringLiteral("progman-linux"));
     // Program groups have no close box. The only captions this application
     // draws itself are its group windows', so taking the box out at the
     // style is enough -- and it reaches the buttons a maximized group hands

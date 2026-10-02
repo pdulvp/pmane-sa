@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+include(GNUInstallDirs)
+
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network)
 
 add_executable(progman-linux
@@ -71,3 +73,9 @@ add_executable(progman-linux
 target_link_libraries(progman-linux PRIVATE Qt6::Widgets Qt6::Network)
 
 install(TARGETS progman-linux RUNTIME DESTINATION bin)
+
+# So a desktop shell can tell which application a window belongs to, and
+# therefore offer to pin it. The file's name must match the app_id the
+# application sets with setDesktopFileName().
+install(FILES data/progman-linux.desktop
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
