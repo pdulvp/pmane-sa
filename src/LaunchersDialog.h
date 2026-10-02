@@ -41,6 +41,10 @@ private:
     // machine's: the last of those cannot be removed.
     int editableRunnerRows() const;
     void browseForRunner();
+    // One row of the Steam library table; `discovered` ones are Steam's own
+    // and not this dialog's to change.
+    void addLibraryRow(const QString &path, bool discovered);
+    void browseForLibrary();
 
     void buildTree(int selectLauncher);
     // Reads the page on show back into the launcher it belongs to, which is
@@ -66,6 +70,13 @@ private:
     QLabel *m_runnersNote;
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
+    // The Steam page: where Steam keeps its libraries. The ones Steam
+    // lists itself are shown but not edited, like a discovered runner.
+    QWidget *m_librariesBox;
+    QTableWidget *m_libraries;
+    QPushButton *m_libraryAdd;
+    QPushButton *m_libraryRemove;
+
     QWidget *m_coresBox;
     QLineEdit *m_coresDir;
     QTableWidget *m_cores;

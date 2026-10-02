@@ -1,6 +1,7 @@
 #include "Launchers.h"
 
 #include "CompatTools.h"
+#include "SteamLibrary.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -85,7 +86,8 @@ QString coreFor(const Launcher &launcher, const QString &path, const LauncherRun
     return QFile::exists(full) ? full : QString();
 }
 
-QStringList expand(const QString &arguments, const QString &file, const QString &core) {
+QStringList expand(const QString &arguments, const QString &file, const QString &core,
+                   const QString &appId) {
     QStringList out;
     // Split first and substitute after, so that a path with spaces in it
     // stays one argument however the template was written.
@@ -94,6 +96,7 @@ QStringList expand(const QString &arguments, const QString &file, const QString 
         piece.replace(QLatin1String("{file}"), file);
         piece.replace(QLatin1String("{dir}"), QFileInfo(file).absolutePath());
         piece.replace(QLatin1String("{core}"), core);
+        piece.replace(QLatin1String("{appid}"), appId);
 
         // A placeholder that stood for nothing leaves an empty argument, and
         // an empty argument is not nothing: it is an argument. Out it goes,
@@ -176,6 +179,10 @@ void load() {
             settings.value(QStringLiteral("extensions"), launcher.extensions).toStringList();
         if (launcher.usesPrefixes) {
             launcher.prefixesDir = settings.value(QStringLiteral("prefixesDir")).toString();
+        }
+        if (launcher.usesSteamLibraries) {
+            launcher.libraryFolders =
+                settings.value(QStringLiteral("libraryFolders")).toStringList();
         }
         if (launcher.usesCores) {
             launcher.coresDir = settings.value(QStringLiteral("coresDir")).toString();
@@ -334,6 +341,18 @@ QVector<Launcher> defaultLaunchers() {
                                     QStringLiteral("retroarch"), true)};
     result << retroarch;
 
+    Launcher steam;
+    steam.id = QStringLiteral("steam");
+    steam.name = tr("Steam");
+    steam.description = tr("Steam games, started from the app manifest Steam writes for each "
+                           "one. Steam finds the game itself: the manifest only says which.");
+    steam.extensions = {QStringLiteral("acf")};
+    steam.usesSteamLibraries = true;
+    steam.arguments = QStringLiteral("steam://rungameid/{appid}");
+    steam.runners = {
+        makeRunner(QStringLiteral("steam"), tr("Steam"), QStringLiteral("steam"))};
+    result << steam;
+
     return result;
 }
 
@@ -352,6 +371,9 @@ void setLaunchers(const QVector<Launcher> &updated) {
         settings.setValue(QStringLiteral("extensions"), launcher.extensions);
         if (launcher.usesPrefixes) {
             settings.setValue(QStringLiteral("prefixesDir"), launcher.prefixesDir);
+        }
+        if (launcher.usesSteamLibraries) {
+            settings.setValue(QStringLiteral("libraryFolders"), launcher.libraryFolders);
         }
         if (launcher.usesCores) {
             settings.setValue(QStringLiteral("coresDir"), launcher.coresDir);
@@ -473,8 +495,11 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
 LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunner &runner,
                                    const QString &path, const QStringList &extraArgs) {
     const QString core = coreFor(launcher, path, runner);
+    // Steam is handed an app id rather than a file: the manifest the item
+    // points at is only where that id is written down.
+    const QString appId = launcher.usesSteamLibraries ? steamAppId(path) : QString();
     // The launcher's own line, with the file in it, then the item's.
-    const QStringList args = expand(launcher.arguments, path, core) + extraArgs;
+    const QStringList args = expand(launcher.arguments, path, core, appId) + extraArgs;
 
     // A command that is neither on the PATH nor a path of its own can only
     // be an alias or a shell function, whatever the setting says: starting it

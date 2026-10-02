@@ -4,6 +4,7 @@
 #include "LaunchersDialog.h"
 #include "TextPromptDialog.h"
 #include "ApplicationPickerDialog.h"
+#include "SteamGamePickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
 #include "MinimizedGroupIcon.h"
@@ -100,6 +101,7 @@ void MainWindow::buildMenus() {
 
     QMenu *insertMenu = bar->addMenu(tr("&Insert"));
     insertMenu->addAction(tr("&Application..."), this, &MainWindow::insertApplication);
+    insertMenu->addAction(tr("&Steam Game..."), this, &MainWindow::insertSteamGame);
 
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
@@ -210,6 +212,19 @@ void MainWindow::insertApplication() {
     }
 
     ApplicationPickerDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    for (const ProgramItem &item : dialog.chosenItems()) gw->addProgramItem(item);
+}
+
+void MainWindow::insertSteamGame() {
+    GroupWindow *gw = activeGroup();
+    if (!gw) {
+        QMessageBox::information(this, tr("Insert Steam Game"),
+                                 tr("Select or open a Program Group first."));
+        return;
+    }
+
+    SteamGamePickerDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted) return;
     for (const ProgramItem &item : dialog.chosenItems()) gw->addProgramItem(item);
 }

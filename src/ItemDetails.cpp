@@ -1,5 +1,7 @@
 #include "ItemDetails.h"
 
+#include "SteamLibrary.h"
+
 #include "DesktopEntry.h"
 #include "ItemKind.h"
 #include "PeIconExtractor.h"
@@ -159,6 +161,17 @@ void completeProgramItem(ProgramItem &it) {
             // icons that file holds, the conf naming only the file.
             if (!it.icon.isNull()) it.iconSource = resolved;
         }
+    } else if (isSteamManifest(it.command)) {
+        // The manifest names the game and Steam has cached its icon; the
+        // file name ("appmanifest_19680.acf") is no use as a label.
+        const SteamGame game = readSteamManifest(it.command);
+        if (!game.name.isEmpty() && nameIsOurs(it)) it.name = game.name;
+        if (it.icon.isNull() && !game.iconPath.isEmpty()) {
+            it.icon = QIcon(game.iconPath);
+            // Remembered so the properties dialog opens its icon listing on
+            // the artwork Steam cached rather than on the manifest.
+            if (!it.icon.isNull()) it.iconSource = game.iconPath;
+        }
     } else if (isScummVmGame(it.command)) {
         // Prefer the title the .trs names itself, falling back to the folder
         // holding it ("The Dig", not "DIG"). Never override a name the user
@@ -198,6 +211,9 @@ void completeProgramItem(ProgramItem &it) {
     if (it.icon.isNull() && isScummVmGame(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("scummvm"));
     }
+    if (it.icon.isNull() && isSteamManifest(it.command)) {
+        it.icon = QIcon::fromTheme(QStringLiteral("steam"));
+    }
     if (it.icon.isNull() && isRetroArchRom(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("retroarch"));
     }
@@ -215,7 +231,11 @@ void completeProgramItem(ProgramItem &it) {
         it.icon = QApplication::style()->standardIcon(fallback);
     }
 
-    if (it.workingDir.isEmpty()) it.workingDir = QFileInfo(it.command).absolutePath();
+    // Steam starts the game from wherever it installed it; a working
+    // directory beside the manifest would mean nothing.
+    if (it.workingDir.isEmpty() && !isSteamManifest(it.command)) {
+        it.workingDir = QFileInfo(it.command).absolutePath();
+    }
 }
 
 QString iconSourceFile(const ProgramItem &item) {

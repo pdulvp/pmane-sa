@@ -1,6 +1,7 @@
 #include "LaunchersDialog.h"
 
 #include "DialogChrome.h"
+#include "SteamLibrary.h"
 
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -246,6 +247,55 @@ void LaunchersDialog::buildLauncherPage() {
         if (!dir.isEmpty()) m_prefixesDir->setText(dir);
     });
 
+    // Where Steam keeps its games. Steam lists its own libraries in a file
+    // of its own, so those are read rather than asked for; a folder it does
+    // not list -- a disk it has not been told about -- is added here.
+    m_librariesBox = new QWidget(m_launcherPage);
+    auto *librariesLayout = new QVBoxLayout(m_librariesBox);
+    librariesLayout->setContentsMargins(0, 0, 0, 0);
+    librariesLayout->setSpacing(kDialogRowSpacing);
+    librariesLayout->addWidget(new QLabel(tr("Library folders:"), m_librariesBox));
+
+    m_libraries = new QTableWidget(0, 2, m_librariesBox);
+    m_libraries->setHorizontalHeaderLabels({tr("Folder"), tr("Games")});
+    m_libraries->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_libraries->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_libraries->verticalHeader()->setVisible(false);
+    m_libraries->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_libraries->setFrameShape(QFrame::NoFrame);
+    m_libraries->setMinimumHeight(110);
+    librariesLayout->addWidget(m_libraries, 1);
+
+    auto *librariesNote = new QLabel(
+        tr("The greyed rows are the libraries Steam lists itself, which come and go with "
+           "what Steam knows about. Add a folder here only for one it does not list. "
+           "Insert > Steam Games lists everything found across them."),
+        m_librariesBox);
+    markHintLabel(librariesNote);
+    librariesNote->setWordWrap(true);
+    librariesLayout->addWidget(librariesNote);
+
+    m_libraryAdd = new QPushButton(tr("Add..."), m_librariesBox);
+    m_libraryRemove = new QPushButton(tr("Remove"), m_librariesBox);
+    m_libraryAdd->setAutoDefault(false);
+    m_libraryRemove->setAutoDefault(false);
+    auto *libraryButtons = new QHBoxLayout;
+    libraryButtons->addStretch();
+    libraryButtons->addWidget(m_libraryAdd);
+    libraryButtons->addWidget(m_libraryRemove);
+    librariesLayout->addLayout(libraryButtons);
+    layout->addWidget(m_librariesBox, 1);
+
+    connect(m_libraryAdd, &QPushButton::clicked, this, &LaunchersDialog::browseForLibrary);
+    connect(m_libraryRemove, &QPushButton::clicked, this, [this] {
+        const int row = m_libraries->currentRow();
+        if (row < 0) return;
+        const QTableWidgetItem *cell = m_libraries->item(row, 0);
+        // Steam's own list is not ours to take from.
+        if (cell && cell->data(kDiscoveredRole).toBool()) return;
+        m_libraries->removeRow(row);
+    });
+
     // The cores an emulator plays each file type with, shared by every
     // profile that has not pinned one of its own.
     m_coresBox = new QWidget(m_launcherPage);
@@ -372,6 +422,43 @@ void LaunchersDialog::browseForRunner() {
     if (name->text().trimmed().isEmpty()) name->setText(QFileInfo(picked).fileName());
 }
 
+void LaunchersDialog::addLibraryRow(const QString &path, bool discovered) {
+    const int row = m_libraries->rowCount();
+    m_libraries->insertRow(row);
+
+    auto *folder = new QTableWidgetItem(path);
+    folder->setData(kDiscoveredRole, discovered);
+    folder->setFlags(folder->flags() & ~Qt::ItemIsEditable);
+    m_libraries->setItem(row, 0, folder);
+
+    // What is actually in it, which is the thing worth knowing about a
+    // folder someone has just added.
+    const int found = steamGamesIn({path}).size();
+    auto *count = new QTableWidgetItem(QString::number(found));
+    count->setFlags(count->flags() & ~Qt::ItemIsEditable);
+    m_libraries->setItem(row, 1, count);
+
+    if (!discovered) return;
+    const QString note = tr("Listed by Steam itself, so it comes and goes with what Steam "
+                            "knows about rather than being set here.");
+    for (int column = 0; column < m_libraries->columnCount(); ++column) {
+        QTableWidgetItem *cell = m_libraries->item(row, column);
+        cell->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+        cell->setForeground(m_libraries->palette().brush(QPalette::Disabled, QPalette::Text));
+        cell->setToolTip(note);
+    }
+}
+
+void LaunchersDialog::browseForLibrary() {
+    const QString dir = QFileDialog::getExistingDirectory(this, tr("Steam Library Folder"));
+    if (dir.isEmpty()) return;
+
+    for (int row = 0; row < m_libraries->rowCount(); ++row) {
+        if (m_libraries->item(row, 0)->text() == dir) return; // already listed
+    }
+    addLibraryRow(dir, false);
+}
+
 void LaunchersDialog::buildTree(int selectLauncher) {
     const QSignalBlocker blocker(m_tree);
     m_tree->clear();
@@ -438,6 +525,19 @@ void LaunchersDialog::commitCurrentPage() {
         // things with, whether its own or the machine's.
         if (!runners.isEmpty()) launcher.runners = runners;
 
+        if (launcher.usesSteamLibraries) {
+            // Only the ones added by hand are kept: Steam's own are read
+            // afresh each time, and saving them would freeze a list that
+            // should follow what Steam knows.
+            QStringList folders;
+            for (int row = 0; row < m_libraries->rowCount(); ++row) {
+                const QTableWidgetItem *cell = m_libraries->item(row, 0);
+                if (!cell || cell->data(kDiscoveredRole).toBool()) continue;
+                if (!cell->text().isEmpty()) folders << cell->text();
+            }
+            launcher.libraryFolders = folders;
+        }
+
         if (!launcher.usesCores) return;
         launcher.coresDir = m_coresDir->text().trimmed();
         QVector<QPair<QString, QString>> cores;
@@ -492,6 +592,18 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
 
     m_prefixesBox->setVisible(launcher.usesPrefixes);
     if (launcher.usesPrefixes) m_prefixesDir->setText(launcher.prefixesDir);
+
+    m_librariesBox->setVisible(launcher.usesSteamLibraries);
+    if (launcher.usesSteamLibraries) {
+        m_libraries->setRowCount(0);
+        // Steam's own first, then whatever has been added by hand.
+        const QStringList discovered = discoveredSteamLibraries();
+        for (const QString &path : discovered) addLibraryRow(path, true);
+        for (const QString &path : launcher.libraryFolders) {
+            if (discovered.contains(path)) continue;
+            addLibraryRow(path, false);
+        }
+    }
 
     m_coresBox->setVisible(launcher.usesCores);
     if (launcher.usesCores) {

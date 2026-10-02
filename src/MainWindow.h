@@ -45,6 +45,7 @@ private slots:
     // Adds one of the applications installed on the machine to the active
     // group, picked from a list of them.
     void insertApplication();
+    void insertSteamGame();
     void deleteGroup();
     // Renames the active group, or the one whose caption was double clicked.
     void renameGroup(QMdiSubWindow *sub = nullptr);

@@ -50,6 +50,7 @@ struct Launcher {
     //   {file}   the item's own path
     //   {dir}    the folder the item sits in
     //   {core}   the emulator core chosen for the file
+    //   {appid}  the Steam app id the file's manifest names
     //
     // A placeholder with nothing to put in it takes its argument out of the
     // line, and the flag in front of it with it: "-L {core} {file}" is just
@@ -67,6 +68,9 @@ struct Launcher {
     // scaling its own way and should not be told otherwise.
     bool usesDpiScale = false;
     bool usesCores = false;      // an emulator that has to be told the core
+    // Steam: the game is Steam's to find, so what this launcher is set up
+    // with is where Steam keeps its libraries rather than any program.
+    bool usesSteamLibraries = false;
 
     // Where the prefixes its runners build are kept -- one to a program,
     // holding its C: drive, its registry and its saved games. Empty means
@@ -77,6 +81,11 @@ struct Launcher {
     // `coresDir` empty means: work it out from where the program lives.
     QString coresDir;
     QVector<QPair<QString, QString>> cores;
+
+    // Steam: library folders added by hand, for one Steam does not list
+    // itself. The ones it does list are found each session and are not in
+    // here.
+    QStringList libraryFolders;
 
     // The programs that can act as this launcher.
     QVector<LauncherRunner> runners;

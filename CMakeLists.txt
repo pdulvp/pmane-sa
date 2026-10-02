@@ -62,6 +62,10 @@ add_executable(progman-linux
     src/Theme.h
     src/WindowScale.cpp
     src/WindowScale.h
+    src/SteamLibrary.cpp
+    src/SteamLibrary.h
+    src/SteamGamePickerDialog.cpp
+    src/SteamGamePickerDialog.h
     src/TitleBar.cpp
     src/TitleBar.h
     src/WindowEdges.cpp
