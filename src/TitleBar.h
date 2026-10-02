@@ -51,6 +51,11 @@ private:
     QRect titleArea() const;
 
     QMenuBar *m_menuBar;
+    // Hands the search over to the desktop shell: a button rather than a
+    // box, because nothing typed here could reach the shell's own search
+    // anyway -- see DesktopShell.h. Only there on a desktop that has a
+    // search to hand over to.
+    QToolButton *m_searchButton = nullptr;
     QLabel *m_clock;
     QToolButton *m_minimizeButton;
     QToolButton *m_maximizeButton;

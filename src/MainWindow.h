@@ -12,6 +12,7 @@ class QMdiSubWindow;
 class QMenu;
 class DesktopArea;
 class GroupWindow;
+class SearchProvider;
 class MinimizedGroupIcon;
 class TitleBar;
 
@@ -71,6 +72,19 @@ private:
     void rebuildScreenMenu();
     void updateWindowTitle();
     GroupWindow *activeGroup() const;
+
+public:
+    // Brings an item into view and selects it: the screen it is on, the
+    // group holding it, raised and selected. What the desktop's own search
+    // does when one of this application's results is clicked.
+    bool revealItem(const QString &screen, int groupIndex, int itemIndex,
+                    const QString &itemName);
+    // The groups on show now, in the order they were built: what the search
+    // offers, and what revealItem() counts through.
+    QVector<GroupWindow *> groups() const;
+    QString currentScreen() const;
+
+private:
     QMdiSubWindow *addGroupWindow(GroupWindow *group);
     void load();
     void save();
@@ -113,6 +127,8 @@ private:
     bool m_snapping = false;
     QString m_themeName;
     ScreenManager m_screens;
+    // Answers the desktop's own search, where there is one listening.
+    SearchProvider *m_searchProvider = nullptr;
 
     // Groups shown as desktop icons instead of stub title bars, in the order
     // they were minimized.

@@ -54,6 +54,14 @@ void GroupWindow::insertProgramItem(const ProgramItem &item, int row) {
     emit modified();
 }
 
+void GroupWindow::selectItem(int index) {
+    if (index < 0 || index >= m_list->count()) return;
+    QListWidgetItem *row = m_list->item(index);
+    m_list->setCurrentItem(row);
+    m_list->scrollToItem(row, QAbstractItemView::EnsureVisible);
+    m_list->setFocus();
+}
+
 void GroupWindow::clearSelection() {
     m_list->clearSelection();
     // Also drop the current item, or the style still marks it with a focus

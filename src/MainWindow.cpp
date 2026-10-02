@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "SearchProvider.h"
+
 #include "AlignmentGuides.h"
 #include "LaunchersDialog.h"
 #include "TextPromptDialog.h"
@@ -61,6 +63,12 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     load();
     rebuildScreenMenu();
     updateWindowTitle();
+
+    // Offered to the desktop's search once there is a desktop to search:
+    // it answers out of the groups now on screen, so it has to come after
+    // they are loaded.
+    m_searchProvider = new SearchProvider(this);
+    m_searchProvider->registerOnBus();
 
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
@@ -358,6 +366,71 @@ void MainWindow::clearDesktop() {
     // After the deletions, so a resize on the way out cannot file geometry
     // against a window that is already gone.
     m_normalGeometry.clear();
+}
+
+QString MainWindow::currentScreen() const {
+    return m_screens.current();
+}
+
+QVector<GroupWindow *> MainWindow::groups() const {
+    QVector<GroupWindow *> found;
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) found.append(group);
+    }
+    return found;
+}
+
+bool MainWindow::revealItem(const QString &screen, int groupIndex, int itemIndex,
+                            const QString &itemName) {
+    // The screen it lives on first: a group on another one is not on the
+    // desktop at all until that screen is loaded.
+    if (!screen.isEmpty() && screen != m_screens.current()) switchToScreen(screen);
+
+    const QVector<GroupWindow *> all = groups();
+    GroupWindow *group = groupIndex >= 0 && groupIndex < all.size() ? all[groupIndex] : nullptr;
+
+    // The desktop may have been rearranged since the search last looked, so
+    // the name is checked and, failing that, searched for. Better a slightly
+    // wrong group than the wrong item.
+    const auto itemAt = [](GroupWindow *candidate, int index) {
+        return candidate && index >= 0 && index < candidate->items().size()
+                   ? candidate->items()[index].name
+                   : QString();
+    };
+    // No group at that position, or something else sitting there now: look
+    // for the item by name instead. The null case has to be checked outright
+    // -- comparing names would let an item with no name match nothing at all
+    // and skip the search.
+    if (!group || itemAt(group, itemIndex) != itemName) {
+        group = nullptr;
+        for (GroupWindow *candidate : all) {
+            const QVector<ProgramItem> &items = candidate->items();
+            for (int i = 0; i < items.size(); ++i) {
+                if (items[i].name != itemName) continue;
+                group = candidate;
+                itemIndex = i;
+                break;
+            }
+            if (group) break;
+        }
+    }
+    if (!group) return false;
+
+    // The window it is in, brought out of whatever state it is in and made
+    // the one in front.
+    if (auto *sub = qobject_cast<QMdiSubWindow *>(group->parentWidget())) {
+        if (sub->isMinimized() || !sub->isVisible()) sub->showNormal();
+        m_mdiArea->setActiveSubWindow(sub);
+        sub->raise();
+    }
+    group->selectItem(itemIndex);
+
+    // And the application itself, which is the whole point of a result that
+    // shows something rather than starting it.
+    if (isMinimized()) showNormal();
+    raise();
+    activateWindow();
+    return true;
 }
 
 void MainWindow::switchToScreen(const QString &name) {

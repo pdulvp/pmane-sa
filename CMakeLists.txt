@@ -9,7 +9,7 @@ set(CMAKE_AUTOUIC ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network DBus)
 
 add_executable(progman-linux
     src/main.cpp
@@ -64,6 +64,10 @@ add_executable(progman-linux
     src/WindowScale.h
     src/SteamLibrary.cpp
     src/SteamLibrary.h
+    src/DesktopShell.cpp
+    src/DesktopShell.h
+    src/SearchProvider.cpp
+    src/SearchProvider.h
     src/SteamGamePickerDialog.cpp
     src/SteamGamePickerDialog.h
     src/TitleBar.cpp
@@ -74,7 +78,7 @@ add_executable(progman-linux
     src/ThemeDialog.h
 )
 
-target_link_libraries(progman-linux PRIVATE Qt6::Widgets Qt6::Network)
+target_link_libraries(progman-linux PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
 
 install(TARGETS progman-linux RUNTIME DESTINATION bin)
 
@@ -83,3 +87,8 @@ install(TARGETS progman-linux RUNTIME DESTINATION bin)
 # application sets with setDesktopFileName().
 install(FILES data/progman-linux.desktop
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+
+# What tells the shell to ask this application for search results. The bus
+# name and object path in it are the ones SearchProvider registers.
+install(FILES data/progman-linux-search-provider.ini
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/gnome-shell/search-providers)

@@ -30,6 +30,9 @@ public:
     // Drops this group's highlighted icon, so only the active group carries
     // a selection.
     void clearSelection();
+    // Picks one out and shows it: scrolled into view, selected and focused.
+    // What a search result does when it is activated.
+    void selectItem(int index);
 
 signals:
     void titleChanged(const QString &title);

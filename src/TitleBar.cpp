@@ -1,5 +1,8 @@
 #include "TitleBar.h"
 
+#include "DesktopShell.h"
+#include "Theme.h"
+
 #include "WindowEdges.h"
 
 #include <QApplication>
@@ -25,6 +28,8 @@ constexpr int kButtonHeight = 24;
 constexpr int kTitleMargin = 12;
 // Room around the clock, so it belongs to neither the title nor the buttons.
 constexpr int kClockMargin = 10;
+
+
 // The short time format has no seconds in it, but the minute still has to
 // turn over promptly, and the system clock can be set while we watch.
 constexpr int kClockInterval = 1000;
@@ -60,6 +65,18 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     connect(clockTimer, &QTimer::timeout, this, &TitleBar::updateClock);
     clockTimer->start(kClockInterval);
 
+    // Only where there is a shell to hand the search to: a button that
+    // could do nothing would be worse than no button.
+    if (desktopSearchAvailable()) {
+        m_searchButton = captionButton(this, QStyle::SP_FileDialogContentsView);
+        // The desktop's own magnifier where it has one, so the button reads
+        // as search rather than as whatever the style happens to draw.
+        const QIcon glass = QIcon::fromTheme(QStringLiteral("system-search"),
+                                             QIcon::fromTheme(QStringLiteral("edit-find")));
+        if (!glass.isNull()) m_searchButton->setIcon(glass);
+        m_searchButton->setToolTip(tr("Search the desktop"));
+    }
+
     m_minimizeButton = captionButton(this, QStyle::SP_TitleBarMinButton);
     m_maximizeButton = captionButton(this, QStyle::SP_TitleBarMaxButton);
     m_closeButton = captionButton(this, QStyle::SP_TitleBarCloseButton);
@@ -70,12 +87,19 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+    // Before the menus, the way a file manager puts its search at the start
+    // of the bar rather than among the window's own buttons.
+    if (m_searchButton) layout->addWidget(m_searchButton);
     layout->addWidget(m_menuBar);
     layout->addStretch();
     layout->addWidget(m_clock);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
     layout->addWidget(m_closeButton);
+
+    if (m_searchButton) {
+        connect(m_searchButton, &QToolButton::clicked, this, [] { openDesktopSearch(); });
+    }
 
     connect(m_minimizeButton, &QToolButton::clicked, this,
             [this] { window()->showMinimized(); });
@@ -93,6 +117,7 @@ void TitleBar::applyPalette(const QPalette &palette) {
     setPalette(palette);
     m_menuBar->setPalette(palette);
     m_clock->setPalette(palette);
+    if (m_searchButton) m_searchButton->setPalette(palette);
     for (QToolButton *button : {m_minimizeButton, m_maximizeButton, m_closeButton}) {
         button->setPalette(palette);
     }
@@ -134,6 +159,8 @@ void TitleBar::paintEvent(QPaintEvent *event) {
 }
 
 QRect TitleBar::titleArea() const {
+    // After the menus, which are the rightmost thing on the left: the
+    // search button sits before them rather than between them and the title.
     const int left = m_menuBar->geometry().right() + kTitleMargin;
     const int right = m_clock->geometry().left() - kTitleMargin;
     return QRect(left, 0, right - left, height());
@@ -226,6 +253,8 @@ void TitleBar::updateMaximizeButton() {
 }
 
 bool TitleBar::eventFilter(QObject *watched, QEvent *event) {
+
+
     if (watched == window()) {
         switch (event->type()) {
         case QEvent::WindowTitleChange:
