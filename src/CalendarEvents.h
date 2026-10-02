@@ -60,4 +60,10 @@ private:
 
     QVector<CalendarEvent> m_events;
     bool m_connected = false;
+    // Whether the server has ever told us anything. Until it has, a range is
+    // asked for insistently: it only announces a range that differs from the
+    // one it already holds, and the desktop's own calendar may well have
+    // asked for exactly the weeks we want -- in which case a polite request
+    // is answered with silence.
+    bool m_answered = false;
 };

@@ -62,11 +62,19 @@ void CalendarEvents::setRange(const QDate &from, const QDate &to) {
 
     QDBusInterface server(QLatin1String(kService), QLatin1String(kPath),
                           QLatin1String(kInterface), QDBusConnection::sessionBus());
+    // Forced until it has answered once. The shell's own calendar sets a
+    // range as well, and when it happens to be the range we want -- the six
+    // weeks around today, which is exactly what a date menu shows -- an
+    // unforced request changes nothing and so announces nothing, and the
+    // pane comes up empty until the month is changed.
+    const bool force = !m_answered;
     // The answer comes as a signal, so nothing is waited for here.
-    server.asyncCall(QStringLiteral("SetTimeRange"), since, until, false);
+    server.asyncCall(QStringLiteral("SetTimeRange"), since, until, force);
 }
 
 void CalendarEvents::onEventsAddedOrUpdated(const QDBusMessage &message) {
+    // Anything at all means it is listening to us, even an empty list.
+    m_answered = true;
     if (message.arguments().isEmpty()) return;
 
     // Const, and it has to be: QDBusArgument's beginArray() and the rest
