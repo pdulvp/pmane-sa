@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QDir>
 #include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
@@ -27,13 +28,16 @@ bool gamescopeAvailable() {
 }
 
 QVector<WindowScaleOption> windowScaleOptions(bool wineDpi) {
-    QVector<WindowScaleOption> options;
-    for (int percent : {100, 110, 120, 150, 200}) {
-        options.append({percent, WindowScaleMode::Gamescope});
+    static const QVector<int> steps = {110, 120, 150, 200};
+
+    QVector<WindowScaleOption> options{{100, WindowScaleMode::Gamescope}};
+    for (int percent : steps) options.append({percent, WindowScaleMode::Gamescope});
+
+    // After the scales that always work: these depend on the program
+    // honouring the DPI it is told about.
+    if (wineDpi) {
+        for (int percent : steps) options.append({percent, WindowScaleMode::WineDpi});
     }
-    // Last, after the scales that always work: this one depends on the
-    // program playing along.
-    if (wineDpi) options.append({200, WindowScaleMode::WineDpi});
     return options;
 }
 
@@ -48,13 +52,11 @@ QString windowScaleLabel(int percent) {
 
 QString windowScaleLabel(const WindowScaleOption &option) {
     if (option.mode == WindowScaleMode::Gamescope) return windowScaleLabel(option.percent);
-    return QCoreApplication::translate("WindowScale", "%1 (wine DPI)")
-        .arg(windowScaleLabel(option.percent));
-}
-
-QString wineDpiScaleValue(int percent) {
-    if (percent % 100 == 0) return QString::number(percent / 100);
-    return QString::number(percent / 100.0, 'g', 2);
+    // Named by the DPI it sets, which is the number that means something:
+    // 144 is what Windows calls 150%.
+    return QCoreApplication::translate("WindowScale", "%1 (wine DPI %2)")
+        .arg(windowScaleLabel(option.percent))
+        .arg(wineLogPixels(option.percent));
 }
 
 int wineLogPixels(int percent) {
@@ -180,9 +182,32 @@ QSize scaledSize(const QSize &native, int percent) {
                  qRound(native.height() * percent / 100.0));
 }
 
-QStringList gamescopeCommand(const QSize &native, int percent, const QString &program,
-                             const QStringList &args) {
-    if (percent <= 100 || !native.isValid() || native.isEmpty()) return {};
+QStringList availableShaders() {
+    // Where gamescope looks, in the order it says it looks.
+    const QStringList dirs = {
+        QStringLiteral("/usr/share/gamescope/reshade/Shaders"),
+        QDir::homePath() + QStringLiteral("/.local/share/gamescope/reshade/Shaders"),
+    };
+
+    QStringList names;
+    for (const QString &dir : dirs) {
+        for (const QFileInfo &file :
+             QDir(dir).entryInfoList({QStringLiteral("*.fx")}, QDir::Files, QDir::Name)) {
+            // Named to gamescope by the file, without the extension.
+            const QString name = file.completeBaseName();
+            if (!names.contains(name)) names.append(name);
+        }
+    }
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+QStringList gamescopeCommand(const QSize &native, int percent, const QString &shader,
+                             const QString &program, const QStringList &args) {
+    // A shader is reason enough to go through gamescope even at its own
+    // size: a CRT effect at 1x is a thing someone may well want.
+    if (percent <= 100 && shader.isEmpty()) return {};
+    if (!native.isValid() || native.isEmpty()) return {};
     if (!gamescopeAvailable()) return {};
 
     const QSize out = scaledSize(native, percent);
@@ -201,8 +226,10 @@ QStringList gamescopeCommand(const QSize &native, int percent, const QString &pr
                whole ? QStringLiteral("integer") : QStringLiteral("fit"),
                QStringLiteral("-F"),
                whole ? QStringLiteral("pixel") : QStringLiteral("pixel"),
-               QStringLiteral("--"), program} +
-           args;
+               } +
+           (shader.isEmpty() ? QStringList{}
+                             : QStringList{QStringLiteral("--reshade-effect"), shader}) +
+           QStringList{QStringLiteral("--"), program} + args;
 }
 
 bool isWin16Executable(const QString &exePath) {

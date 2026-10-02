@@ -114,6 +114,15 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_nativeSizeLabel = new QLabel(this);
     markHintLabel(m_nativeSizeLabel);
 
+    // Whatever ReShade effects are installed, which on a stock machine is
+    // none: gamescope looks for them under its own directories and Debian
+    // ships nothing there.
+    m_shaderCombo = new QComboBox(this);
+    m_shaderCombo->setToolTip(
+        tr("A ReShade effect to run it through. Only gamescope can apply one, so choosing "
+           "one runs the program through gamescope even at its own size. Effects live in "
+           "~/.local/share/gamescope/reshade/Shaders."));
+
     m_scaleRow = new QWidget(this);
     auto *scaleLayout = new QHBoxLayout(m_scaleRow);
     scaleLayout->setContentsMargins(0, 0, 0, 0);
@@ -122,14 +131,20 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     scaleLayout->addWidget(m_measureButton);
     scaleLayout->addWidget(m_nativeSizeLabel, 1);
     m_form->addRow(tr("Window size:"), m_scaleRow);
+    m_form->addRow(tr("Shader:"), m_shaderCombo);
 
     connect(m_measureButton, &QPushButton::clicked, this,
             &ItemPropertiesDialog::measureWindow);
+    connect(m_shaderCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+        m_shaderName = m_shaderCombo->currentData().toString();
+        refreshNativeSizeLabel();
+    });
     connect(m_scaleCombo, &QComboBox::currentIndexChanged, this, [this](int) {
         m_scalePercent = m_scaleCombo->currentData().toInt();
         m_scaleMode = m_scaleCombo->currentData(kScaleModeRole).toInt() == 1
                           ? WindowScaleMode::WineDpi
                           : WindowScaleMode::Gamescope;
+        m_form->setRowVisible(m_shaderCombo, m_scaleMode == WindowScaleMode::Gamescope);
         refreshNativeSizeLabel();
     });
     m_form->addRow(tr("Icon:"), iconRow);
@@ -172,6 +187,7 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_nativeSize = item.nativeSize;
     m_scalePercent = qMax(item.windowScalePercent, 100);
     m_scaleMode = item.windowScaleMode;
+    m_shaderName = item.shader;
     m_workDirEdit->setText(item.workingDir);
     populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
@@ -277,6 +293,30 @@ void ItemPropertiesDialog::updateScaleRow() {
     }
     m_scaleCombo->setCurrentIndex(selectedIndex);
     refreshNativeSizeLabel();
+
+    // Read each time, so an effect dropped in since the dialog opened is
+    // offered without restarting anything.
+    {
+        const QSignalBlocker shaderBlocker(m_shaderCombo);
+        m_shaderCombo->clear();
+        m_shaderCombo->addItem(tr("None"), QString());
+        for (const QString &name : availableShaders()) m_shaderCombo->addItem(name, name);
+        const int found = m_shaderCombo->findData(m_shaderName);
+        if (found < 0 && !m_shaderName.isEmpty()) {
+            // Named by the item but no longer installed: said so rather than
+            // silently dropped.
+            m_shaderCombo->addItem(tr("%1 (not installed)").arg(m_shaderName), m_shaderName);
+            m_shaderCombo->setCurrentIndex(m_shaderCombo->count() - 1);
+        } else {
+            m_shaderCombo->setCurrentIndex(qMax(found, 0));
+        }
+        // Nothing to pick from, and nothing to apply one with.
+        m_shaderCombo->setEnabled(m_shaderCombo->count() > 1);
+    }
+    // A shader is gamescope's to apply, so the row goes with wine's own
+    // scaling being off.
+    m_form->setRowVisible(m_shaderCombo,
+                          scalable && m_scaleMode == WindowScaleMode::Gamescope);
 
     if (scalable != m_scaleRowShown) {
         m_scaleRowShown = scalable;
@@ -447,6 +487,7 @@ ProgramItem ItemPropertiesDialog::item() const {
                              ? WindowScaleMode::WineDpi
                              : WindowScaleMode::Gamescope;
     it.nativeSize = m_nativeSize;
+    it.shader = m_shaderCombo->currentData().toString();
     it.workingDir = m_workDirEdit->text().trimmed();
     it.launcher = m_launcherCombo->currentData().toString();
     it.xpStyleIcon = m_xpStyleCheck->isChecked();

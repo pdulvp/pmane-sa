@@ -63,11 +63,15 @@ private:
     QComboBox *m_scaleCombo;
     QPushButton *m_measureButton;
     QLabel *m_nativeSizeLabel;
+    // The ReShade effect to run it through, from what is installed. Only
+    // gamescope can apply one.
+    QComboBox *m_shaderCombo;
     QSize m_nativeSize;
     // The scale as chosen, kept apart from the combo: the list is rebuilt
     // whenever the launcher changes, and the choice has to survive that.
     int m_scalePercent = 100;
     WindowScaleMode m_scaleMode = WindowScaleMode::Gamescope;
+    QString m_shaderName;
     QLabel *m_iconPreview;
     QCheckBox *m_xpStyleCheck;
     QFormLayout *m_form;

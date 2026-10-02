@@ -801,6 +801,7 @@ void MainWindow::load() {
             item.windowScaleMode = settings.value("windowScaleMode").toString() == "wineDpi"
                                        ? WindowScaleMode::WineDpi
                                        : WindowScaleMode::Gamescope;
+            item.shader = settings.value("shader").toString();
             const QSize native = settings.value("nativeSize").toSize();
             if (native.isValid() && !native.isEmpty()) item.nativeSize = native;
             group->addProgramItem(item);
@@ -873,6 +874,7 @@ void MainWindow::save() {
                     settings.setValue("windowScaleMode", "wineDpi");
                 }
             }
+            if (!items[j].shader.isEmpty()) settings.setValue("shader", items[j].shader);
             if (items[j].nativeSize.isValid() && !items[j].nativeSize.isEmpty()) {
                 settings.setValue("nativeSize", items[j].nativeSize);
             }

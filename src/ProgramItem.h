@@ -29,6 +29,10 @@ struct ProgramItem {
     // window the program lets you resize.
     WindowScaleMode windowScaleMode = WindowScaleMode::Gamescope;
     QSize nativeSize;
+    // A ReShade effect to run it through, by the name gamescope knows it by.
+    // Empty for none. Only gamescope can apply one, so naming one runs the
+    // program through gamescope even at its own size.
+    QString shader;
     QIcon icon;            // Icon extracted from the executable
     bool legacyIcon = false; // Came from 16-bit (NE) or .ico artwork
     // Whether this icon is drawn the Windows XP way: tipped into a shallow

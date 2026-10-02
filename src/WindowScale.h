@@ -24,7 +24,7 @@ bool gamescopeAvailable();
 // can be laid out wrongly. Blown up, though, it is the same number of pixels.
 //
 // Wine's own scaling tells the program it is on a higher-resolution screen,
-// by WINE_DPI_SCALE and the DPI recorded in the prefix. The program then
+// by the DPI recorded in the prefix. The program then
 // draws itself bigger -- real pixels, sharp text -- but only as well as it
 // was written to: a program from Windows 3.x may not honour it at all, or
 // may honour it and misplace things.
@@ -45,10 +45,13 @@ QVector<WindowScaleOption> windowScaleOptions(bool wineDpi);
 QString windowScaleLabel(int percent);
 QString windowScaleLabel(const WindowScaleOption &option);
 
-// What wine is told about the screen it is drawing on: the value of
-// WINE_DPI_SCALE, and the dots per inch to record in the prefix. 96 is what
-// Windows calls 100%, so a doubled program is 192.
-QString wineDpiScaleValue(int percent);
+// The dots per inch to record in the prefix for a given scale. 96 is what
+// Windows calls 100%, so 144 is 150% and a doubled program is 192.
+//
+// There is no environment variable to set alongside it: WINE_DPI_SCALE,
+// which gets passed around as the way to do this, appears in no part of
+// wine -- neither the system one nor a wine-ge build carries the string --
+// so the registry is the whole of the mechanism.
 int wineLogPixels(int percent);
 
 // What dots per inch is the default -- what Windows calls 100%, and what a
@@ -94,17 +97,24 @@ void initialisePrefix(const QString &wineCommand, const QString &prefixDir);
 // The size a window comes out at, which is what the scale is really for.
 QSize scaledSize(const QSize &native, int percent);
 
-// The command that runs `program args...` at `percent` of `native`, or an
-// empty list when there is nothing to do: no scaling asked for, no size
-// known, or no gamescope installed.
+// The ReShade effects installed on this machine, by name, as gamescope wants
+// them: the .fx files under its shader directories, without the extension.
+// Empty when none are installed -- Debian ships none, so they are whatever
+// has been put there by hand.
+QStringList availableShaders();
+
+// The command that runs `program args...` at `percent` of `native`, through
+// `shader` if one is named, or an empty list when there is nothing to do: no
+// scaling and no shader asked for, no size known, or no gamescope installed.
 //
 // A whole multiple is scaled by repeating pixels, which is what suits
 // artwork drawn one pixel at a time: doubled, it stays crisp rather than
 // being smeared. A fraction cannot repeat pixels evenly, so it is filtered
 // instead -- softer, but without the uneven rows that nearest-neighbour
-// would leave at 1.5x.
-QStringList gamescopeCommand(const QSize &native, int percent, const QString &program,
-                             const QStringList &args);
+// would leave at 1.5x. At an exact multiple the filter makes no difference
+// at all: every output pixel is one input pixel, whichever is asked for.
+QStringList gamescopeCommand(const QSize &native, int percent, const QString &shader,
+                             const QString &program, const QStringList &args);
 
 // Whether this is a 16-bit Windows program -- an "NE" executable, as
 // everything written for Windows 3.x is. Wine runs one of these inside

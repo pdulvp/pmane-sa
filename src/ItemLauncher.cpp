@@ -42,9 +42,9 @@ struct Invocation {
 // scales the result. Nothing about the program's own command line changes:
 // gamescope takes it whole, after a "--".
 // Wine's own scaling: the program is told it is on a higher-resolution
-// screen and draws itself bigger. Two things say so -- the variable wine
-// reads at startup, and the DPI recorded in the prefix, which is what the
-// fonts follow.
+// screen and draws itself bigger. The DPI recorded in the prefix is what
+// says so, and the whole of what says so -- WINE_DPI_SCALE, which gets
+// passed around as the way to do this, is read by no part of wine.
 //
 // Run for every wine launch, not only a scaled one: the DPI lives in the
 // prefix and stays there, so turning scaling off has to put it back. Left
@@ -58,12 +58,6 @@ void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &lau
                          item.windowScalePercent > 100;
     const int wanted = scaling ? wineLogPixels(item.windowScalePercent) : kDefaultLogPixels;
 
-    if (scaling) {
-        if (call.env.isEmpty()) call.env = QProcessEnvironment::systemEnvironment();
-        call.env.insert(QStringLiteral("WINE_DPI_SCALE"),
-                        wineDpiScaleValue(item.windowScalePercent));
-    }
-
     setPrefixDpi(runner.command, protonPrefixFor(item.command, launcher.prefixesDir), wanted);
 }
 
@@ -71,10 +65,14 @@ void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &lau
 // anything. Wine's own scaling is handled by applyWineDpi(), which runs
 // whether or not anything is being scaled.
 void applyWindowScale(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
-    if (item.windowScalePercent <= 100 || !launcher.usesWindowScale) return;
+    if (!launcher.usesWindowScale) return;
     if (item.windowScaleMode != WindowScaleMode::Gamescope) return;
+    // A shader needs gamescope as much as a scale does.
+    if (item.windowScalePercent <= 100 && item.shader.isEmpty()) return;
 
-    const QString scale = windowScaleLabel(item.windowScalePercent);
+    const QString scale = item.windowScalePercent > 100
+                              ? windowScaleLabel(item.windowScalePercent)
+                              : tr("its own size with a shader");
     if (!gamescopeAvailable()) {
         call.error = tr("'%1' is set to run at %2 its own size, which needs gamescope. It "
                         "is not installed.")
@@ -89,8 +87,8 @@ void applyWindowScale(Invocation &call, const ProgramItem &item, const Launcher 
         return;
     }
 
-    const QStringList wrapped =
-        gamescopeCommand(item.nativeSize, item.windowScalePercent, call.program, call.args);
+    const QStringList wrapped = gamescopeCommand(item.nativeSize, item.windowScalePercent,
+                                                item.shader, call.program, call.args);
     if (wrapped.isEmpty()) return;
     call.program = QStringLiteral("gamescope");
     call.args = wrapped;
