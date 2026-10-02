@@ -96,9 +96,14 @@ private:
     // Asks for a screen name, rejecting blanks and names already in use.
     QString askScreenName(const QString &windowTitle, const QString &initial);
     void createDefaultGroups();
-    void applyTheme(const QString &themeName);
-    // Puts exactly these colours on, which is one frame of a change of
-    // scheme. applyTheme() decides what to move to; this does the moving.
+    // `moved` eases from the colours on screen to the new ones. Wanted when
+    // the whole desktop changes at once -- the dark switch -- and not while
+    // picking through schemes in the Colors dialog, where each step would
+    // smear into the next and the list would feel slow.
+    void applyTheme(const QString &themeName, bool moved = false);
+    // Puts these colours on: every palette in the application, and the
+    // surfaces the dialogs paint themselves. One frame of a move, or the
+    // whole of a change that is not moved to.
     void applyThemeColours(const Theme &theme);
 
     QVariantAnimation *m_themeFade = nullptr;
@@ -106,6 +111,8 @@ private:
     // is set to, which changes the moment dark mode is flipped -- this says
     // what it still looks like, which is where a move has to start from.
     Theme m_wornTheme;
+
+
 
     QPalette captionPalette(const QPalette &base) const;
     // While a group is resized, holds the edge being dragged to the sides of

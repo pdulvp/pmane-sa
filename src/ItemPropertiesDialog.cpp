@@ -425,11 +425,7 @@ void ItemPropertiesDialog::refreshNativeSizeLabel() {
     // program lets you resize stays resizable.
     m_measureButton->setEnabled(!wineDpi);
     if (wineDpi) {
-        m_nativeSizeLabel->setText(
-            tr("The program draws itself bigger, at %1 dpi. Nothing to measure, and a "
-               "resizable window stays resizable -- but a program that ignores DPI will "
-               "ignore this.")
-                .arg(wineLogPixels(percent)));
+        m_nativeSizeLabel->setText(tr(""));
         return;
     }
 

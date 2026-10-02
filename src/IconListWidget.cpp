@@ -10,6 +10,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QVariantAnimation>
 #include <QStyledItemDelegate>
 
 #include "Theme.h"
@@ -80,6 +81,63 @@ QStringList labelLines(const QString &text, const QFont &font, int width, int ma
 // How far the item artwork is taken down after dark. Enough to stop a grid
 // of bright icons glaring, not so far that they look switched off.
 constexpr qreal kDarkIconDim = 0.82;
+
+// How the answer to a double click is drawn: the icon grows a little and
+// fades out, over about the time it takes to notice it happened.
+constexpr int kFlashMs = 380;
+constexpr qreal kFlashGrowth = 0.7;
+
+// The growing, fading copy of an icon that says a program is on its way.
+// Drawn over the list rather than by the delegate: it has to be able to
+// spill outside the cell it came from, and the row underneath carries on
+// being what it was.
+class LaunchFlash : public QWidget {
+public:
+    LaunchFlash(QWidget *host, const QRect &iconRect, const QIcon &icon)
+        : QWidget(host), m_icon(icon), m_from(iconRect) {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_DeleteOnClose);
+        setGeometry(host->rect());
+        show();
+        raise();
+
+        auto *grow = new QVariantAnimation(this);
+        grow->setStartValue(0.0);
+        grow->setEndValue(1.0);
+        grow->setDuration(kFlashMs);
+        // Quick at first and easing off, the way a thing let go of moves.
+        grow->setEasingCurve(QEasingCurve::OutQuad);
+        connect(grow, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
+            m_through = value.toReal();
+            update();
+        });
+        connect(grow, &QVariantAnimation::finished, this, &QWidget::close);
+        grow->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override {
+        if (m_icon.isNull()) return;
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.setOpacity(1.0 - m_through);
+
+        // Grown about its own middle, so it swells where it sits rather
+        // than drifting off one corner.
+        const qreal scale = 1.0 + kFlashGrowth * m_through;
+        const QSizeF grown(m_from.width() * scale, m_from.height() * scale);
+        const QRectF where(m_from.center().x() + 0.5 - grown.width() / 2.0,
+                           m_from.center().y() + 0.5 - grown.height() / 2.0,
+                           grown.width(), grown.height());
+        painter.drawPixmap(where, m_icon.pixmap(m_from.size() * 2), QRectF());
+    }
+
+private:
+    QIcon m_icon;
+    QRect m_from;
+    qreal m_through = 0.0;
+};
 
 class ProgramItemDelegate : public QStyledItemDelegate {
 public:
@@ -197,6 +255,21 @@ IconListWidget::IconListWidget(QWidget *parent) : QListWidget(parent) {
     // and Qt hit-tests it for WA_AcceptDrops. Without this, external drops
     // are rejected before dragEnterEvent is ever called.
     viewport()->setAcceptDrops(true);
+}
+
+void IconListWidget::flashItem(int row) {
+    QListWidgetItem *item = this->item(row);
+    if (!item) return;
+
+    // Where the delegate draws the artwork, which is what has to appear to
+    // grow: the cell is mostly label and empty space.
+    const QRect cell = visualItemRect(item);
+    if (cell.isEmpty()) return;
+    const QSize size = iconSize();
+    const QRect iconRect(cell.x() + (cell.width() - size.width()) / 2,
+                         cell.y() + kTopPadding, size.width(), size.height());
+
+    new LaunchFlash(viewport(), iconRect, item->icon());
 }
 
 void IconListWidget::updateGridSize() {

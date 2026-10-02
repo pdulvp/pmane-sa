@@ -58,8 +58,6 @@ private:
 
     // The launcher page: the only page there is.
     QWidget *m_launcherPage;
-    QLabel *m_launcherName;
-    QLabel *m_launcherDescription;
     QLineEdit *m_extensions;
     QFormLayout *m_launcherForm;
     QLabel *m_runnersTitle;
@@ -67,7 +65,6 @@ private:
     QPushButton *m_runnerAdd;
     QPushButton *m_runnerRemove;
     QPushButton *m_runnerBrowse;
-    QLabel *m_runnersNote;
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
     // The Steam page: where Steam keeps its libraries. The ones Steam

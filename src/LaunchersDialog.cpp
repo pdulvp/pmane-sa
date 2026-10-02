@@ -38,6 +38,22 @@ constexpr int kRunnerShell = 2;
 // up here, so that it is shown but not edited.
 constexpr int kDiscoveredRole = Qt::UserRole + 1;
 
+// How many rows a table on this page shows. Past that it scrolls: a
+// launcher with twenty Proton builds should not push everything below it
+// off the dialog, and a launcher with one should not leave a hole.
+constexpr int kVisibleTableRows = 4;
+
+// Holds a table to that many rows and stops it growing with the dialog.
+// The space the dialog gains goes to the bottom instead, so the controls
+// stay where they are whatever size the window is.
+void showAtMostFourRows(QTableWidget *table) {
+    const int header = table->horizontalHeader()->sizeHint().height();
+    const int row = table->verticalHeader()->defaultSectionSize();
+    table->setFixedHeight(header + kVisibleTableRows * row + 2);
+    table->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+}
+
 QString joinExtensions(const QStringList &extensions) {
     return extensions.join(QLatin1Char(' '));
 }
@@ -125,7 +141,10 @@ LaunchersDialog::LaunchersDialog(QWidget *parent) : QDialog(parent) {
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     buildTree(0);
-    resize(760, 520);
+    // Tall enough for the roomiest launcher, so that picking through them
+    // never resizes the window: the slack sits at the bottom of the pages
+    // that need less.
+    resize(760, 620);
 }
 
 void LaunchersDialog::buildLauncherPage() {
@@ -133,17 +152,6 @@ void LaunchersDialog::buildLauncherPage() {
     auto *layout = new QVBoxLayout(m_launcherPage);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(kDialogRowSpacing);
-
-    m_launcherName = new QLabel(m_launcherPage);
-    QFont heading = m_launcherName->font();
-    heading.setBold(true);
-    m_launcherName->setFont(heading);
-    layout->addWidget(m_launcherName);
-
-    m_launcherDescription = new QLabel(m_launcherPage);
-    markHintLabel(m_launcherDescription);
-    m_launcherDescription->setWordWrap(true);
-    layout->addWidget(m_launcherDescription);
 
     m_extensions = new QLineEdit(m_launcherPage);
     m_extensions->setPlaceholderText(tr("conf  iso  nes"));
@@ -175,13 +183,8 @@ void LaunchersDialog::buildLauncherPage() {
     m_runners->verticalHeader()->setVisible(false);
     m_runners->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_runners->setFrameShape(QFrame::NoFrame);
-    m_runners->setMinimumHeight(130);
-    layout->addWidget(m_runners, 1);
-
-    m_runnersNote = new QLabel(m_launcherPage);
-    markHintLabel(m_runnersNote);
-    m_runnersNote->setWordWrap(true);
-    layout->addWidget(m_runnersNote);
+    showAtMostFourRows(m_runners);
+    layout->addWidget(m_runners);
 
     m_runnerAdd = new QPushButton(tr("Add"), m_launcherPage);
     m_runnerRemove = new QPushButton(tr("Remove"), m_launcherPage);
@@ -232,13 +235,6 @@ void LaunchersDialog::buildLauncherPage() {
     prefixesRow->addWidget(prefixesBrowse);
     prefixesLayout->addLayout(prefixesRow);
 
-    auto *prefixesNote =
-        new QLabel(tr("Each program gets a wine prefix of its own under here, built the "
-                      "first time it runs."),
-                   m_prefixesBox);
-    markHintLabel(prefixesNote);
-    prefixesNote->setWordWrap(true);
-    prefixesLayout->addWidget(prefixesNote);
     layout->addWidget(m_prefixesBox);
 
     connect(prefixesBrowse, &QPushButton::clicked, this, [this] {
@@ -263,17 +259,9 @@ void LaunchersDialog::buildLauncherPage() {
     m_libraries->verticalHeader()->setVisible(false);
     m_libraries->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_libraries->setFrameShape(QFrame::NoFrame);
-    m_libraries->setMinimumHeight(110);
-    librariesLayout->addWidget(m_libraries, 1);
+    showAtMostFourRows(m_libraries);
+    librariesLayout->addWidget(m_libraries);
 
-    auto *librariesNote = new QLabel(
-        tr("The greyed rows are the libraries Steam lists itself, which come and go with "
-           "what Steam knows about. Add a folder here only for one it does not list. "
-           "Insert > Steam Games lists everything found across them."),
-        m_librariesBox);
-    markHintLabel(librariesNote);
-    librariesNote->setWordWrap(true);
-    librariesLayout->addWidget(librariesNote);
 
     m_libraryAdd = new QPushButton(tr("Add..."), m_librariesBox);
     m_libraryRemove = new QPushButton(tr("Remove"), m_librariesBox);
@@ -284,7 +272,7 @@ void LaunchersDialog::buildLauncherPage() {
     libraryButtons->addWidget(m_libraryAdd);
     libraryButtons->addWidget(m_libraryRemove);
     librariesLayout->addLayout(libraryButtons);
-    layout->addWidget(m_librariesBox, 1);
+    layout->addWidget(m_librariesBox);
 
     connect(m_libraryAdd, &QPushButton::clicked, this, &LaunchersDialog::browseForLibrary);
     connect(m_libraryRemove, &QPushButton::clicked, this, [this] {
@@ -321,8 +309,8 @@ void LaunchersDialog::buildLauncherPage() {
     m_cores->verticalHeader()->setVisible(false);
     m_cores->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_cores->setFrameShape(QFrame::NoFrame);
-    m_cores->setMinimumHeight(110);
-    coresLayout->addWidget(m_cores, 1);
+    showAtMostFourRows(m_cores);
+    coresLayout->addWidget(m_cores);
 
     auto *addCore = new QPushButton(tr("Add"), m_coresBox);
     auto *removeCore = new QPushButton(tr("Remove"), m_coresBox);
@@ -333,7 +321,7 @@ void LaunchersDialog::buildLauncherPage() {
     coreButtons->addWidget(addCore);
     coreButtons->addWidget(removeCore);
     coresLayout->addLayout(coreButtons);
-    layout->addWidget(m_coresBox, 1);
+    layout->addWidget(m_coresBox);
 
     connect(addCore, &QPushButton::clicked, this, [this] {
         const int row = m_cores->rowCount();
@@ -561,30 +549,17 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
 
     m_editingLauncher = r;
 
-    m_launcherName->setText(launcher.name);
-    m_launcherDescription->setText(launcher.description);
     m_extensions->setText(joinExtensions(launcher.extensions));
 
     m_runnersTitle->setText(tr("Available %1:").arg(launcher.name));
     m_runners->setRowCount(0);
     for (const LauncherRunner &runner : launcher.runners) addRunnerRow(runner);
 
-    // Where the list comes from, which differs: wine and Proton are read
-    // off the machine, the rest are where a full path is given.
+    // Whether the list is the machine's or ours: a machine's own list is
+    // not something to add to or take from.
     int discovered = 0;
     for (const LauncherRunner &runner : launcher.runners) discovered += runner.discovered;
-    if (discovered > 0) {
-        m_runnersNote->setText(
-            tr("Every %1 found on this machine is listed. An item picks one of them in "
-               "its properties; the greyed rows come and go with what is installed.")
-                .arg(launcher.name));
-    } else {
-        m_runnersNote->setText(
-            tr("One row to each %1 installed, so an item can be pointed at the one it "
-               "wants. Browse to a program outside the PATH, or tick Shell for a shell "
-               "alias.")
-                .arg(launcher.name));
-    }
+
     // A machine's own list is not ours to add to or take from.
     m_runnerAdd->setEnabled(discovered == 0);
     m_runnerRemove->setEnabled(discovered == 0);
@@ -592,6 +567,14 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
 
     m_prefixesBox->setVisible(launcher.usesPrefixes);
     if (launcher.usesPrefixes) m_prefixesDir->setText(launcher.prefixesDir);
+
+    // Everything that does not belong to this launcher goes first. Showing
+    // one before hiding another leaves both in the layout for a pass, and
+    // the dialog grows to hold the pair -- then stays grown, because a
+    // window is not shrunk back when its contents need less.
+    if (!launcher.usesSteamLibraries) m_librariesBox->hide();
+    if (!launcher.usesCores) m_coresBox->hide();
+    if (!launcher.usesPrefixes) m_prefixesBox->hide();
 
     m_librariesBox->setVisible(launcher.usesSteamLibraries);
     if (launcher.usesSteamLibraries) {

@@ -70,7 +70,7 @@ void setDarkMode(bool dark);
 // following one. `t` runs 0 to 1, from `from` to `to`.
 Theme blendThemes(const Theme &from, const Theme &to, qreal t);
 
-// Wears exactly these colours, whatever scheme they came from. For the
-// frames of such a move: the name and the dark flag are left as they are,
-// so what the desktop is set to remains what it was asked for.
+// Wears exactly these colours, whatever scheme they came from. The name and
+// the dark flag are left as they are, so what the desktop is set to remains
+// what it was asked for.
 void setCurrentThemeColours(const Theme &theme);

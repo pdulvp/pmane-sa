@@ -31,6 +31,13 @@ public:
     // the rows have been repopulated.
     void updateGridSize();
 
+    // Shows that an item has been started: its icon swells and fades away
+    // where it sits. Double clicking a game is otherwise answered by
+    // nothing at all -- a program can take several seconds to put up a
+    // window, and in the meantime there is no telling whether the click
+    // was taken.
+    void flashItem(int row);
+
 signals:
     void filesDropped(const QStringList &paths);
     void programItemsDropped(const QVector<ProgramItem> &items, int row);

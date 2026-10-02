@@ -83,8 +83,9 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
         setDarkMode(dark);
         // Every palette in the application comes from the scheme, so the
-        // whole thing is put on again rather than patched.
-        applyTheme(m_themeName);
+        // whole thing is put on again rather than patched -- and moved to,
+        // the whole desktop changing at once being worth easing.
+        applyTheme(m_themeName, true);
         save();
     });
 
@@ -894,7 +895,7 @@ void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
     if (active) clearMinimizedIconSelection();
 }
 
-void MainWindow::applyTheme(const QString &themeName) {
+void MainWindow::applyTheme(const QString &themeName, bool moved) {
     // Where it is coming from: the colours on screen, not what the desktop
     // is set to. Dark mode is flipped before this is called, so asking the
     // scheme would say the destination and there would be nothing to move.
@@ -909,16 +910,14 @@ void MainWindow::applyTheme(const QString &themeName) {
 
     if (m_themeFade) m_themeFade->stop();
 
-    // Nothing to ease on the way in, and nothing to ease between when the
-    // colours are the same.
-    if (!isVisible() || !from.windowBg.isValid() || from.windowBg == to.windowBg) {
+    // Nothing to move on the way in, nothing to move between when the
+    // colours are the same, and nothing to move when it was not asked for.
+    if (!moved || !isVisible() || !from.windowBg.isValid() ||
+        from.windowBg == to.windowBg) {
         applyThemeColours(to);
         return;
     }
 
-    // Moved to rather than switched to: a desktop that changes colour
-    // between one frame and the next is startling, and the move itself says
-    // that it was this scheme and is now that one.
     if (!m_themeFade) {
         m_themeFade = new QVariantAnimation(this);
         // Straight through, at one rate: an eased move slows at both ends,
@@ -940,8 +939,6 @@ void MainWindow::applyTheme(const QString &themeName) {
 }
 
 void MainWindow::applyThemeColours(const Theme &theme) {
-    // The frames of a change wear colours of their own; what the desktop is
-    // set to -- the scheme's name, its dark half -- is not touched here.
     setCurrentThemeColours(theme);
     m_wornTheme = theme;
     m_mdiArea->setBackground(QBrush(theme.desktop));
@@ -1035,7 +1032,11 @@ void MainWindow::chooseColors() {
     const QString previous = m_themeName;
     ThemeDialog dialog(m_themeName, this);
     // Live preview on the real window, like the Control Panel did.
-    connect(&dialog, &ThemeDialog::themePreviewed, this, &MainWindow::applyTheme);
+    // Put on outright rather than moved to: picking down the list of
+    // schemes, each step would smear into the next and the list would feel
+    // slow to answer.
+    connect(&dialog, &ThemeDialog::themePreviewed, this,
+            [this](const QString &name) { applyTheme(name); });
 
     if (dialog.exec() == QDialog::Accepted) {
         applyTheme(dialog.selectedTheme());

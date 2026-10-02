@@ -10,6 +10,7 @@
 #include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -102,8 +103,18 @@ int GroupWindow::indexOfListItem(QListWidgetItem *listItem) const {
 }
 
 void GroupWindow::onItemActivated(QListWidgetItem *item) {
-    int idx = indexOfListItem(item);
-    if (idx >= 0 && idx < m_items.size()) launch(m_items[idx]);
+    const int idx = indexOfListItem(item);
+    if (idx < 0 || idx >= m_items.size()) return;
+
+    // Answered before it is acted on: starting a program can sit for a
+    // moment -- a wine prefix to build, a Steam client to wake -- and until
+    // something appears there is no telling whether the click was taken.
+    m_list->flashItem(idx);
+
+    // Started on the next turn of the loop, so the first frame of that is
+    // on screen before anything that blocks.
+    const ProgramItem starting = m_items[idx];
+    QTimer::singleShot(0, this, [this, starting] { launch(starting); });
 }
 
 void GroupWindow::launch(const ProgramItem &item) {
