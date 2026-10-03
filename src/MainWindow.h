@@ -4,6 +4,7 @@
 #include <QList>
 #include <QMainWindow>
 
+#include "DesktopColorScheme.h"
 #include "Theme.h"
 
 #include "AlignmentGuides.h"
@@ -14,6 +15,7 @@ class QMdiSubWindow;
 class QMenu;
 class DesktopArea;
 class GroupWindow;
+class DesktopColorSchemeWatch;
 class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
@@ -105,6 +107,11 @@ private:
     // surfaces the dialogs paint themselves. One frame of a move, or the
     // whole of a change that is not moved to.
     void applyThemeColours(const Theme &theme);
+
+    // Follows the desktop between light and dark, so the Program Manager
+    // is not the one window still bright when everything else has dimmed.
+    void followDesktopScheme(DesktopScheme scheme);
+    DesktopColorSchemeWatch *m_schemeWatch = nullptr;
 
     QVariantAnimation *m_themeFade = nullptr;
     // The colours actually on screen. currentTheme() says what the desktop

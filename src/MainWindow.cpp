@@ -80,6 +80,13 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     m_layoutNow = currentLayout();
     updateLayoutActions();
 
+    // Whatever the desktop is wearing, worn here too -- now, and again
+    // whenever it is switched over.
+    m_schemeWatch = new DesktopColorSchemeWatch(this);
+    connect(m_schemeWatch, &DesktopColorSchemeWatch::schemeChanged, this,
+            &MainWindow::followDesktopScheme);
+    followDesktopScheme(desktopColorScheme());
+
     connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
         setDarkMode(dark);
         // Every palette in the application comes from the scheme, so the
@@ -420,6 +427,21 @@ void MainWindow::clearDesktop() {
     // the desktop emptied: the arrangements remembered no longer describe
     // what is on screen.
     forgetLayoutHistory();
+}
+
+void MainWindow::followDesktopScheme(DesktopScheme scheme) {
+    // A desktop that says nothing either way is left alone: the switch in
+    // the strip is then the only thing that decides.
+    if (scheme == DesktopScheme::Unknown) return;
+
+    const bool wantsDark = scheme == DesktopScheme::Dark;
+    if (wantsDark == darkMode()) return;
+
+    setDarkMode(wantsDark);
+    // Moved to, as the switch in the strip is: the whole desktop changing
+    // at once is worth easing whoever asked for it.
+    applyTheme(m_themeName, true);
+    save();
 }
 
 QString MainWindow::currentScreen() const {

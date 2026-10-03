@@ -66,6 +66,8 @@ add_executable(progman-linux
     src/SteamLibrary.h
     src/DesktopShell.cpp
     src/DesktopShell.h
+    src/DesktopColorScheme.cpp
+    src/DesktopColorScheme.h
     src/SystemVolume.cpp
     src/SystemVolume.h
     src/CalendarEvents.cpp
