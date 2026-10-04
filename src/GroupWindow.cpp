@@ -4,6 +4,7 @@
 #include "ItemDetails.h"
 #include "ItemKind.h"
 #include "ItemLauncher.h"
+#include "Ids.h"
 #include "ItemPropertiesDialog.h"
 #include "LaunchNotices.h"
 
@@ -18,6 +19,7 @@
 
 GroupWindow::GroupWindow(const QString &title, QWidget *parent)
     : QWidget(parent), m_title(title) {
+    m_id = newId();
     m_list = new IconListWidget(this);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -83,16 +85,10 @@ void GroupWindow::rebuildList() {
         const QIcon shown = it.xpStyleIcon ? xpStyleIcon(it.icon) : it.icon;
         auto *listItem = new QListWidgetItem(shown, it.name);
         listItem->setData(IconListWidget::IndexRole, i);
-        listItem->setData(IconListWidget::NameRole, it.name);
-        listItem->setData(IconListWidget::CustomNameRole, it.customName);
-        listItem->setData(IconListWidget::CommandRole, it.command);
-        listItem->setData(IconListWidget::ArgumentsRole, it.arguments);
-        listItem->setData(IconListWidget::LauncherRole, it.launcher);
-        // So an item dragged to another group keeps the icon somebody picked
-        // for it, rather than being worked out again from its command.
-        listItem->setData(IconListWidget::IconIndexRole, it.iconIndex);
-        listItem->setData(IconListWidget::IconSourceRole, it.iconSource);
-        listItem->setData(IconListWidget::XpStyleRole, it.xpStyleIcon);
+        // The whole item, so that one dragged to another group arrives as
+        // what it was -- its identity, its prefix, its scaling and the icon
+        // somebody picked for it, not just its name and command.
+        listItem->setData(IconListWidget::ItemRole, QVariant::fromValue(it));
         m_list->addItem(listItem);
     }
     m_list->updateGridSize();
@@ -217,6 +213,21 @@ void GroupWindow::deleteItem(int index) {
     emit itemDeleted(index, deleted);
 }
 
+void GroupWindow::duplicateItem(int index) {
+    if (index < 0 || index >= m_items.size()) return;
+
+    ProgramItem copy = m_items[index];
+    // Everything about it except what makes it itself: the copy is a second
+    // icon for the same program, so it gets an identity of its own and, with
+    // it, a wine prefix of its own. A named prefix is kept -- that one was
+    // chosen, and sharing it is what choosing it was for.
+    copy.id.clear();
+    copy.name = tr("%1 (copy)").arg(copy.name);
+    copy.customName = true;
+    insertProgramItem(copy, index + 1);
+    selectItem(index + 1);
+}
+
 void GroupWindow::removeProgramItem(int index) {
     if (index < 0 || index >= m_items.size()) return;
     m_items.remove(index);
@@ -234,12 +245,16 @@ void GroupWindow::onContextMenuRequested(const QPoint &pos) {
         QAction *runAction = menu.addAction(
             (isDocument(command) || isFolder(command)) ? tr("Open") : tr("Run"));
         QAction *propsAction = menu.addAction(tr("Properties..."));
+        // The way to have one program twice: the same command set up two
+        // ways, each with a prefix of its own.
+        QAction *duplicateAction = menu.addAction(tr("Duplicate"));
         menu.addSeparator();
         QAction *deleteAction = menu.addAction(tr("Delete"));
 
         QAction *chosen = menu.exec(m_list->mapToGlobal(pos));
         if (chosen == runAction) launch(m_items[idx]);
         else if (chosen == propsAction) showPropertiesDialog(idx);
+        else if (chosen == duplicateAction) duplicateItem(idx);
         else if (chosen == deleteAction) deleteItem(idx);
     } else {
         QAction *newAction = menu.addAction(tr("New Program Item..."));

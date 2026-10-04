@@ -201,8 +201,10 @@ private:
         LayoutSnapshot before;
         LayoutSnapshot after;
 
-        // Which group it happened to, by its place on the desktop.
-        int group = -1;
+        // Which group it happened to. By what the group is rather than where
+        // it sits: the desktop gets rearranged between doing a thing and
+        // taking it back, and a group restored comes back at the end.
+        QString group;
 
         // ItemDeleted: the item, and where in its group it sat.
         int itemIndex = -1;
@@ -227,9 +229,9 @@ private:
     // it takes it away again.
     void applyEdit(const Edit &edit, bool undoing);
     void updateEditActions();
-    // The group in this position on the desktop, or null.
-    GroupWindow *groupAt(int index) const;
-    int indexOfGroup(const GroupWindow *group) const;
+    // The group with this identity, or null when it is not on the desktop
+    // any more.
+    GroupWindow *groupById(const QString &id) const;
     // A group added or taken away makes the remembered arrangements
     // meaningless -- they are a list of windows by position -- but says
     // nothing about the deletions remembered beside them, which carry what

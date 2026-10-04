@@ -14,14 +14,15 @@
 namespace {
 
 // The marker a per-application prefix carries, naming the program it was
-// built for. It is what tells one of ours from a folder someone else put in
-// there.
+// built for and the item that claimed it. It is what tells one of ours from
+// a folder someone else put in there.
 const char *kMarkerFile = ".program";
 
 // The fields of a saved item a prefix scan needs: what it runs and where it
 // runs it. The rest of a ProgramItem -- its icon, its scaling -- costs work
 // to read and says nothing about prefixes.
 struct SavedItem {
+    QString id;
     QString command;
     QString launcher;
     QString prefix;
@@ -33,7 +34,7 @@ QVector<SavedItem> allItems(const OpenScreen &open) {
     QVector<SavedItem> items;
 
     for (const ProgramItem &item : open.items) {
-        items.append({item.command, item.launcher, item.prefix});
+        items.append({item.id, item.command, item.launcher, item.prefix});
     }
 
     ScreenManager screens;
@@ -52,6 +53,7 @@ QVector<SavedItem> allItems(const OpenScreen &open) {
                 SavedItem item;
                 item.command = settings.value(QStringLiteral("command")).toString();
                 if (item.command.isEmpty()) continue;
+                item.id = settings.value(QStringLiteral("id")).toString();
                 item.launcher = settings.value(QStringLiteral("launcher")).toString();
                 item.prefix = settings.value(QStringLiteral("prefix")).toString();
                 items.append(item);
@@ -75,16 +77,10 @@ QHash<QString, int> usageByPath(const OpenScreen &open) {
         launcherForItem(item.command, item.launcher, &launcher, &runner);
         if (!launcher || !launcher->usesPrefixes) continue;
         const QString path =
-            itemPrefixPath(item.command, launcher->prefixesDir, item.prefix);
+            itemPrefixPath(item.command, launcher->prefixesDir, item.prefix, item.id);
         if (!path.isEmpty()) counts[QDir::cleanPath(path)] += 1;
     }
     return counts;
-}
-
-QString markerIn(const QString &path) {
-    QFile marker(path + QLatin1Char('/') + QLatin1String(kMarkerFile));
-    if (!marker.open(QIODevice::ReadOnly)) return {};
-    return QString::fromUtf8(marker.readAll()).trimmed();
 }
 
 // Whether a folder looks like a wine prefix rather than something else that
@@ -143,7 +139,7 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.path = path;
         use.onDisk = true;
         use.items = counts.value(path);
-        use.program = markerIn(path);
+        use.program = prefixOwner(path).program;
         // One of ours if it carries a marker, or if it has no marker but
         // holds a prefix and something still runs in it -- which is how the
         // ones built before the markers existed read.

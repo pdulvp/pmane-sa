@@ -1,14 +1,21 @@
 #pragma once
 
-#include <QString>
 #include <QIcon>
+#include <QMetaType>
 #include <QSize>
+#include <QString>
 
 #include "WindowScale.h"
 
 // A single launchable entry inside a Program Group (equivalent to a
 // PROGRAM ITEM in windows 3.1's progman.ini).
 struct ProgramItem {
+    // This item, as against any other with the same command. Two icons may
+    // point at one executable and be set up differently -- a different
+    // prefix, a different scale -- so what tells them apart cannot be worked
+    // out from what they point at. Filled in when the item is made; see
+    // Ids.h.
+    QString id;
     QString name;          // Description shown under the icon
     // Whether that name was typed by a person. Discovery improves on a name
     // it worked out itself -- a .desktop file is a poor label, and the
@@ -60,3 +67,8 @@ struct ProgramItem {
     // Empty falls back to the command.
     QString iconSource;
 };
+
+// So that a whole item can be carried on a list row, which is how a drag
+// hands one group's item to another without either of them having to take
+// it apart field by field.
+Q_DECLARE_METATYPE(ProgramItem)

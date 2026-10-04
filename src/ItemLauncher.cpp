@@ -60,7 +60,8 @@ void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &lau
                          item.windowScalePercent > 100;
     const int wanted = scaling ? wineLogPixels(item.windowScalePercent) : kDefaultLogPixels;
 
-    setPrefixDpi(runner.command, itemPrefixFor(item.command, launcher.prefixesDir, item.prefix),
+    setPrefixDpi(runner.command,
+                 itemPrefixFor(item.command, launcher.prefixesDir, item.prefix, item.id),
                  wanted);
 }
 
@@ -113,7 +114,8 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
     // on first run; it refuses to start without one. The path is per
     // executable, so each program gets its own bottle -- under whichever
     // folder the launcher keeps them in.
-    const QString prefix = itemPrefixFor(item.command, launcher.prefixesDir, item.prefix);
+    const QString prefix =
+        itemPrefixFor(item.command, launcher.prefixesDir, item.prefix, item.id);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the Proton prefix at '%1'.").arg(prefix);
         return call;
@@ -135,7 +137,8 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
 // the next. Left to wine's own default when the launcher names no folder.
 void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
     if (!launcher.usesPrefixes) return;
-    const QString prefix = itemPrefixFor(item.command, launcher.prefixesDir, item.prefix);
+    const QString prefix =
+        itemPrefixFor(item.command, launcher.prefixesDir, item.prefix, item.id);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the wine prefix at '%1'.").arg(prefix);
         return;
@@ -270,7 +273,7 @@ QString launchProgramItem(const ProgramItem &item) {
     // file to the application and exits, and so does the handler Steam's
     // url goes to, so for those an exit says nothing.
     const bool ourProcess = launcher && !launcher->usesSteamLibraries;
-    const QString log = ourProcess ? launchLogPath(item.name) : QString();
+    const QString log = ourProcess ? launchLogPath(item.name, item.id) : QString();
     if (!log.isEmpty()) {
         process.setStandardOutputFile(log, QIODevice::Truncate);
         process.setStandardErrorFile(log, QIODevice::Append);

@@ -13,18 +13,13 @@ class IconListWidget : public QListWidget {
 public:
     explicit IconListWidget(QWidget *parent = nullptr);
 
-    // Roles carrying a ProgramItem's fields on each row, so a drag can be
-    // serialized without reaching back into the owning group.
+    // What each row carries, so a drag can be serialized without reaching
+    // back into the owning group: where the item is, and the item. Field by
+    // field it was, until a field added to a ProgramItem and forgotten here
+    // went quietly missing from every item dragged between groups.
     enum DataRole {
         IndexRole = Qt::UserRole,
-        NameRole,
-        CustomNameRole,
-        CommandRole,
-        ArgumentsRole,
-        LauncherRole,
-        IconIndexRole,
-        IconSourceRole,
-        XpStyleRole,
+        ItemRole,
     };
 
     // Resizes the (uniform) grid cells to fit the widest label. Call after

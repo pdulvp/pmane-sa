@@ -110,7 +110,7 @@ void LaunchNotices::watch(const QString &itemName, qint64 pid, const QString &lo
     timer->start();
 }
 
-QString launchLogPath(const QString &itemName) {
+QString launchLogPath(const QString &itemName, const QString &itemId) {
     const QString dir =
         QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
         QStringLiteral("/launches");
@@ -122,6 +122,9 @@ QString launchLogPath(const QString &itemName) {
     QString name = itemName.simplified().replace(unsafe, QStringLiteral("-"));
     while (name.startsWith(QLatin1Char('-'))) name.remove(0, 1);
     if (name.isEmpty()) name = QStringLiteral("item");
+    // Its own, not its name's: two icons for the same program each have
+    // their own last run to look at.
+    if (!itemId.isEmpty()) name += QLatin1Char('-') + itemId;
 
     return dir + QLatin1Char('/') + name + QStringLiteral(".log");
 }

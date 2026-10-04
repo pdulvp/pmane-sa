@@ -50,6 +50,10 @@ namespace {
 // screen is written into that screen's file by the same hand that writes this
 // one, so neither can drift from the other.
 void writeProgramItem(QSettings &settings, const ProgramItem &item) {
+    // What tells this icon from another pointing at the same program, and
+    // what its own wine prefix is named after: written first because it is
+    // the one field that is not about what the item does.
+    settings.setValue("id", item.id);
     settings.setValue("name", item.name);
     // Only a name someone chose has anything to remember: the rest are
     // worked out again each time the item is read.
@@ -85,6 +89,9 @@ void writeProgramItem(QSettings &settings, const ProgramItem &item) {
 
 ProgramItem readProgramItem(const QSettings &settings) {
     ProgramItem item;
+    // Empty for an item saved before identities: completeProgramItem() gives
+    // it one as it is put on the desktop.
+    item.id = settings.value("id").toString();
     item.name = settings.value("name").toString();
     item.customName = settings.value("customName", false).toBool();
     item.command = settings.value("command").toString();
@@ -316,7 +323,7 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
             [this, group](int index, const ProgramItem &item) {
                 Edit edit;
                 edit.kind = Edit::ItemDeleted;
-                edit.group = indexOfGroup(group);
+                edit.group = group->id();
                 edit.itemIndex = index;
                 edit.item = item;
                 record(edit);
@@ -420,7 +427,7 @@ void MainWindow::deleteGroup() {
     // and setting the lot up again by hand.
     Edit edit;
     edit.kind = Edit::GroupDeleted;
-    edit.group = indexOfGroup(gw);
+    edit.group = gw->id();
     edit.title = gw->title();
     edit.items = gw->items();
     edit.geometry = m_normalGeometry.value(sub, sub->geometry());
@@ -491,6 +498,7 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
     const QString path = m_screens.filePath(screen);
     if (path.isEmpty()) return;
 
+    const QString groupId = gw->id();
     const QString title = gw->title();
     const QVector<ProgramItem> items = gw->items();
     const QRect geometry = m_normalGeometry.value(sub, sub->geometry());
@@ -506,6 +514,7 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
 
         settings.beginWriteArray("Groups", existing + 1);
         settings.setArrayIndex(existing);
+        settings.setValue("id", groupId);
         settings.setValue("title", title);
         settings.setValue("x", geometry.x());
         settings.setValue("y", geometry.y());
@@ -976,18 +985,13 @@ void MainWindow::record(const Edit &edit) {
     updateEditActions();
 }
 
-GroupWindow *MainWindow::groupAt(int index) const {
-    const QList<QMdiSubWindow *> windows = m_mdiArea->subWindowList();
-    if (index < 0 || index >= windows.size()) return nullptr;
-    return qobject_cast<GroupWindow *>(windows[index]->widget());
-}
-
-int MainWindow::indexOfGroup(const GroupWindow *group) const {
-    const QList<QMdiSubWindow *> windows = m_mdiArea->subWindowList();
-    for (int i = 0; i < windows.size(); ++i) {
-        if (windows[i]->widget() == group) return i;
+GroupWindow *MainWindow::groupById(const QString &id) const {
+    if (id.isEmpty()) return nullptr;
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        auto *group = qobject_cast<GroupWindow *>(sub->widget());
+        if (group && group->id() == id) return group;
     }
-    return -1;
+    return nullptr;
 }
 
 void MainWindow::undoEdit() {
@@ -1013,7 +1017,7 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
         return;
 
     case Edit::ItemDeleted: {
-        GroupWindow *group = groupAt(edit.group);
+        GroupWindow *group = groupById(edit.group);
         // The group it was in has since gone itself. Nothing sensible can be
         // done with the item, and putting it somewhere else would be a
         // worse answer than leaving it where it is not.
@@ -1029,6 +1033,9 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
     case Edit::GroupDeleted:
         if (undoing) {
             auto *group = new GroupWindow(edit.title);
+            // The same group as the one that went, not a new one wearing its
+            // name: anything else remembered about it still points here.
+            group->setId(edit.group);
             for (const ProgramItem &item : edit.items) group->addProgramItem(item);
             QMdiSubWindow *sub = addGroupWindow(group);
             sub->setGeometry(edit.geometry);
@@ -1037,7 +1044,7 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
             // It comes back at the end of the desktop's order rather than in
             // the place it had, so the arrangements remembered no longer
             // line up -- addGroupWindow() has said so already.
-        } else if (GroupWindow *group = groupAt(edit.group)) {
+        } else if (GroupWindow *group = groupById(edit.group)) {
             if (QMdiSubWindow *sub = qobject_cast<QMdiSubWindow *>(group->parentWidget())) {
                 m_normalGeometry.remove(sub);
                 delete sub;
@@ -1545,6 +1552,7 @@ void MainWindow::load() {
     int groupCount = settings.beginReadArray("Groups");
     for (int i = 0; i < groupCount; ++i) {
         settings.setArrayIndex(i);
+        const QString id = settings.value("id").toString();
         QString title = settings.value("title").toString();
         int x = settings.value("x", 20 + i * 20).toInt();
         int y = settings.value("y", 20 + i * 20).toInt();
@@ -1553,6 +1561,9 @@ void MainWindow::load() {
         bool minimized = settings.value("minimized", false).toBool();
 
         auto *group = new GroupWindow(title);
+        // Kept if the file names one; a desktop written before groups had
+        // identities keeps the one the group was just given.
+        group->setId(id);
         int itemCount = settings.beginReadArray("Items");
         for (int j = 0; j < itemCount; ++j) {
             settings.setArrayIndex(j);
@@ -1590,6 +1601,7 @@ void MainWindow::save() {
         if (!gw) continue;
 
         settings.setArrayIndex(idx++);
+        settings.setValue("id", gw->id());
         settings.setValue("title", gw->title());
         // Never the stub a minimized window collapsed to: save the rect it
         // will actually reopen at.

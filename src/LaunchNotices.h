@@ -34,4 +34,4 @@ signals:
 // Where one item's output is kept while it runs: a file of its own under the
 // cache directory, written over at each launch. Empty if the directory
 // cannot be made, which simply leaves the launch unwatched.
-QString launchLogPath(const QString &itemName);
+QString launchLogPath(const QString &itemName, const QString &itemId);

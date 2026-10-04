@@ -1,5 +1,7 @@
 #include "IconListWidget.h"
 
+#include "WindowScale.h"
+
 #include <QDataStream>
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -319,6 +321,29 @@ QStringList IconListWidget::mimeTypes() const {
     return {QString::fromLatin1(kProgramItemMimeType), QStringLiteral("text/uri-list")};
 }
 
+// An item on the wire, written and read in one place and in one order. The
+// icon itself is left out: the group it lands in works it out again from the
+// command, and an icon chosen by hand is named by iconIndex and iconSource.
+void writeItem(QDataStream &stream, const ProgramItem &item) {
+    stream << item.id << item.name << item.customName << item.command << item.arguments
+           << item.launcher << item.prefix << item.windowScalePercent
+           << int(item.windowScaleMode) << item.nativeSize << item.shader << item.legacyIcon
+           << item.xpStyleIcon << item.iconIndex << item.iconSource;
+}
+
+ProgramItem readItem(QDataStream &stream) {
+    ProgramItem item;
+    int scaleMode = 0;
+    stream >> item.id >> item.name >> item.customName >> item.command >> item.arguments >>
+        item.launcher >> item.prefix >> item.windowScalePercent >> scaleMode >>
+        item.nativeSize >> item.shader >> item.legacyIcon >> item.xpStyleIcon >>
+        item.iconIndex >> item.iconSource;
+    item.windowScaleMode = scaleMode == int(WindowScaleMode::WineDpi)
+                               ? WindowScaleMode::WineDpi
+                               : WindowScaleMode::Gamescope;
+    return item;
+}
+
 QMimeData *IconListWidget::mimeData(const QList<QListWidgetItem *> &items) const {
     if (items.isEmpty()) return nullptr;
 
@@ -326,11 +351,8 @@ QMimeData *IconListWidget::mimeData(const QList<QListWidgetItem *> &items) const
     QDataStream stream(&payload, QIODevice::WriteOnly);
     stream << int(items.size());
     for (const QListWidgetItem *item : items) {
-        stream << item->data(IndexRole).toInt() << item->data(NameRole).toString()
-               << item->data(CustomNameRole).toBool() << item->data(CommandRole).toString() << item->data(ArgumentsRole).toString()
-               << item->data(LauncherRole).toString()
-               << item->data(IconIndexRole).toInt() << item->data(IconSourceRole).toString()
-               << item->data(XpStyleRole).toBool();
+        stream << item->data(IndexRole).toInt();
+        writeItem(stream, item->data(ItemRole).value<ProgramItem>());
     }
 
     auto *mime = new QMimeData;
@@ -458,11 +480,9 @@ void IconListWidget::dropEvent(QDropEvent *event) {
         QVector<ProgramItem> items;
         QVector<int> sourceRows;
         for (int i = 0; i < count; ++i) {
-            int sourceIndex;
-            ProgramItem item;
-            stream >> sourceIndex >> item.name >> item.customName >> item.command >>
-                item.arguments >> item.launcher >> item.iconIndex >> item.iconSource >>
-                item.xpStyleIcon;
+            int sourceIndex = 0;
+            stream >> sourceIndex;
+            const ProgramItem item = readItem(stream);
             if (stream.status() != QDataStream::Ok) break;
             items.append(item);
             sourceRows.append(sourceIndex);

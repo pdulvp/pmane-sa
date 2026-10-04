@@ -423,7 +423,8 @@ void ItemPropertiesDialog::measureWindow() {
     // and that figure would then be handed to gamescope as its own size.
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     if (launcher->usesPrefixes) {
-        const QString prefix = itemPrefixFor(command, launcher->prefixesDir, m_prefixName);
+        const QString prefix =
+            itemPrefixFor(command, launcher->prefixesDir, m_prefixName, m_item.id);
         if (!QDir().mkpath(prefix)) {
             m_nativeSizeLabel->setText(tr("Could not create its prefix"));
             return;

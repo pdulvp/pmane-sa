@@ -3,6 +3,7 @@
 #include "SteamLibrary.h"
 
 #include "DesktopEntry.h"
+#include "Ids.h"
 #include "ItemKind.h"
 #include "PeIconExtractor.h"
 
@@ -145,6 +146,12 @@ bool nameIsOurs(const ProgramItem &item) {
 } // namespace
 
 void completeProgramItem(ProgramItem &it) {
+    // Every item on the desktop comes through here once, which makes this
+    // the place an item gets its identity. An item read from a desktop
+    // written before identities existed is given one now, and keeps it from
+    // the next save on.
+    if (it.id.isEmpty()) it.id = newId();
+
     // An icon picked by hand in the properties dialog outranks anything we
     // would go looking for. If the file it came from is gone, the item falls
     // back to the usual discovery below rather than to no icon at all.

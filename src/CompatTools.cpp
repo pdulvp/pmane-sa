@@ -162,11 +162,48 @@ QString namedPrefixPath(const QString &name, const QString &baseDir) {
     return prefixesBase(baseDir) + QLatin1Char('/') + name;
 }
 
-// The per-program prefix. `build` is what tells the launch path from a
-// question about it: the folder and the marker naming its program are made
-// the first time a program is actually run, and never by something merely
-// asking where it would run.
-QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build);
+// The per-item prefix. `build` is what tells the launch path from a question
+// about it: the folder and the marker naming its program are made the first
+// time a program is actually run, and never by something merely asking where
+// it would run.
+QString prefixPathFor(const QString &exePath, const QString &baseDir, const QString &itemId,
+                      bool build);
+
+// The marker file inside a prefix, which says whose it is.
+const char *kMarkerFile = ".program";
+
+// Whether this item may have that prefix: an empty folder is free, one
+// claimed by this item is its own, and one claimed by another item is not --
+// whatever program either of them runs. A prefix from before the markers
+// carried an item goes to whichever item asks for it first, which is the one
+// that was using it already.
+bool freeFor(const QString &path, const QString &exePath, const QString &itemId) {
+    if (!QFileInfo::exists(path)) return true;
+    const PrefixOwner owner = prefixOwner(path);
+    // Claimed by an item: its own, and nobody else's.
+    if (!owner.itemId.isEmpty()) return owner.itemId == itemId;
+    // Claimed by a program but no item -- made before items had identities.
+    // It goes to whichever item asks for it first, which is the one that has
+    // been running out of it.
+    if (!owner.program.isEmpty()) return owner.program == exePath;
+    // No marker at all: older still, from when a prefix was named and left
+    // at that. Same rule, there being nothing to tell it apart by.
+    return true;
+}
+
+// Says the prefix is this item's, so that the next item asking for it is
+// given one of its own instead of moving in.
+void claim(const QString &path, const QString &exePath, const QString &itemId) {
+    if (!QDir().mkpath(path)) return;
+    QFile marker(path + QLatin1Char('/') + QLatin1String(kMarkerFile));
+    if (!marker.open(QIODevice::WriteOnly)) return;
+    marker.write(exePath.toUtf8());
+    if (!itemId.isEmpty()) {
+        marker.write("\n");
+        marker.write(itemId.toUtf8());
+    }
+    marker.close();
+}
 
 } // namespace
 
@@ -181,27 +218,40 @@ QString prefixFolderName(const QString &prefixName) {
 }
 
 QString itemPrefixPath(const QString &exePath, const QString &baseDir,
-                       const QString &prefixName) {
+                       const QString &prefixName, const QString &itemId) {
     const QString name = prefixFolderName(prefixName);
-    if (name.isEmpty()) return prefixPathFor(exePath, baseDir, false);
+    if (name.isEmpty()) return prefixPathFor(exePath, baseDir, itemId, false);
     return namedPrefixPath(name, baseDir);
 }
 
 QString itemPrefixFor(const QString &exePath, const QString &baseDir,
-                      const QString &prefixName) {
+                      const QString &prefixName, const QString &itemId) {
     const QString name = prefixFolderName(prefixName);
-    if (name.isEmpty()) return protonPrefixFor(exePath, baseDir);
+    if (name.isEmpty()) return prefixPathFor(exePath, baseDir, itemId, true);
 
     return namedPrefixPath(name, baseDir);
 }
 
+PrefixOwner prefixOwner(const QString &prefixPath) {
+    PrefixOwner owner;
+    QFile marker(prefixPath + QLatin1Char('/') + QLatin1String(kMarkerFile));
+    if (!marker.open(QIODevice::ReadOnly)) return owner;
+
+    // The program on the first line, the item that claimed it on the second.
+    const QStringList lines = QString::fromUtf8(marker.readAll()).split(QLatin1Char('\n'));
+    if (!lines.isEmpty()) owner.program = lines.first().trimmed();
+    if (lines.size() > 1) owner.itemId = lines.at(1).trimmed();
+    return owner;
+}
+
 QString protonPrefixFor(const QString &exePath, const QString &baseDir) {
-    return prefixPathFor(exePath, baseDir, true);
+    return prefixPathFor(exePath, baseDir, QString(), true);
 }
 
 namespace {
 
-QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build) {
+QString prefixPathFor(const QString &exePath, const QString &baseDir, const QString &itemId,
+                      bool build) {
     const QFileInfo info(exePath);
 
     // Where they all live: the folder the launcher profile names, and the
@@ -217,10 +267,15 @@ QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build
     const QString hash = QString::fromLatin1(digest.toHex().left(8));
 
     // Prefixes made before these folders were given readable names are still
-    // where they were: a game's saves live in there.
+    // where they were: a game's saves live in there. A second icon for the
+    // same program does not move in, though -- it was built for the one that
+    // has it.
     const QString legacy =
         ours + QLatin1Char('/') + info.completeBaseName() + QLatin1Char('-') + hash;
-    if (QFileInfo::exists(legacy)) return legacy;
+    if (QFileInfo::exists(legacy) && freeFor(legacy, info.absoluteFilePath(), itemId)) {
+        if (build) claim(legacy, info.absoluteFilePath(), itemId);
+        return legacy;
+    }
 
     // Otherwise a name worth reading in a file manager: the program, under
     // the folder it was installed in, which is what tells two copies of the
@@ -231,26 +286,33 @@ QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build
                        : title + QStringLiteral(" - ") + info.completeBaseName();
     name.replace(QLatin1Char('/'), QLatin1Char('-'));
 
-    // A marker naming the program the prefix was built for, so a second
-    // program that would have taken the same folder is given one of its own
-    // instead of moving into this one.
+    // A marker naming the program the prefix was built for and the item that
+    // claimed it, so that neither another program of the same name nor a
+    // second icon for this one moves into it.
     const QString path = base + QLatin1Char('/') + name;
-    const QString marker = path + QStringLiteral("/.program");
-    QFile markerFile(marker);
-    if (QFileInfo::exists(path)) {
-        if (markerFile.open(QIODevice::ReadOnly)) {
-            const QString owner = QString::fromUtf8(markerFile.readAll()).trimmed();
-            markerFile.close();
-            if (owner == info.absoluteFilePath()) return path;
-        }
-        return path + QStringLiteral(" (") + hash + QLatin1Char(')');
+    if (freeFor(path, info.absoluteFilePath(), itemId)) {
+        if (build) claim(path, info.absoluteFilePath(), itemId);
+        return path;
     }
 
-    if (build && QDir().mkpath(path) && markerFile.open(QIODevice::WriteOnly)) {
-        markerFile.write(info.absoluteFilePath().toUtf8());
-        markerFile.close();
+    // Taken. Before minting a new one, the folder a second program of the
+    // same name would have been given back when the path was all there was
+    // to tell them apart: an item that has been running out of that one
+    // keeps it.
+    const QString byPath = path + QStringLiteral(" (") + hash + QLatin1Char(')');
+    if (QFileInfo::exists(byPath) && freeFor(byPath, info.absoluteFilePath(), itemId)) {
+        if (build) claim(byPath, info.absoluteFilePath(), itemId);
+        return byPath;
     }
-    return path;
+
+    // A second icon for the same program is told apart by its own identity,
+    // which is the one thing it does not share with the first.
+    const QString mine = itemId.isEmpty() ? hash : itemId;
+    const QString own = path + QStringLiteral(" (") + mine + QLatin1Char(')');
+    if (build && freeFor(own, info.absoluteFilePath(), itemId)) {
+        claim(own, info.absoluteFilePath(), itemId);
+    }
+    return own;
 }
 
 } // namespace

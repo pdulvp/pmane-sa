@@ -14,6 +14,12 @@ class GroupWindow : public QWidget {
 public:
     explicit GroupWindow(const QString &title, QWidget *parent = nullptr);
 
+    // This group, as against another with the same title. Given when the
+    // group is made and kept from then on -- see Ids.h -- so that what is
+    // remembered about a group survives it being renamed or moved.
+    QString id() const { return m_id; }
+    void setId(const QString &id) { if (!id.isEmpty()) m_id = id; }
+
     QString title() const { return m_title; }
     void setTitle(const QString &title);
 
@@ -62,8 +68,12 @@ private:
     void launch(const ProgramItem &item);
     void showPropertiesDialog(int index); // -1 == new item
     void deleteItem(int index);
+    // A second icon for the same program, with an identity -- and so a wine
+    // prefix -- of its own.
+    void duplicateItem(int index);
     int indexOfListItem(QListWidgetItem *listItem) const;
 
+    QString m_id;
     QString m_title;
     IconListWidget *m_list;
     QVector<ProgramItem> m_items;

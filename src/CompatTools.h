@@ -30,20 +30,34 @@ QString prefixesFolder(const QString &baseDir);
 // tread on each other's bottle.
 QString protonPrefixFor(const QString &exePath, const QString &baseDir = QString());
 
+// What the file that marks a prefix as one of ours says: the program it was
+// built for, and -- once an item has claimed it -- which item. Either may be
+// empty, a prefix built before the markers carried an item having only the
+// program in it.
+struct PrefixOwner {
+    QString program;
+    QString itemId;
+};
+PrefixOwner prefixOwner(const QString &prefixPath);
+
 // The prefix one item actually runs in: the one it names, kept under the same
 // folder beside the per-application ones, or its own per-application prefix
 // when it names none. A named prefix is shared on purpose -- a game and its
 // editor, a program and the runtime installed with it -- so it carries none
 // of the per-program marker the automatic ones do.
+// `itemId` is what tells two icons for the same executable apart: each gets
+// a prefix of its own, so one can be the demo and the other the full game.
+// Empty asks for the prefix the executable alone would have had, which is
+// what a desktop written before items had identities wants.
 QString itemPrefixFor(const QString &exePath, const QString &baseDir,
-                      const QString &prefixName);
+                      const QString &prefixName, const QString &itemId = QString());
 
 // The same path, worked out and not built: itemPrefixFor() creates the folder
 // for a program that has none yet, which is right at launch and wrong when
 // all that is wanted is to know where an item would run -- counting up what
 // is still in use must not conjure the prefixes it is counting.
 QString itemPrefixPath(const QString &exePath, const QString &baseDir,
-                       const QString &prefixName);
+                       const QString &prefixName, const QString &itemId = QString());
 
 // What a named prefix is called on disk: the name as typed, with whatever
 // cannot be a folder name taken out of it. Empty when nothing is left.
