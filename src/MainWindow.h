@@ -16,6 +16,7 @@ class QMenu;
 class DesktopArea;
 class GroupWindow;
 class DesktopColorSchemeWatch;
+class GnomeWallpaper;
 class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
@@ -58,6 +59,8 @@ private slots:
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();
+    // The desktop's own switches, the wallpaper among them.
+    void editSettings();
     // What each kind of file is started with: the programs and the file types
     // they take.
     void editLaunchers();
@@ -112,6 +115,14 @@ private:
     // is not the one window still bright when everything else has dimmed.
     void followDesktopScheme(DesktopScheme scheme);
     DesktopColorSchemeWatch *m_schemeWatch = nullptr;
+
+    // Reads the desktop's wallpaper, or clears it, according to the
+    // setting. Called whenever either end could have changed: the switch,
+    // the scheme -- light and dark can carry different pictures -- and the
+    // desktop's own background being swapped.
+    void refreshDesktopWallpaper();
+    GnomeWallpaper *m_wallpaperWatch = nullptr;
+    bool m_useDesktopWallpaper = false;
 
     QVariantAnimation *m_themeFade = nullptr;
     // The colours actually on screen. currentTheme() says what the desktop

@@ -10,6 +10,9 @@ set(CMAKE_AUTOUIC ON)
 include(GNUInstallDirs)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network DBus)
+# Only so an SVG wallpaper can be shown -- GNOME's own themed backgrounds
+# are SVG. Optional: without it everything works but those draw nothing.
+find_package(Qt6 6.4 QUIET COMPONENTS Svg)
 
 add_executable(progman-linux
     src/main.cpp
@@ -68,6 +71,10 @@ add_executable(progman-linux
     src/DesktopShell.h
     src/DesktopColorScheme.cpp
     src/DesktopColorScheme.h
+    src/GnomeWallpaper.cpp
+    src/GnomeWallpaper.h
+    src/SettingsDialog.cpp
+    src/SettingsDialog.h
     src/SystemVolume.cpp
     src/SystemVolume.h
     src/CalendarEvents.cpp
@@ -89,6 +96,9 @@ add_executable(progman-linux
 )
 
 target_link_libraries(progman-linux PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
+if(Qt6Svg_FOUND)
+    target_link_libraries(progman-linux PRIVATE Qt6::Svg)
+endif()
 
 install(TARGETS progman-linux RUNTIME DESTINATION bin)
 

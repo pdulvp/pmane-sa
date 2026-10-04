@@ -36,6 +36,8 @@ constexpr int kTopPadding = 6;
 constexpr int kIconTextGap = 4;
 // Dead space between cells, so a click that lands between icons hits no item.
 constexpr int kCellGap = 8;
+// Breathing room above the first row, so icons do not sit against the top edge.
+constexpr int kGridTopMargin = 4;
 // How far past the layout box an icon may be drawn at its native size. It
 // covers the spare pixel an XP-styled icon carries for its shadow; anything
 // larger is real artwork and gets scaled down instead.
@@ -245,6 +247,12 @@ IconListWidget::IconListWidget(QWidget *parent) : QListWidget(parent) {
     setFlow(QListWidget::LeftToRight);
     setWordWrap(true);
     setItemDelegate(new ProgramItemDelegate(this));
+    // The strip the margin opens up sits outside the viewport, so it is the
+    // frame that paints it: give the frame the viewport's own colour rather
+    // than the default window grey.
+    setViewportMargins(0, kGridTopMargin, 0, 0);
+    setBackgroundRole(QPalette::Base);
+    setAutoFillBackground(true);
     updateGridSize();
     setSelectionMode(QAbstractItemView::SingleSelection);
     setDragEnabled(true);

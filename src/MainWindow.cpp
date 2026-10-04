@@ -13,6 +13,8 @@
 #include "TitleBar.h"
 #include "WindowEdges.h"
 #include "Theme.h"
+#include "GnomeWallpaper.h"
+#include "SettingsDialog.h"
 #include "ThemeDialog.h"
 
 #include <QAction>
@@ -30,6 +32,7 @@
 #include <QMessageBox>
 
 #include <functional>
+#include <QScreen>
 #include <QSettings>
 #include <QProcess>
 #include <QStandardPaths>
@@ -86,6 +89,13 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     connect(m_schemeWatch, &DesktopColorSchemeWatch::schemeChanged, this,
             &MainWindow::followDesktopScheme);
     followDesktopScheme(desktopColorScheme());
+
+    // The same for the wallpaper, when the setting asks for it: shown now,
+    // and shown again whenever the desktop's background is changed.
+    m_wallpaperWatch = new GnomeWallpaper(this);
+    connect(m_wallpaperWatch, &GnomeWallpaper::changed, this,
+            &MainWindow::refreshDesktopWallpaper);
+    refreshDesktopWallpaper();
 
     connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
         setDarkMode(dark);
@@ -148,6 +158,7 @@ void MainWindow::buildMenus() {
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
     optionsMenu->addAction(tr("&Launchers..."), this, &MainWindow::editLaunchers);
+    optionsMenu->addAction(tr("&Settings..."), this, &MainWindow::editSettings);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
     m_saveOnExitAction->setCheckable(true);
@@ -937,6 +948,7 @@ void MainWindow::applyTheme(const QString &themeName, bool moved) {
     if (!moved || !isVisible() || !from.windowBg.isValid() ||
         from.windowBg == to.windowBg) {
         applyThemeColours(to);
+        refreshDesktopWallpaper();
         return;
     }
 
@@ -957,6 +969,9 @@ void MainWindow::applyTheme(const QString &themeName, bool moved) {
             });
     connect(m_themeFade, &QVariantAnimation::finished, this,
             [this, to] { applyThemeColours(to); });
+    // Once, at the start: the picture does not fade with the colours, and
+    // reading the setting on every frame of the move would be absurd.
+    refreshDesktopWallpaper();
     m_themeFade->start();
 }
 
@@ -1067,6 +1082,36 @@ void MainWindow::chooseColors() {
     }
 }
 
+void MainWindow::refreshDesktopWallpaper() {
+    if (!m_useDesktopWallpaper) {
+        m_mdiArea->setWallpaper(QString());
+        return;
+    }
+    // Asked for at the size of the screen rather than of the window: it is
+    // the screen a themed wallpaper offers its pictures for, and the answer
+    // then does not change every time the window is resized.
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    m_mdiArea->setWallpaper(
+        GnomeWallpaper::currentPath(darkMode(), screen ? screen->size() : QSize()));
+}
+
+void MainWindow::editSettings() {
+    const bool previous = m_useDesktopWallpaper;
+    SettingsDialog dialog(m_useDesktopWallpaper, this);
+    // Shown on the real desktop as it is switched, the way the Colors
+    // dialog previews a scheme: a background is to be looked at, not read
+    // about in a checkbox.
+    connect(&dialog, &SettingsDialog::desktopWallpaperPreviewed, this, [this](bool use) {
+        m_useDesktopWallpaper = use;
+        refreshDesktopWallpaper();
+    });
+
+    m_useDesktopWallpaper = dialog.exec() == QDialog::Accepted ? dialog.useDesktopWallpaper()
+                                                              : previous;
+    refreshDesktopWallpaper();
+    save();
+}
+
 void MainWindow::about() {
     QMessageBox::about(
         this, tr("About Program Manager"),
@@ -1120,7 +1165,9 @@ void MainWindow::load() {
 
     QSettings settings(path, QSettings::IniFormat);
     setDarkMode(settings.value("dark", false).toBool());
+    m_useDesktopWallpaper = settings.value("desktopWallpaper", false).toBool();
     applyTheme(settings.value("theme", builtinThemes().first().name).toString());
+    refreshDesktopWallpaper();
 
     // XP icon styling used to be one switch for the whole Program Manager.
     // A desktop saved back then carries no per-item setting, so the switch is
@@ -1188,6 +1235,7 @@ void MainWindow::save() {
     settings.clear();
     settings.setValue("theme", m_themeName);
     settings.setValue("dark", darkMode());
+    settings.setValue("desktopWallpaper", m_useDesktopWallpaper);
     settings.setValue("windowGeometry", saveGeometry());
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();

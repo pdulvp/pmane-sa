@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMdiArea>
+#include <QPixmap>
 #include <QString>
 
 // The Program Manager desktop. Beyond being the MDI area the group
@@ -12,9 +13,22 @@ public:
 
     void setScreenName(const QString &name);
 
+    // The picture to show behind the group windows, or an empty path for
+    // the scheme's plain desktop colour. Shown the way a desktop shows a
+    // wallpaper: scaled to cover and centred, never stretched out of shape.
+    void setWallpaper(const QString &path);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
+    // What the picture looks like at the size it is being shown at, kept
+    // so a repaint is not a rescale: the desktop is repainted behind every
+    // window that moves across it.
+    const QPixmap &scaledWallpaper() const;
+
     QString m_screenName;
+    QString m_wallpaperPath;
+    QPixmap m_wallpaper;
+    mutable QPixmap m_scaled;
 };
