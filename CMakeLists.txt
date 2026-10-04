@@ -53,6 +53,8 @@ add_executable(progman-linux
     src/CompatTools.h
     src/PrefixUsage.cpp
     src/PrefixUsage.h
+    src/Autostart.cpp
+    src/Autostart.h
     src/Ids.cpp
     src/Ids.h
     src/Kiosk.cpp

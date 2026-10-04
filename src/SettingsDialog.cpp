@@ -27,8 +27,8 @@ constexpr int kSectionGap = 20;
 
 } // namespace
 
-SettingsDialog::SettingsDialog(bool useDesktopWallpaper, const KioskSettings &kiosk,
-                               QWidget *parent)
+SettingsDialog::SettingsDialog(bool useDesktopWallpaper, bool autostart,
+                               const KioskSettings &kiosk, QWidget *parent)
     : QDialog(parent) {
     setWindowTitle(tr("Settings"));
 
@@ -36,6 +36,10 @@ SettingsDialog::SettingsDialog(bool useDesktopWallpaper, const KioskSettings &ki
 
     m_wallpaper = switchRow(tr("Use the desktop's wallpaper as the background"),
                             useDesktopWallpaper);
+    // A machine that boots into this is a machine that starts it without
+    // being asked, which is why this sits with the lock rather than with the
+    // wallpaper.
+    m_autostart = switchRow(tr("Start when you log in"), autostart);
     m_locked = switchRow(tr("Keep the window full screen"), kiosk.locked);
 
     m_calendar = tile({QStringLiteral("office-calendar-symbolic"),
@@ -67,6 +71,7 @@ SettingsDialog::SettingsDialog(bool useDesktopWallpaper, const KioskSettings &ki
     chrome.fields->addSpacing(kSectionGap);
     chrome.fields->addWidget(sectionHeading(tr("Kiosk")));
     chrome.fields->addSpacing(kHeadingGap);
+    chrome.fields->addWidget(m_autostart);
     chrome.fields->addWidget(m_locked);
     chrome.fields->addSpacing(kSectionGap - kHeadingGap);
     chrome.fields->addWidget(sectionHeading(tr("Shown along the top")));
@@ -170,6 +175,8 @@ QToolButton *SettingsDialog::tile(const QStringList &iconNames, const QString &t
 }
 
 bool SettingsDialog::useDesktopWallpaper() const { return m_wallpaper->isChecked(); }
+
+bool SettingsDialog::autostart() const { return m_autostart->isChecked(); }
 
 KioskSettings SettingsDialog::kiosk() const {
     KioskSettings settings;

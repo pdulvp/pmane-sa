@@ -9,6 +9,7 @@
 #include "SteamGamePickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
+#include "Autostart.h"
 #include "Kiosk.h"
 #include "LaunchNotices.h"
 #include "MinimizedGroupIcon.h"
@@ -1460,7 +1461,11 @@ void MainWindow::refreshDesktopWallpaper() {
 
 void MainWindow::editSettings() {
     const bool previous = m_useDesktopWallpaper;
-    SettingsDialog dialog(m_useDesktopWallpaper, kioskSettings(), this);
+    // Read off the session rather than remembered: what says the Program
+    // Manager starts with it is a file there, which something else may have
+    // taken away since.
+    const bool wasAutostart = autostartEnabled();
+    SettingsDialog dialog(m_useDesktopWallpaper, wasAutostart, kioskSettings(), this);
     // Shown on the real desktop as it is switched, the way the Colors
     // dialog previews a scheme: a background is to be looked at, not read
     // about in a checkbox.
@@ -1474,6 +1479,12 @@ void MainWindow::editSettings() {
     refreshDesktopWallpaper();
 
     if (accepted) {
+        if (dialog.autostart() != wasAutostart && !setAutostartEnabled(dialog.autostart())) {
+            m_notices->post(dialog.autostart()
+                                ? tr("Could not set it to start with the session")
+                                : tr("Could not stop it starting with the session"),
+                            tr("Its entry in ~/.config/autostart could not be written."));
+        }
         setKioskSettings(dialog.kiosk());
         // The strip takes what it carries from them, and so does whether
         // the window can be brought back out of full screen.

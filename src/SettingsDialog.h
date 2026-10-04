@@ -17,10 +17,13 @@ class QToolButton;
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
-    SettingsDialog(bool useDesktopWallpaper, const KioskSettings &kiosk,
+    SettingsDialog(bool useDesktopWallpaper, bool autostart, const KioskSettings &kiosk,
                    QWidget *parent = nullptr);
 
     bool useDesktopWallpaper() const;
+    // Whether the session should start the Program Manager. Not a setting of
+    // ours -- see Autostart.h -- so it is applied rather than saved.
+    bool autostart() const;
     KioskSettings kiosk() const;
 
 signals:
@@ -40,6 +43,7 @@ private:
     QToolButton *tile(const QStringList &iconNames, const QString &text, bool on);
 
     QCheckBox *m_wallpaper;
+    QCheckBox *m_autostart;
     QCheckBox *m_locked;
     QToolButton *m_calendar;
     QToolButton *m_volume;
