@@ -58,6 +58,17 @@ private slots:
     void deleteGroup();
     // Renames the active group, or the one whose caption was double clicked.
     void renameGroup(QMdiSubWindow *sub = nullptr);
+    // Sends a whole group to another screen: off this desktop, and into that
+    // screen's file, which is not open to be moved about in.
+    void moveGroupToScreen(QMdiSubWindow *sub, const QString &screen);
+    // What a right click on a group's caption offers: what can be done to
+    // the group, the window's own system menu being Qt's and reachable from
+    // the box at the left of the caption.
+    void showGroupCaptionMenu(QMdiSubWindow *sub, const QPoint &where);
+    // Fills a menu with the screens this group could go to -- every screen
+    // but the one it is on. Filled as the menu opens rather than when it is
+    // built: screens are made, renamed and deleted while the desktop stands.
+    void fillMoveToScreenMenu(QMenu *menu, QMdiSubWindow *sub);
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();

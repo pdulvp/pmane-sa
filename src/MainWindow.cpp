@@ -26,6 +26,7 @@
 #include <QCloseEvent>
 #include <QDir>
 #include <QFile>
+#include <QContextMenuEvent>
 #include <QKeySequence>
 #include <QScrollBar>
 #include <QLineEdit>
@@ -42,6 +43,68 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QVariantAnimation>
+
+namespace {
+
+// One item's fields, read and written in one place: a group moved to another
+// screen is written into that screen's file by the same hand that writes this
+// one, so neither can drift from the other.
+void writeProgramItem(QSettings &settings, const ProgramItem &item) {
+    settings.setValue("name", item.name);
+    // Only a name someone chose has anything to remember: the rest are
+    // worked out again each time the item is read.
+    if (item.customName) settings.setValue("customName", true);
+    settings.setValue("command", item.command);
+    settings.setValue("arguments", item.arguments);
+    // Only written when set, so a plain wine item stays as it was.
+    if (!item.launcher.isEmpty()) settings.setValue("launcher", item.launcher);
+    // Likewise the prefix: only an item sharing a named one has anything to
+    // remember, the rest having one of their own.
+    if (!item.prefix.isEmpty()) settings.setValue("prefix", item.prefix);
+    // Likewise the icon: only an item wearing one somebody picked out of the
+    // several its file holds has anything to remember.
+    if (item.iconIndex >= 0) {
+        settings.setValue("iconIndex", item.iconIndex);
+        if (!item.iconSource.isEmpty()) settings.setValue("iconSource", item.iconSource);
+    }
+    if (item.xpStyleIcon) settings.setValue("xpStyleIcon", true);
+    // Only a program being scaled has anything to remember about it, and the
+    // size is kept whatever the scale, so that turning it off and on again
+    // does not mean measuring again.
+    if (item.windowScalePercent > 100) {
+        settings.setValue("windowScalePercent", item.windowScalePercent);
+        if (item.windowScaleMode == WindowScaleMode::WineDpi) {
+            settings.setValue("windowScaleMode", "wineDpi");
+        }
+    }
+    if (!item.shader.isEmpty()) settings.setValue("shader", item.shader);
+    if (item.nativeSize.isValid() && !item.nativeSize.isEmpty()) {
+        settings.setValue("nativeSize", item.nativeSize);
+    }
+}
+
+ProgramItem readProgramItem(const QSettings &settings) {
+    ProgramItem item;
+    item.name = settings.value("name").toString();
+    item.customName = settings.value("customName", false).toBool();
+    item.command = settings.value("command").toString();
+    item.arguments = settings.value("arguments").toString();
+    item.launcher = settings.value("launcher").toString();
+    item.prefix = settings.value("prefix").toString();
+    item.iconIndex = settings.value("iconIndex", -1).toInt();
+    item.iconSource = settings.value("iconSource").toString();
+    item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
+    item.windowScalePercent = settings.value("windowScalePercent", 100).toInt();
+    item.windowScaleMode = settings.value("windowScaleMode").toString() == "wineDpi"
+                               ? WindowScaleMode::WineDpi
+                               : WindowScaleMode::Gamescope;
+    item.shader = settings.value("shader").toString();
+    const QSize native = settings.value("nativeSize").toSize();
+    if (native.isValid() && !native.isEmpty()) item.nativeSize = native;
+    return item;
+}
+
+} // namespace
 
 MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
@@ -235,6 +298,16 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
             }
         }
     }
+    if (QMenu *systemMenu = sub->systemMenu()) {
+        // Right-clicking a group's caption opens this menu, so this is where
+        // a group is sent to another screen from: the group itself is what
+        // is being moved, and its caption is where it is held.
+        systemMenu->addSeparator();
+        QMenu *move = systemMenu->addMenu(tr("Move to &Screen"));
+        connect(systemMenu, &QMenu::aboutToShow, this,
+                [this, move, sub] { fillMoveToScreenMenu(move, sub); });
+    }
+
     sub->setWindowTitle(group->title());
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
@@ -375,11 +448,116 @@ void MainWindow::renameGroup(QMdiSubWindow *sub) {
     gw->setTitle(title);
 }
 
+void MainWindow::showGroupCaptionMenu(QMdiSubWindow *sub, const QPoint &where) {
+    GroupWindow *gw = sub ? qobject_cast<GroupWindow *>(sub->widget()) : nullptr;
+    if (!gw) return;
+
+    // Made where it is shown rather than kept: the screens it offers are
+    // made, renamed and deleted while the desktop stands.
+    QMenu menu(this);
+    QMenu *move = menu.addMenu(tr("Move to &Screen"));
+    fillMoveToScreenMenu(move, sub);
+    menu.addSeparator();
+    menu.addAction(tr("&Rename Group..."), this, [this, sub] { renameGroup(sub); });
+    menu.addAction(tr("&Delete Group"), this, [this, sub] {
+        m_mdiArea->setActiveSubWindow(sub);
+        deleteGroup();
+    });
+    menu.exec(where);
+}
+
+void MainWindow::fillMoveToScreenMenu(QMenu *menu, QMdiSubWindow *sub) {
+    menu->clear();
+
+    const QString here = m_screens.current();
+    bool any = false;
+    for (const QString &name : m_screens.names()) {
+        if (name == here) continue;
+        any = true;
+        menu->addAction(name, this, [this, sub, name] { moveGroupToScreen(sub, name); });
+    }
+
+    if (any) return;
+    // Something to read rather than an empty menu, which says nothing about
+    // why it is empty.
+    QAction *none = menu->addAction(tr("No other screens"));
+    none->setEnabled(false);
+}
+
+void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
+    GroupWindow *gw = sub ? qobject_cast<GroupWindow *>(sub->widget()) : nullptr;
+    if (!gw || !m_screens.contains(screen) || screen == m_screens.current()) return;
+
+    const QString path = m_screens.filePath(screen);
+    if (path.isEmpty()) return;
+
+    const QString title = gw->title();
+    const QVector<ProgramItem> items = gw->items();
+    const QRect geometry = m_normalGeometry.value(sub, sub->geometry());
+    const bool minimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
+
+    // Written straight into the other screen's file: that screen is not
+    // open, so there is no desktop of its own to put the group on. It goes
+    // on the end of what is already there, where a new group would go.
+    {
+        QSettings settings(path, QSettings::IniFormat);
+        const int existing = settings.beginReadArray("Groups");
+        settings.endArray();
+
+        settings.beginWriteArray("Groups", existing + 1);
+        settings.setArrayIndex(existing);
+        settings.setValue("title", title);
+        settings.setValue("x", geometry.x());
+        settings.setValue("y", geometry.y());
+        settings.setValue("w", geometry.width());
+        settings.setValue("h", geometry.height());
+        settings.setValue("minimized", minimized);
+        settings.beginWriteArray("Items", items.size());
+        for (int i = 0; i < items.size(); ++i) {
+            settings.setArrayIndex(i);
+            writeProgramItem(settings, items[i]);
+        }
+        settings.endArray();
+        settings.endArray();
+        settings.sync();
+        if (settings.status() != QSettings::NoError) {
+            m_notices->post(tr("Could not move '%1'").arg(title),
+                            tr("Nothing could be written to %1's file.").arg(screen));
+            return;
+        }
+    }
+
+    // Off this desktop only once it is safely on the other: a group is its
+    // items, and there is no undo that would reach into another screen's
+    // file to fetch them back.
+    if (m_minimizedIcons.contains(sub)) restoreFromIcon(sub);
+    m_normalGeometry.remove(sub);
+    delete sub;
+    forgetArrangements();
+
+    // This screen's file is written too, so that what is on screen and what
+    // is on disk say the same thing about where the group lives.
+    save();
+
+    m_notices->post(tr("'%1' moved to %2").arg(title, screen),
+                    tr("It is on that screen the next time you open it."));
+}
+
 void MainWindow::updateWindowMenu() {
     m_windowMenu->clear();
 
     // The way back from a maximized window, whose caption carries no buttons
     // while it fills the screen.
+    // The active group's own entry first: what the Window menu is otherwise
+    // about is this window, and this is about the group in front of it.
+    if (QMdiSubWindow *active = m_mdiArea->activeSubWindow()) {
+        if (qobject_cast<GroupWindow *>(active->widget())) {
+            QMenu *move = m_windowMenu->addMenu(tr("Move Group to &Screen"));
+            fillMoveToScreenMenu(move, active);
+            m_windowMenu->addSeparator();
+        }
+    }
+
     QAction *restore = m_windowMenu->addAction(tr("&Restore"), this, &QWidget::showNormal);
     // Locked, there is no way back out of full screen at all -- that being
     // what the lock is -- and a menu entry that undid it would be a hole in
@@ -928,6 +1106,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     }
 
     if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
+        // A right click on a group's caption. Qt opens the system menu only
+        // from the little box at the left of it, so the caption as a whole
+        // is ours to answer -- and what belongs on it is what can be done to
+        // the group rather than to the window.
+        if (event->type() == QEvent::ContextMenu) {
+            auto *menu = static_cast<QContextMenuEvent *>(event);
+            // Above the group's own widget is the caption and the frame; the
+            // group's client area answers for itself.
+            const QWidget *client = sub->widget();
+            if (client && menu->pos().y() < client->geometry().top()) {
+                showGroupCaptionMenu(sub, menu->globalPos());
+                return true;
+            }
+        }
+
         // A drag of this group has begun: which edges it moves, and so which
         // of them are to be lined up with the neighbours, is whatever has
         // changed by the time the geometry comes through.
@@ -1363,24 +1556,7 @@ void MainWindow::load() {
         int itemCount = settings.beginReadArray("Items");
         for (int j = 0; j < itemCount; ++j) {
             settings.setArrayIndex(j);
-            ProgramItem item;
-            item.name = settings.value("name").toString();
-            item.customName = settings.value("customName", false).toBool();
-            item.command = settings.value("command").toString();
-            item.arguments = settings.value("arguments").toString();
-            item.launcher = settings.value("launcher").toString();
-            item.prefix = settings.value("prefix").toString();
-            item.iconIndex = settings.value("iconIndex", -1).toInt();
-            item.iconSource = settings.value("iconSource").toString();
-            item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
-            item.windowScalePercent = settings.value("windowScalePercent", 100).toInt();
-            item.windowScaleMode = settings.value("windowScaleMode").toString() == "wineDpi"
-                                       ? WindowScaleMode::WineDpi
-                                       : WindowScaleMode::Gamescope;
-            item.shader = settings.value("shader").toString();
-            const QSize native = settings.value("nativeSize").toSize();
-            if (native.isValid() && !native.isEmpty()) item.nativeSize = native;
-            group->addProgramItem(item);
+            group->addProgramItem(readProgramItem(settings));
         }
         settings.endArray();
         if (globalXpIcons) group->adoptGlobalXpStyleIcons();
@@ -1428,39 +1604,7 @@ void MainWindow::save() {
         settings.beginWriteArray("Items");
         for (int j = 0; j < items.size(); ++j) {
             settings.setArrayIndex(j);
-            settings.setValue("name", items[j].name);
-            // Only a name someone chose has anything to remember: the rest
-            // are worked out again each time the item is read.
-            if (items[j].customName) settings.setValue("customName", true);
-            settings.setValue("command", items[j].command);
-            settings.setValue("arguments", items[j].arguments);
-            // Only written when set, so a plain wine item stays as it was.
-            if (!items[j].launcher.isEmpty()) settings.setValue("launcher", items[j].launcher);
-            // Likewise the prefix: only an item sharing a named one has
-            // anything to remember, the rest having one of their own.
-            if (!items[j].prefix.isEmpty()) settings.setValue("prefix", items[j].prefix);
-            // Likewise the icon: only an item wearing one somebody picked out
-            // of the several its file holds has anything to remember.
-            if (items[j].iconIndex >= 0) {
-                settings.setValue("iconIndex", items[j].iconIndex);
-                if (!items[j].iconSource.isEmpty()) {
-                    settings.setValue("iconSource", items[j].iconSource);
-                }
-            }
-            if (items[j].xpStyleIcon) settings.setValue("xpStyleIcon", true);
-            // Only a program being scaled has anything to remember about it,
-            // and the size is kept whatever the scale, so that turning it off
-            // and on again does not mean measuring again.
-            if (items[j].windowScalePercent > 100) {
-                settings.setValue("windowScalePercent", items[j].windowScalePercent);
-                if (items[j].windowScaleMode == WindowScaleMode::WineDpi) {
-                    settings.setValue("windowScaleMode", "wineDpi");
-                }
-            }
-            if (!items[j].shader.isEmpty()) settings.setValue("shader", items[j].shader);
-            if (items[j].nativeSize.isValid() && !items[j].nativeSize.isEmpty()) {
-                settings.setValue("nativeSize", items[j].nativeSize);
-            }
+            writeProgramItem(settings, items[j]);
         }
         settings.endArray();
     }
