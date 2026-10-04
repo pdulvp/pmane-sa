@@ -3,6 +3,7 @@
 #include "CalculatorPane.h"
 #include "CalendarPane.h"
 #include "DesktopShell.h"
+#include "Kiosk.h"
 #include "SystemVolume.h"
 #include "Theme.h"
 
@@ -225,6 +226,30 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // it would show through in the ordinary window colour: the strip carries
     // a colour of its own, so it has to fill.
     setAutoFillBackground(true);
+
+    applyKioskSettings();
+}
+
+void TitleBar::applyKioskSettings() {
+    const KioskSettings &kiosk = kioskSettings();
+
+    if (m_searchButton) m_searchButton->setVisible(kiosk.showSearch);
+    if (m_volumeButton) {
+        m_volumeButton->setVisible(kiosk.showVolume);
+        m_volumeSlider->setVisible(kiosk.showVolume);
+    }
+    if (m_calculatorButton) {
+        m_calculatorButton->setVisible(kiosk.showCalculator);
+        // Taken off the screen with the button that opens it: it hangs off
+        // that button, and there would be nothing to put it under.
+        if (!kiosk.showCalculator && m_calculator) m_calculator->hide();
+    }
+    m_clock->setVisible(kiosk.showCalendar);
+    if (!kiosk.showCalendar && m_calendar) m_calendar->hide();
+
+    // The buttons follow it too: whether the window can be brought back out
+    // of full screen is the whole of what the lock means.
+    updateMaximizeButton();
 }
 
 void TitleBar::applyPalette(const QPalette &palette) {
@@ -304,7 +329,22 @@ QRect TitleBar::titleArea() const {
     // After the menus, which are the rightmost thing on the left: the
     // search button sits before them rather than between them and the title.
     const int left = m_menuBar->geometry().right() + kTitleMargin;
-    const int right = m_clock->geometry().left() - kTitleMargin;
+
+    // Up to whatever the right-hand end actually begins with. Asking one
+    // named widget would be asking a widget that may not be on the strip at
+    // all: the kiosk settings take them off it one by one, and a hidden
+    // widget keeps the geometry it last had.
+    int right = width();
+    for (const QWidget *widget : {static_cast<const QWidget *>(m_darkButton),
+                                  static_cast<const QWidget *>(m_volumeButton),
+                                  static_cast<const QWidget *>(m_calculatorButton),
+                                  static_cast<const QWidget *>(m_clock),
+                                  static_cast<const QWidget *>(m_minimizeButton),
+                                  static_cast<const QWidget *>(m_maximizeButton),
+                                  static_cast<const QWidget *>(m_closeButton)}) {
+        if (widget && widget->isVisible()) right = qMin(right, widget->geometry().left());
+    }
+    right -= kTitleMargin;
     return QRect(left, 0, right - left, height());
 }
 
@@ -409,11 +449,13 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
 }
 
 void TitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
-    // A double click maximizes the window, but never brings it back out
-    // again: with the window filling the screen the caption is a long strip
-    // of nothing to click on, and a stray double click there should not
-    // shrink it. The restore button is the way back.
-    if (event->button() == Qt::LeftButton && !windowFillsScreen(window())) {
+    // Locked, a double click maximizes the window but never brings it back
+    // out again: with the window filling the screen the caption is a long
+    // strip of nothing to click on, and a stray double click there should
+    // not shrink it. Unlocked, it does what a caption usually does and
+    // toggles both ways.
+    const bool canShrink = !windowFillsScreen(window()) || !kioskSettings().locked;
+    if (event->button() == Qt::LeftButton && canShrink) {
         toggleMaximized();
         event->accept();
         return;
@@ -444,11 +486,12 @@ void TitleBar::updateMaximizeButton() {
         this));
     m_maximizeButton->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
 
-    // A window filling the screen carries no caption buttons at all: there is
-    // nothing to drag it by up there either, so the strip is left to the
-    // menus, the title and the clock. Window > Restore brings it back, and
-    // File > Exit closes it.
-    const bool showButtons = !windowFillsScreen(window());
+    // Locked full screen, the window carries no caption buttons at all:
+    // there is nothing to drag it by up there either, so the strip is left
+    // to the menus, the title and the clock. Unlocked -- Options > Settings,
+    // Kiosk -- it is a window like any other and keeps its buttons wherever
+    // it is, so there is a way back from full screen.
+    const bool showButtons = !windowFillsScreen(window()) || !kioskSettings().locked;
     m_minimizeButton->setVisible(showButtons);
     m_maximizeButton->setVisible(showButtons);
     m_closeButton->setVisible(showButtons);

@@ -18,6 +18,10 @@ public:
     void setTitle(const QString &title);
 
     const QVector<ProgramItem> &items() const { return m_items; }
+    // Takes one out without asking and without announcing it: what redoing
+    // a deletion does, the asking and the announcing having happened the
+    // first time round.
+    void removeProgramItem(int index);
     void addProgramItem(const ProgramItem &item);
     void insertProgramItem(const ProgramItem &item, int row);
     void newItemDialog() { showPropertiesDialog(-1); }
@@ -40,6 +44,10 @@ signals:
     // should stay selected.
     void itemSelected();
     void modified();
+    // An item the user deleted, and where it was, so that it can be put
+    // back. Not emitted for an item dragged to another group: that one has
+    // not gone anywhere.
+    void itemDeleted(int index, const ProgramItem &item);
 
 private slots:
     void onItemActivated(QListWidgetItem *item);

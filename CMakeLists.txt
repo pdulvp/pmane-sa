@@ -53,6 +53,8 @@ add_executable(progman-linux
     src/CompatTools.h
     src/PrefixUsage.cpp
     src/PrefixUsage.h
+    src/Kiosk.cpp
+    src/Kiosk.h
     src/LaunchNotices.cpp
     src/LaunchNotices.h
     src/NotificationArea.cpp

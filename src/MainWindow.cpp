@@ -9,6 +9,7 @@
 #include "SteamGamePickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
+#include "Kiosk.h"
 #include "LaunchNotices.h"
 #include "MinimizedGroupIcon.h"
 #include "NotificationArea.h"
@@ -26,6 +27,7 @@
 #include <QDir>
 #include <QFile>
 #include <QKeySequence>
+#include <QScrollBar>
 #include <QLineEdit>
 #include <QMdiSubWindow>
 #include <QMenu>
@@ -66,6 +68,17 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     connect(LaunchNotices::instance(), &LaunchNotices::posted, m_notices,
             &NotificationArea::post);
 
+    // Scrolling the desktop moves everything the viewport holds, including
+    // the things that are not on the desktop but over it: the row of
+    // minimized groups along the bottom and the corner the notices sit in
+    // both stay where they are.
+    for (QScrollBar *bar : {m_mdiArea->horizontalScrollBar(), m_mdiArea->verticalScrollBar()}) {
+        connect(bar, &QScrollBar::valueChanged, this, [this] {
+            arrangeMinimizedIcons();
+            m_notices->updatePosition();
+        });
+    }
+
     buildMenus();
     // --profile on the command line wins over whatever was open last.
     if (!startupScreen.isEmpty() && m_screens.contains(startupScreen)) {
@@ -89,7 +102,7 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     m_layoutSettle->setInterval(400);
     connect(m_layoutSettle, &QTimer::timeout, this, &MainWindow::recordLayoutChange);
     m_layoutNow = currentLayout();
-    updateLayoutActions();
+    updateEditActions();
 
     // Whatever the desktop is wearing, worn here too -- now, and again
     // whenever it is switched over.
@@ -179,21 +192,21 @@ void MainWindow::buildMenus() {
     // Undoing a move is what anyone wants after dragging a group somewhere
     // by accident; cascading them all is what nobody wants. Owned by the
     // window so the Window menu can be rebuilt around them.
-    m_undoAction = new QAction(tr("&Undo Arrangement"), this);
+    m_undoAction = new QAction(tr("&Undo"), this);
     m_undoAction->setShortcut(QKeySequence::Undo);
     m_undoAction->setShortcutContext(Qt::ApplicationShortcut);
-    connect(m_undoAction, &QAction::triggered, this, &MainWindow::undoLayoutChange);
+    connect(m_undoAction, &QAction::triggered, this, &MainWindow::undoEdit);
 
-    m_redoAction = new QAction(tr("&Redo Arrangement"), this);
+    m_redoAction = new QAction(tr("&Redo"), this);
     m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(tr("Ctrl+Y"))});
     m_redoAction->setShortcutContext(Qt::ApplicationShortcut);
-    connect(m_redoAction, &QAction::triggered, this, &MainWindow::redoLayoutChange);
+    connect(m_redoAction, &QAction::triggered, this, &MainWindow::redoEdit);
 
     // On the window as well as in the menu, so the shortcuts answer before
     // the menu has ever been opened.
     addAction(m_undoAction);
     addAction(m_redoAction);
-    updateLayoutActions();
+    updateEditActions();
 
     m_windowMenu = bar->addMenu(tr("&Window"));
     connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
@@ -226,6 +239,15 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     sub->resize(320, 240);
     connect(group, &GroupWindow::titleChanged, sub, &QMdiSubWindow::setWindowTitle);
     connect(group, &GroupWindow::itemSelected, this, &MainWindow::clearMinimizedIconSelection);
+    connect(group, &GroupWindow::itemDeleted, this,
+            [this, group](int index, const ProgramItem &item) {
+                Edit edit;
+                edit.kind = Edit::ItemDeleted;
+                edit.group = indexOfGroup(group);
+                edit.itemIndex = index;
+                edit.item = item;
+                record(edit);
+            });
 
     sub->setPalette(captionPalette(sub->palette()));
 
@@ -238,7 +260,7 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
 
     sub->show();
     // The arrangements remembered were of a different set of windows.
-    forgetLayoutHistory();
+    forgetArrangements();
     return sub;
 }
 
@@ -320,12 +342,24 @@ void MainWindow::deleteGroup() {
         this, tr("Delete"), tr("Delete group '%1' and all its items?").arg(gw->title()));
     if (reply != QMessageBox::Yes) return;
 
+    // The whole of it, before it is gone: a group is its items, and they go
+    // with it. Undo is the only thing between one answer to one question
+    // and setting the lot up again by hand.
+    Edit edit;
+    edit.kind = Edit::GroupDeleted;
+    edit.group = indexOfGroup(gw);
+    edit.title = gw->title();
+    edit.items = gw->items();
+    edit.geometry = m_normalGeometry.value(sub, sub->geometry());
+    edit.minimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
+
     m_normalGeometry.remove(sub);
     delete sub; // owns and deletes the GroupWindow child widget too
 
     // a group taken away: the arrangements remembered no longer describe
     // what is on screen.
-    forgetLayoutHistory();
+    forgetArrangements();
+    record(edit);
 }
 
 void MainWindow::renameGroup(QMdiSubWindow *sub) {
@@ -347,7 +381,10 @@ void MainWindow::updateWindowMenu() {
     // The way back from a maximized window, whose caption carries no buttons
     // while it fills the screen.
     QAction *restore = m_windowMenu->addAction(tr("&Restore"), this, &QWidget::showNormal);
-    restore->setEnabled(isMaximized());
+    // Locked, there is no way back out of full screen at all -- that being
+    // what the lock is -- and a menu entry that undid it would be a hole in
+    // the middle of it. Options > Settings is where it is unlocked.
+    restore->setEnabled(isMaximized() && !kioskSettings().locked);
     m_windowMenu->addSeparator();
 
     // Added rather than created: this menu is emptied and built again every
@@ -443,9 +480,9 @@ void MainWindow::clearDesktop() {
     // against a window that is already gone.
     m_normalGeometry.clear();
 
-    // the desktop emptied: the arrangements remembered no longer describe
-    // what is on screen.
-    forgetLayoutHistory();
+    // the desktop emptied: nothing remembered is about the groups that will
+    // take their place.
+    forgetEdits();
 }
 
 void MainWindow::followDesktopScheme(DesktopScheme scheme) {
@@ -727,7 +764,7 @@ void MainWindow::applyLayout(const LayoutSnapshot &layout) {
     m_applyingLayout = false;
 
     m_layoutNow = currentLayout();
-    updateLayoutActions();
+    updateEditActions();
 }
 
 void MainWindow::recordLayoutChange() {
@@ -741,41 +778,139 @@ void MainWindow::recordLayoutChange() {
         return;
     }
 
-    m_layoutUndo.append(m_layoutNow);
-    // Deep enough to get out of real trouble, and still nothing: fifty
-    // arrangements of a dozen groups is a few thousand numbers.
-    constexpr int kMaxRemembered = 50;
-    while (m_layoutUndo.size() > kMaxRemembered) m_layoutUndo.removeFirst();
-    // Moving something by hand is a new branch: what was undone away is gone.
-    m_layoutRedo.clear();
+    Edit edit;
+    edit.kind = Edit::Arrangement;
+    edit.before = m_layoutNow;
+    edit.after = now;
     m_layoutNow = now;
-    updateLayoutActions();
+    record(edit);
 }
 
-void MainWindow::undoLayoutChange() {
-    if (m_layoutUndo.isEmpty()) return;
-    m_layoutRedo.append(currentLayout());
-    const LayoutSnapshot previous = m_layoutUndo.takeLast();
-    applyLayout(previous);
+void MainWindow::record(const Edit &edit) {
+    m_undo.append(edit);
+    // Deep enough to get out of real trouble, and still nothing: fifty
+    // arrangements of a dozen groups is a few thousand numbers, and a
+    // deleted group is the group.
+    constexpr int kMaxRemembered = 50;
+    while (m_undo.size() > kMaxRemembered) m_undo.removeFirst();
+    // Doing something by hand is a new branch: what was undone away is gone.
+    m_redo.clear();
+    updateEditActions();
 }
 
-void MainWindow::redoLayoutChange() {
-    if (m_layoutRedo.isEmpty()) return;
-    m_layoutUndo.append(currentLayout());
-    const LayoutSnapshot next = m_layoutRedo.takeLast();
-    applyLayout(next);
+GroupWindow *MainWindow::groupAt(int index) const {
+    const QList<QMdiSubWindow *> windows = m_mdiArea->subWindowList();
+    if (index < 0 || index >= windows.size()) return nullptr;
+    return qobject_cast<GroupWindow *>(windows[index]->widget());
 }
 
-void MainWindow::updateLayoutActions() {
-    if (m_undoAction) m_undoAction->setEnabled(!m_layoutUndo.isEmpty());
-    if (m_redoAction) m_redoAction->setEnabled(!m_layoutRedo.isEmpty());
+int MainWindow::indexOfGroup(const GroupWindow *group) const {
+    const QList<QMdiSubWindow *> windows = m_mdiArea->subWindowList();
+    for (int i = 0; i < windows.size(); ++i) {
+        if (windows[i]->widget() == group) return i;
+    }
+    return -1;
 }
 
-void MainWindow::forgetLayoutHistory() {
-    m_layoutUndo.clear();
-    m_layoutRedo.clear();
+void MainWindow::undoEdit() {
+    if (m_undo.isEmpty()) return;
+    const Edit edit = m_undo.takeLast();
+    applyEdit(edit, true);
+    m_redo.append(edit);
+    updateEditActions();
+}
+
+void MainWindow::redoEdit() {
+    if (m_redo.isEmpty()) return;
+    const Edit edit = m_redo.takeLast();
+    applyEdit(edit, false);
+    m_undo.append(edit);
+    updateEditActions();
+}
+
+void MainWindow::applyEdit(const Edit &edit, bool undoing) {
+    switch (edit.kind) {
+    case Edit::Arrangement:
+        applyLayout(undoing ? edit.before : edit.after);
+        return;
+
+    case Edit::ItemDeleted: {
+        GroupWindow *group = groupAt(edit.group);
+        // The group it was in has since gone itself. Nothing sensible can be
+        // done with the item, and putting it somewhere else would be a
+        // worse answer than leaving it where it is not.
+        if (!group) return;
+        if (undoing) {
+            group->insertProgramItem(edit.item, edit.itemIndex);
+        } else {
+            group->removeProgramItem(edit.itemIndex);
+        }
+        return;
+    }
+
+    case Edit::GroupDeleted:
+        if (undoing) {
+            auto *group = new GroupWindow(edit.title);
+            for (const ProgramItem &item : edit.items) group->addProgramItem(item);
+            QMdiSubWindow *sub = addGroupWindow(group);
+            sub->setGeometry(edit.geometry);
+            m_normalGeometry[sub] = edit.geometry;
+            if (edit.minimized) minimizeToIcon(sub);
+            // It comes back at the end of the desktop's order rather than in
+            // the place it had, so the arrangements remembered no longer
+            // line up -- addGroupWindow() has said so already.
+        } else if (GroupWindow *group = groupAt(edit.group)) {
+            if (QMdiSubWindow *sub = qobject_cast<QMdiSubWindow *>(group->parentWidget())) {
+                m_normalGeometry.remove(sub);
+                delete sub;
+                forgetArrangements();
+            }
+        }
+        return;
+    }
+}
+
+void MainWindow::updateEditActions() {
+    // Named after what it will actually do: "Undo" alone, in front of a
+    // desktop someone has just emptied a group off, says nothing about
+    // whether the group is coming back.
+    const auto name = [this](const Edit &edit) {
+        switch (edit.kind) {
+        case Edit::Arrangement: return tr("Arrangement");
+        case Edit::ItemDeleted: return tr("Delete Item");
+        case Edit::GroupDeleted: return tr("Delete Group");
+        }
+        return QString();
+    };
+
+    if (m_undoAction) {
+        m_undoAction->setEnabled(!m_undo.isEmpty());
+        m_undoAction->setText(m_undo.isEmpty() ? tr("&Undo")
+                                               : tr("&Undo %1").arg(name(m_undo.last())));
+    }
+    if (m_redoAction) {
+        m_redoAction->setEnabled(!m_redo.isEmpty());
+        m_redoAction->setText(m_redo.isEmpty() ? tr("&Redo")
+                                               : tr("&Redo %1").arg(name(m_redo.last())));
+    }
+}
+
+void MainWindow::forgetArrangements() {
+    // The deletions stay: each carries the whole of what it took away and
+    // where it came from, so none of them depends on the windows standing
+    // where they stood.
+    const auto isArrangement = [](const Edit &edit) { return edit.kind == Edit::Arrangement; };
+    m_undo.removeIf(isArrangement);
+    m_redo.removeIf(isArrangement);
     m_layoutNow = currentLayout();
-    updateLayoutActions();
+    updateEditActions();
+}
+
+void MainWindow::forgetEdits() {
+    m_undo.clear();
+    m_redo.clear();
+    m_layoutNow = currentLayout();
+    updateEditActions();
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
@@ -1119,7 +1254,7 @@ void MainWindow::refreshDesktopWallpaper() {
 
 void MainWindow::editSettings() {
     const bool previous = m_useDesktopWallpaper;
-    SettingsDialog dialog(m_useDesktopWallpaper, this);
+    SettingsDialog dialog(m_useDesktopWallpaper, kioskSettings(), this);
     // Shown on the real desktop as it is switched, the way the Colors
     // dialog previews a scheme: a background is to be looked at, not read
     // about in a checkbox.
@@ -1128,9 +1263,19 @@ void MainWindow::editSettings() {
         refreshDesktopWallpaper();
     });
 
-    m_useDesktopWallpaper = dialog.exec() == QDialog::Accepted ? dialog.useDesktopWallpaper()
-                                                              : previous;
+    const bool accepted = dialog.exec() == QDialog::Accepted;
+    m_useDesktopWallpaper = accepted ? dialog.useDesktopWallpaper() : previous;
     refreshDesktopWallpaper();
+
+    if (accepted) {
+        setKioskSettings(dialog.kiosk());
+        // The strip takes what it carries from them, and so does whether
+        // the window can be brought back out of full screen.
+        m_titleBar->applyKioskSettings();
+        // Window > Restore is the other way out, and it goes with the rest
+        // while the window is locked.
+        updateWindowMenu();
+    }
     save();
 }
 

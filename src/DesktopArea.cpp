@@ -5,7 +5,23 @@
 #include <QPainter>
 #include <QPaintEvent>
 
-DesktopArea::DesktopArea(QWidget *parent) : QMdiArea(parent) {}
+DesktopArea::DesktopArea(QWidget *parent) : QMdiArea(parent) {
+    // A group window dragged off the edge, or left out there when the
+    // Program Manager's own window was made smaller, is still on the
+    // desktop: the bars are how it is reached again. Progman's own client
+    // area scrolled the same way.
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+}
+
+void DesktopArea::scrollContentsBy(int dx, int dy) {
+    QMdiArea::scrollContentsBy(dx, dy);
+    // Scrolling blits what was already drawn and repaints only the strip
+    // that came into view, which would carry the wallpaper and the screen's
+    // name along with it. Both belong to the viewport rather than to what
+    // is arranged on it, so the whole of it is drawn again.
+    viewport()->update();
+}
 
 void DesktopArea::setScreenName(const QString &name) {
     if (m_screenName == name) return;

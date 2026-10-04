@@ -40,6 +40,11 @@ public:
     // each part is told the colour scheme rather than left to inherit it.
     void applyPalette(const QPalette &palette);
 
+    // Puts the kiosk settings on: what the strip carries, and whether the
+    // window can be brought back out of full screen at all. Called when
+    // they are changed in Options > Settings as well as at startup.
+    void applyKioskSettings();
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     // Where the watch on the window is set up, the window being final by

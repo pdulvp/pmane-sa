@@ -8,6 +8,7 @@
 #include "Theme.h"
 
 #include "AlignmentGuides.h"
+#include "ProgramItem.h"
 #include "ScreenManager.h"
 
 class QActionGroup;
@@ -173,20 +174,61 @@ private:
         bool operator!=(const LayoutSnapshot &other) const { return !(*this == other); }
     };
 
+    // Something done to the desktop that can be done again or taken back.
+    // Deleting is the reason this is more than the arrangements it started
+    // as: an item or a whole group went on one answer to one question, and
+    // nothing short of setting it up again brought it back.
+    struct Edit {
+        enum Kind {
+            Arrangement, // the group windows moved or resized
+            ItemDeleted,
+            GroupDeleted,
+        };
+        Kind kind = Arrangement;
+
+        // Arrangement: where everything was, and where it went.
+        LayoutSnapshot before;
+        LayoutSnapshot after;
+
+        // Which group it happened to, by its place on the desktop.
+        int group = -1;
+
+        // ItemDeleted: the item, and where in its group it sat.
+        int itemIndex = -1;
+        ProgramItem item;
+
+        // GroupDeleted: the whole of it, since there is nothing else left.
+        QString title;
+        QVector<ProgramItem> items;
+        QRect geometry;
+        bool minimized = false;
+    };
+
     LayoutSnapshot currentLayout() const;
     void applyLayout(const LayoutSnapshot &layout);
     // Called as a move or a resize settles. One entry per gesture, not one
     // per step of it, which is what the pause is for.
     void recordLayoutChange();
-    void undoLayoutChange();
-    void redoLayoutChange();
-    void updateLayoutActions();
+    void record(const Edit &edit);
+    void undoEdit();
+    void redoEdit();
+    // Does one, either way round: undoing a deletion puts it back, redoing
+    // it takes it away again.
+    void applyEdit(const Edit &edit, bool undoing);
+    void updateEditActions();
+    // The group in this position on the desktop, or null.
+    GroupWindow *groupAt(int index) const;
+    int indexOfGroup(const GroupWindow *group) const;
     // A group added or taken away makes the remembered arrangements
-    // meaningless: they are a list of windows by position.
-    void forgetLayoutHistory();
+    // meaningless -- they are a list of windows by position -- but says
+    // nothing about the deletions remembered beside them, which carry what
+    // they need.
+    void forgetArrangements();
+    // A different desktop entirely: nothing remembered applies to it.
+    void forgetEdits();
 
-    QVector<LayoutSnapshot> m_layoutUndo;
-    QVector<LayoutSnapshot> m_layoutRedo;
+    QVector<Edit> m_undo;
+    QVector<Edit> m_redo;
     LayoutSnapshot m_layoutNow;
     QTimer *m_layoutSettle = nullptr;
     // Set while an arrangement is being put back, so putting it back is not

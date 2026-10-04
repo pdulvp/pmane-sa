@@ -209,6 +209,16 @@ void GroupWindow::deleteItem(int index) {
     auto reply = QMessageBox::question(this, tr("Delete"),
                                         tr("Delete '%1'?").arg(m_items[index].name));
     if (reply != QMessageBox::Yes) return;
+
+    // Kept for whoever is remembering what was done, so that Undo can hand
+    // it back rather than the answer to that question being final.
+    const ProgramItem deleted = m_items[index];
+    removeProgramItem(index);
+    emit itemDeleted(index, deleted);
+}
+
+void GroupWindow::removeProgramItem(int index) {
+    if (index < 0 || index >= m_items.size()) return;
     m_items.remove(index);
     rebuildList();
     emit modified();

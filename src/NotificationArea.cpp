@@ -56,11 +56,12 @@ NotificationArea::NotificationArea(QWidget *parent) : QWidget(parent) {
 }
 
 bool NotificationArea::eventFilter(QObject *watched, QEvent *event) {
-    if (watched == parentWidget() && event->type() == QEvent::Resize) reposition();
+    if (watched == parentWidget() && event->type() == QEvent::Resize) updatePosition();
     return QWidget::eventFilter(watched, event);
 }
 
-void NotificationArea::reposition() {
+// Back into the corner, and no taller than there is room for.
+void NotificationArea::updatePosition() {
     QWidget *host = parentWidget();
     if (!host) return;
 
@@ -94,7 +95,7 @@ void NotificationArea::post(const QString &title, const QString &detail,
     while (m_notices.size() > kMaxNotices) dismiss(m_notices.first());
 
     show();
-    reposition();
+    updatePosition();
 
     // In rather than on: see kFadeMs.
     auto *fade = new QGraphicsOpacityEffect(notice);
@@ -229,5 +230,5 @@ void NotificationArea::dismiss(QWidget *notice) {
         });
         return;
     }
-    reposition();
+    updatePosition();
 }

@@ -20,6 +20,10 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    // The desktop itself does not scroll: what scrolls is the arrangement
+    // of group windows on it, so the wallpaper and the screen's name are
+    // drawn again where they were rather than shifted with the windows.
+    void scrollContentsBy(int dx, int dy) override;
 
 private:
     // What the picture looks like at the size it is being shown at, kept

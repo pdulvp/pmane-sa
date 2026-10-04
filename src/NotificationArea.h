@@ -29,6 +29,11 @@ public:
     // dialogs are redressed when Options > Colors changes.
     void applyTheme();
 
+    // Back into the corner. Needed from outside when the desktop scrolls:
+    // scrolling moves everything the viewport holds, and this corner is not
+    // part of what is being scrolled.
+    void updatePosition();
+
 protected:
     // Repositioned from its parent's resizing as well as its own growing:
     // the corner it sits in moves with both.
@@ -39,8 +44,6 @@ private:
     QWidget *buildNotice(const QString &title, const QString &detail, const QString &logPath);
     void dress(QWidget *notice);
     void dismiss(QWidget *notice);
-    // Back into the corner, and no taller than there is room for.
-    void reposition();
 
     QVBoxLayout *m_stack;
     // Newest last, which is nearest the corner. Only a few are kept: a
