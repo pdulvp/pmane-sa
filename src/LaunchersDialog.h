@@ -4,6 +4,7 @@
 #include <QVector>
 
 #include "Launchers.h"
+#include "ProgramItem.h"
 
 class QFormLayout;
 class QLabel;
@@ -28,6 +29,12 @@ public:
     // The launchers as the dialog leaves them. Only meaningful after OK.
     QVector<Launcher> launchers() const { return m_launchers; }
 
+    // The desktop as it stands, so that counting what still runs in a prefix
+    // counts the items on screen rather than the ones last written to file:
+    // a screen is saved when it is closed, and an item added a moment ago is
+    // not in there yet.
+    void setOpenScreen(const QString &name, const QVector<ProgramItem> &items);
+
 private:
     // Which launcher a row stands for, kept on the row itself.
     enum Role { LauncherRole = Qt::UserRole };
@@ -41,6 +48,27 @@ private:
     // machine's: the last of those cannot be removed.
     int editableRunnerRows() const;
     void browseForRunner();
+
+    // What a row of the prefixes table stands for.
+    enum class PrefixRow {
+        Fixed,    // the prefix every item gets of its own: not ours to touch
+        Named,    // one set up here, for the items pointed at it to share
+        Leftover, // a folder in there that no item leads to any more
+    };
+    void addPrefixRow(PrefixRow kind, const QString &name, const QString &used,
+                      const QString &path, const QString &note);
+    // Rebuilds the table from the names as typed and a fresh look at what is
+    // in the prefixes folder, so that what is used and what is not follows
+    // the items as they are rather than as they were when the dialog opened.
+    void refreshPrefixTable();
+    // The named prefixes as the table has them, blank rows and all: what a
+    // rebuild has to keep.
+    QStringList typedPrefixes() const;
+    // Fills the size column, which means walking every prefix: asked for
+    // rather than done on the way past.
+    void measurePrefixes();
+    // Removes the selected prefix, and offers to take its folder with it.
+    void removePrefix();
     // One row of the Steam library table; `discovered` ones are Steam's own
     // and not this dialog's to change.
     void addLibraryRow(const QString &path, bool discovered);
@@ -53,6 +81,10 @@ private:
     void showPageFor(QTreeWidgetItem *item);
 
     QVector<Launcher> m_launchers;
+
+    // The screen on show and what is on it, for the prefix usage count.
+    QString m_openScreen;
+    QVector<ProgramItem> m_openItems;
 
     QTreeWidget *m_tree;
 
@@ -67,6 +99,12 @@ private:
     QPushButton *m_runnerBrowse;
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
+    // The prefixes an item can be pointed at: the per-application one at the
+    // top, then whatever has been set up by hand.
+    QTableWidget *m_prefixes;
+    QPushButton *m_prefixAdd;
+    QPushButton *m_prefixRemove;
+    QPushButton *m_prefixSizes;
     // The Steam page: where Steam keeps its libraries. The ones Steam
     // lists itself are shown but not edited, like a discovered runner.
     QWidget *m_librariesBox;

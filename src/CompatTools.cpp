@@ -145,14 +145,70 @@ const CompatTool *compatToolById(const QString &id) {
     return nullptr;
 }
 
+namespace {
+
+// Where a launcher's prefixes live: the folder it names, and this
+// application's own data directory until one does.
+QString prefixesBase(const QString &baseDir) {
+    if (!baseDir.isEmpty()) return baseDir;
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+           QStringLiteral("/prefixes");
+}
+
+// Beside the automatic ones, under whichever folder the launcher keeps them
+// in -- the same place as before, only the name is chosen rather than worked
+// out.
+QString namedPrefixPath(const QString &name, const QString &baseDir) {
+    return prefixesBase(baseDir) + QLatin1Char('/') + name;
+}
+
+// The per-program prefix. `build` is what tells the launch path from a
+// question about it: the folder and the marker naming its program are made
+// the first time a program is actually run, and never by something merely
+// asking where it would run.
+QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build);
+
+} // namespace
+
+QString prefixesFolder(const QString &baseDir) { return prefixesBase(baseDir); }
+
+QString prefixFolderName(const QString &prefixName) {
+    QString name = prefixName.trimmed();
+    // A name is typed, not picked: anything a folder cannot hold goes.
+    name.replace(QRegularExpression(QStringLiteral("[/\\\\:]+")), QStringLiteral("-"));
+    while (name.startsWith(QLatin1Char('.'))) name.remove(0, 1);
+    return name.trimmed();
+}
+
+QString itemPrefixPath(const QString &exePath, const QString &baseDir,
+                       const QString &prefixName) {
+    const QString name = prefixFolderName(prefixName);
+    if (name.isEmpty()) return prefixPathFor(exePath, baseDir, false);
+    return namedPrefixPath(name, baseDir);
+}
+
+QString itemPrefixFor(const QString &exePath, const QString &baseDir,
+                      const QString &prefixName) {
+    const QString name = prefixFolderName(prefixName);
+    if (name.isEmpty()) return protonPrefixFor(exePath, baseDir);
+
+    return namedPrefixPath(name, baseDir);
+}
+
 QString protonPrefixFor(const QString &exePath, const QString &baseDir) {
+    return prefixPathFor(exePath, baseDir, true);
+}
+
+namespace {
+
+QString prefixPathFor(const QString &exePath, const QString &baseDir, bool build) {
     const QFileInfo info(exePath);
 
     // Where they all live: the folder the launcher profile names, and the
     // application's own data directory until one does.
     const QString ours = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
                          QStringLiteral("/prefixes");
-    const QString base = baseDir.isEmpty() ? ours : baseDir;
+    const QString base = prefixesBase(baseDir);
 
     // Two programs of the same name must not share one install, so the path
     // they were started from settles it.
@@ -190,9 +246,11 @@ QString protonPrefixFor(const QString &exePath, const QString &baseDir) {
         return path + QStringLiteral(" (") + hash + QLatin1Char(')');
     }
 
-    if (QDir().mkpath(path) && markerFile.open(QIODevice::WriteOnly)) {
+    if (build && QDir().mkpath(path) && markerFile.open(QIODevice::WriteOnly)) {
         markerFile.write(info.absoluteFilePath().toUtf8());
         markerFile.close();
     }
     return path;
 }
+
+} // namespace

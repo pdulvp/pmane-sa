@@ -51,6 +51,12 @@ add_executable(progman-linux
     src/ProgramItem.h
     src/CompatTools.cpp
     src/CompatTools.h
+    src/PrefixUsage.cpp
+    src/PrefixUsage.h
+    src/LaunchNotices.cpp
+    src/LaunchNotices.h
+    src/NotificationArea.cpp
+    src/NotificationArea.h
     src/PeIconExtractor.cpp
     src/PeIconExtractor.h
     src/ItemPropertiesDialog.cpp

@@ -327,8 +327,8 @@ QMimeData *IconListWidget::mimeData(const QList<QListWidgetItem *> &items) const
     stream << int(items.size());
     for (const QListWidgetItem *item : items) {
         stream << item->data(IndexRole).toInt() << item->data(NameRole).toString()
-               << item->data(CommandRole).toString() << item->data(ArgumentsRole).toString()
-               << item->data(WorkingDirRole).toString() << item->data(LauncherRole).toString()
+               << item->data(CustomNameRole).toBool() << item->data(CommandRole).toString() << item->data(ArgumentsRole).toString()
+               << item->data(LauncherRole).toString()
                << item->data(IconIndexRole).toInt() << item->data(IconSourceRole).toString()
                << item->data(XpStyleRole).toBool();
     }
@@ -460,8 +460,8 @@ void IconListWidget::dropEvent(QDropEvent *event) {
         for (int i = 0; i < count; ++i) {
             int sourceIndex;
             ProgramItem item;
-            stream >> sourceIndex >> item.name >> item.command >> item.arguments >>
-                item.workingDir >> item.launcher >> item.iconIndex >> item.iconSource >>
+            stream >> sourceIndex >> item.name >> item.customName >> item.command >>
+                item.arguments >> item.launcher >> item.iconIndex >> item.iconSource >>
                 item.xpStyleIcon;
             if (stream.status() != QDataStream::Ok) break;
             items.append(item);

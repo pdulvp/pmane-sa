@@ -18,9 +18,9 @@ public:
     enum DataRole {
         IndexRole = Qt::UserRole,
         NameRole,
+        CustomNameRole,
         CommandRole,
         ArgumentsRole,
-        WorkingDirRole,
         LauncherRole,
         IconIndexRole,
         IconSourceRole,

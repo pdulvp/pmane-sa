@@ -68,6 +68,11 @@ struct Launcher {
     // scaling its own way and should not be told otherwise.
     bool usesDpiScale = false;
     bool usesCores = false;      // an emulator that has to be told the core
+    // Whether an item run by it can be given arguments of its own. A wine or
+    // a Proton build hands them to the Windows program it starts, which is
+    // the one place they mean anything: an emulator, DOSBox and Steam are
+    // each handed a file or an id and have nowhere to put them.
+    bool usesArguments = false;
     // Steam: the game is Steam's to find, so what this launcher is set up
     // with is where Steam keeps its libraries rather than any program.
     bool usesSteamLibraries = false;
@@ -76,6 +81,13 @@ struct Launcher {
     // holding its C: drive, its registry and its saved games. Empty means
     // this application's own data directory.
     QString prefixesDir;
+
+    // Prefixes set up by hand, by name, kept in that same folder. An item
+    // names one of these when several programs are to share a bottle -- a
+    // game and its editor, or a program and the runtime it was installed
+    // alongside. The per-application prefix every item gets otherwise is not
+    // in here: it is not named, and is nobody's to remove.
+    QStringList prefixes;
 
     // Emulator cores by file type: which core plays a .nes, which a .gba.
     // `coresDir` empty means: work it out from where the program lives.
@@ -121,10 +133,15 @@ struct LauncherChoice {
     QString label;
     // Whether what it names keeps a wine prefix of its own.
     bool usesPrefixes = false;
+    // The prefixes set up by hand on the launcher behind it, for an item to
+    // pick one of instead of its own.
+    QStringList prefixes;
     // Whether an item run by it can be scaled up, and whether wine's own
     // scaling is one of the ways.
     bool usesWindowScale = false;
     bool usesDpiScale = false;
+    // Whether arguments of the item's own reach the program it starts.
+    bool usesArguments = false;
 };
 // Everything that can open this file: every runner of every launcher that
 // claims it, so an item can be pointed at one of them.

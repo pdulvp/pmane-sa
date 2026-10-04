@@ -12,6 +12,7 @@
 #include "IconEffect.h"
 #include "IconPickerDialog.h"
 #include "ItemDetails.h"
+#include "ItemKind.h"
 #include "PeIconExtractor.h"
 #include "Launchers.h"
 #include "DialogChrome.h"
@@ -43,26 +44,18 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_nameEdit = new QLineEdit(this);
     m_commandEdit = new QLineEdit(this);
     m_argsEdit = new QLineEdit(this);
-    m_workDirEdit = new QLineEdit(this);
     m_launcherCombo = new QComboBox(this);
     populateLaunchers(QString());
 
     m_nameEdit->setPlaceholderText(tr("The name under the icon"));
     m_commandEdit->setPlaceholderText(tr("Program, document or folder to open"));
     m_argsEdit->setPlaceholderText(tr("Passed to the program as it starts"));
-    m_workDirEdit->setPlaceholderText(tr("Where the program starts out"));
 
     auto *commandBrowse = new QPushButton(tr("Browse..."), this);
     auto *commandRow = new QHBoxLayout;
     commandRow->setSpacing(8);
     commandRow->addWidget(m_commandEdit);
     commandRow->addWidget(commandBrowse);
-
-    auto *workDirBrowse = new QPushButton(tr("Browse..."), this);
-    auto *workDirRow = new QHBoxLayout;
-    workDirRow->setSpacing(8);
-    workDirRow->addWidget(m_workDirEdit);
-    workDirRow->addWidget(workDirBrowse);
 
     // The icon in a well of its own, so it reads as the thing being chosen
     // rather than as a picture dropped beside a button.
@@ -92,10 +85,21 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->setHorizontalSpacing(kDialogLabelGap);
     m_form->setVerticalSpacing(kDialogRowSpacing);
     m_form->addRow(tr("Description:"), m_nameEdit);
-    m_form->addRow(tr("Command Line:"), commandRow);
+    m_form->addRow(tr("File:"), commandRow);
     m_form->addRow(tr("Program arguments:"), m_argsEdit);
-    m_form->addRow(tr("Working Directory:"), workDirRow);
     m_form->addRow(tr("Run with:"), m_launcherCombo);
+
+    // Which wine prefix it runs in. A program gets one of its own unless it
+    // is pointed at one of the launcher's named prefixes, which is how two
+    // programs come to share a C: drive -- a game and its editor, or a
+    // program and the runtime it was installed with.
+    m_prefixCombo = new QComboBox(this);
+    m_prefixCombo->setToolTip(
+        tr("The wine prefix this item runs in: one of its own, or one of the prefixes set "
+           "up in Options > Launchers for programs meant to share a bottle."));
+    m_form->addRow(tr("Prefix:"), m_prefixCombo);
+    connect(m_prefixCombo, &QComboBox::currentIndexChanged, this,
+            [this](int) { m_prefixName = m_prefixCombo->currentData().toString(); });
 
     // How big to run it. A program written for a 640x480 screen is a postage
     // stamp on a modern one, and nothing in wine will scale it: the program
@@ -160,19 +164,25 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     chrome.fields->addStretch();
     chrome.footer->addWidget(buttons);
 
+    // textEdited, not textChanged: filling the field in from the file picked
+    // is not someone naming the item.
+    connect(m_nameEdit, &QLineEdit::textEdited, this, [this] { m_nameEdited = true; });
+
     connect(m_commandEdit, &QLineEdit::textChanged, this,
             &ItemPropertiesDialog::updateLauncherVisibility);
     // Only the scale row follows the choice. Going through
     // updateLauncherVisibility() here would refill the list, and a list that
     // reacts to its own refilling never stops.
-    connect(m_launcherCombo, &QComboBox::currentIndexChanged, this,
-            [this](int) { updateScaleRow(); });
+    connect(m_launcherCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+        updateArgumentsRow();
+        updatePrefixRow();
+        updateScaleRow();
+    });
     updateLauncherVisibility();
 
     connect(commandBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseCommand);
     connect(changeIconButton, &QPushButton::clicked, this, &ItemPropertiesDialog::changeIcon);
     connect(m_xpStyleCheck, &QCheckBox::toggled, this, &ItemPropertiesDialog::refreshIconPreview);
-    connect(workDirBrowse, &QPushButton::clicked, this, &ItemPropertiesDialog::browseWorkingDir);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
@@ -181,6 +191,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 
 void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_item = item;
+    m_nameEdited = false;
     m_nameEdit->setText(item.name);
     m_commandEdit->setText(item.command);
     m_argsEdit->setText(item.arguments);
@@ -188,7 +199,7 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_scalePercent = qMax(item.windowScalePercent, 100);
     m_scaleMode = item.windowScaleMode;
     m_shaderName = item.shader;
-    m_workDirEdit->setText(item.workingDir);
+    m_prefixName = item.prefix;
     populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
     updateLauncherVisibility();
@@ -261,6 +272,68 @@ void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
     // saving the dialog does not quietly repoint the item.
     m_launcherCombo->addItem(tr("%1 (no longer set up)").arg(selected), selected);
     m_launcherCombo->setCurrentIndex(m_launcherCombo->count() - 1);
+}
+
+void ItemPropertiesDialog::updateArgumentsRow() {
+    const QString command = m_commandEdit->text().trimmed();
+    // A .desktop file is nobody's launcher to claim -- gio follows it -- but
+    // the application it describes does take arguments.
+    bool usesArguments = isDesktopEntry(command);
+    const QString selected = m_launcherCombo->currentData().toString();
+    for (const LauncherChoice &choice : launchersFor(command)) {
+        if (choice.id == selected) {
+            usesArguments = choice.usesArguments;
+            break;
+        }
+    }
+
+    if (usesArguments == m_argumentsRowShown) return;
+    m_argumentsRowShown = usesArguments;
+    // Whatever was typed stays in the field: an item moved from wine to
+    // something else and back has its arguments again.
+    m_form->setRowVisible(m_argsEdit, usesArguments);
+    resize(width(), sizeHint().height());
+}
+
+void ItemPropertiesDialog::updatePrefixRow() {
+    // Only the launchers that keep prefixes have anything to say here, and
+    // the named ones are the launcher's own: the list follows what has just
+    // been picked, the way the scaling list does.
+    bool usesPrefixes = false;
+    QStringList prefixes;
+    const QString selected = m_launcherCombo->currentData().toString();
+    for (const LauncherChoice &choice : launchersFor(m_commandEdit->text().trimmed())) {
+        if (choice.id == selected) {
+            usesPrefixes = choice.usesPrefixes;
+            prefixes = choice.prefixes;
+            break;
+        }
+    }
+
+    {
+        const QSignalBlocker blocker(m_prefixCombo);
+        m_prefixCombo->clear();
+        // Nothing named is not nothing: it is the prefix the program gets of
+        // its own, which is what nearly every item wants.
+        m_prefixCombo->addItem(tr("Default (per application)"), QString());
+        for (const QString &name : prefixes) m_prefixCombo->addItem(name, name);
+
+        const int found = m_prefixCombo->findData(m_prefixName);
+        if (found < 0 && !m_prefixName.isEmpty()) {
+            // Named by the item but since removed from the launcher. Offered
+            // anyway, so that opening the dialog does not quietly move the
+            // program out of the bottle its saved games are in.
+            m_prefixCombo->addItem(tr("%1 (no longer set up)").arg(m_prefixName), m_prefixName);
+            m_prefixCombo->setCurrentIndex(m_prefixCombo->count() - 1);
+        } else {
+            m_prefixCombo->setCurrentIndex(qMax(found, 0));
+        }
+    }
+
+    if (usesPrefixes == m_prefixRowShown) return;
+    m_prefixRowShown = usesPrefixes;
+    m_form->setRowVisible(m_prefixCombo, usesPrefixes);
+    resize(width(), sizeHint().height());
 }
 
 void ItemPropertiesDialog::updateScaleRow() {
@@ -350,7 +423,7 @@ void ItemPropertiesDialog::measureWindow() {
     // and that figure would then be handed to gamescope as its own size.
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     if (launcher->usesPrefixes) {
-        const QString prefix = protonPrefixFor(command, launcher->prefixesDir);
+        const QString prefix = itemPrefixFor(command, launcher->prefixesDir, m_prefixName);
         if (!QDir().mkpath(prefix)) {
             m_nativeSizeLabel->setText(tr("Could not create its prefix"));
             return;
@@ -462,6 +535,8 @@ void ItemPropertiesDialog::updateLauncherVisibility() {
     populateLaunchers(chosen);
 
     // Read after the list was refilled, which may have moved the selection.
+    updateArgumentsRow();
+    updatePrefixRow();
     updateScaleRow();
 
     if (show == m_launcherRowShown) return;
@@ -476,6 +551,8 @@ ProgramItem ItemPropertiesDialog::item() const {
     // from -- is carried over from the item being edited.
     ProgramItem it = m_item;
     it.name = m_nameEdit->text().trimmed();
+    // Emptied out, it goes back to being ours to work out.
+    it.customName = !it.name.isEmpty() && (m_item.customName || m_nameEdited);
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
     it.windowScalePercent = m_scaleCombo->currentData().toInt();
@@ -484,8 +561,8 @@ ProgramItem ItemPropertiesDialog::item() const {
                              : WindowScaleMode::Gamescope;
     it.nativeSize = m_nativeSize;
     it.shader = m_shaderCombo->currentData().toString();
-    it.workingDir = m_workDirEdit->text().trimmed();
     it.launcher = m_launcherCombo->currentData().toString();
+    it.prefix = m_prefixName;
     it.xpStyleIcon = m_xpStyleCheck->isChecked();
     return it;
 }
@@ -501,7 +578,6 @@ void ItemPropertiesDialog::browseCommand() {
     m_commandEdit->setText(path);
     QFileInfo info(path);
     if (m_nameEdit->text().isEmpty()) m_nameEdit->setText(info.completeBaseName());
-    if (m_workDirEdit->text().isEmpty()) m_workDirEdit->setText(info.absolutePath());
 
     // The item now points somewhere else, so it wears that file's icon --
     // unless one was picked by hand, which outlives a change of command.
@@ -511,10 +587,4 @@ void ItemPropertiesDialog::browseCommand() {
         m_item.legacyIcon = false;
     }
     refreshIconPreview();
-}
-
-void ItemPropertiesDialog::browseWorkingDir() {
-    QString dir = QFileDialog::getExistingDirectory(this, tr("Select Working Directory"),
-                                                      m_workDirEdit->text());
-    if (!dir.isEmpty()) m_workDirEdit->setText(dir);
 }

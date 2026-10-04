@@ -10,13 +10,23 @@
 // PROGRAM ITEM in windows 3.1's progman.ini).
 struct ProgramItem {
     QString name;          // Description shown under the icon
+    // Whether that name was typed by a person. Discovery improves on a name
+    // it worked out itself -- a .desktop file is a poor label, and the
+    // application it describes names itself properly -- but it must never
+    // take back a name someone chose, and it cannot tell the two apart by
+    // looking: "XnView" is both what a person may want and what
+    // XnView.desktop is called.
+    bool customName = false;
     QString command;       // Path to the .exe (or other file) to run under wine
     QString arguments;     // Program arguments, added after the launcher's own
-    QString workingDir;    // Working directory when launched
     // Which launcher profile starts this item, as "<launcher>/<profile>" --
     // one of the ones set up in Options > Launchers. Empty means whichever
     // profile its launcher leads with, and so does a profile since deleted.
     QString launcher;
+    // Which of the launcher's named wine prefixes it runs in, by name. Empty
+    // -- the ordinary case -- is the prefix of its own that every program
+    // gets, and so is a name since removed from the launcher.
+    QString prefix;
     // Windows programs: run the program at this percentage of its own size,
     // inside gamescope. 100 leaves it alone. Kept as a whole number of
     // percent so that a scale of 1.1 is exact. The size it draws at has to

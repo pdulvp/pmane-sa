@@ -179,6 +179,11 @@ void load() {
             settings.value(QStringLiteral("extensions"), launcher.extensions).toStringList();
         if (launcher.usesPrefixes) {
             launcher.prefixesDir = settings.value(QStringLiteral("prefixesDir")).toString();
+            // A table emptied on purpose stays empty, as the cores one does.
+            if (settings.contains(QStringLiteral("prefixes"))) {
+                launcher.prefixes =
+                    settings.value(QStringLiteral("prefixes")).toStringList();
+            }
         }
         if (launcher.usesSteamLibraries) {
             launcher.libraryFolders =
@@ -279,6 +284,7 @@ QVector<Launcher> defaultLaunchers() {
     wine.usesPrefixes = true;
     wine.usesWindowScale = true;
     wine.usesDpiScale = true;
+    wine.usesArguments = true;
     wine.arguments = QStringLiteral("{file}");
     result << wine;
 
@@ -291,6 +297,7 @@ QVector<Launcher> defaultLaunchers() {
     proton.extensions = {QStringLiteral("exe")};
     proton.usesPrefixes = true;
     proton.usesWindowScale = true;
+    proton.usesArguments = true;
     // Proton is handed the executable by protonInvocation, which knows the
     // environment it wants as well; this is here for the sake of the rest.
     proton.arguments = QStringLiteral("run {file}");
@@ -371,6 +378,7 @@ void setLaunchers(const QVector<Launcher> &updated) {
         settings.setValue(QStringLiteral("extensions"), launcher.extensions);
         if (launcher.usesPrefixes) {
             settings.setValue(QStringLiteral("prefixesDir"), launcher.prefixesDir);
+            settings.setValue(QStringLiteral("prefixes"), launcher.prefixes);
         }
         if (launcher.usesSteamLibraries) {
             settings.setValue(QStringLiteral("libraryFolders"), launcher.libraryFolders);
@@ -440,7 +448,8 @@ QVector<LauncherChoice> launchersFor(const QString &path) {
                 }
             }
             choices.append({launcherId(*launcher, runner), label, launcher->usesPrefixes,
-                            launcher->usesWindowScale, launcher->usesDpiScale});
+                            launcher->prefixes, launcher->usesWindowScale,
+                            launcher->usesDpiScale, launcher->usesArguments});
         }
     }
     return choices;

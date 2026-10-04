@@ -4,7 +4,9 @@
 
 #include "CompatTools.h"
 #include "DesktopEntry.h"
+#include "ItemDetails.h"
 #include "ItemKind.h"
+#include "LaunchNotices.h"
 #include "Launchers.h"
 
 #include <QCoreApplication>
@@ -58,7 +60,8 @@ void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &lau
                          item.windowScalePercent > 100;
     const int wanted = scaling ? wineLogPixels(item.windowScalePercent) : kDefaultLogPixels;
 
-    setPrefixDpi(runner.command, protonPrefixFor(item.command, launcher.prefixesDir), wanted);
+    setPrefixDpi(runner.command, itemPrefixFor(item.command, launcher.prefixesDir, item.prefix),
+                 wanted);
 }
 
 // Gamescope's scaling, which wraps the program rather than telling it
@@ -110,7 +113,7 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
     // on first run; it refuses to start without one. The path is per
     // executable, so each program gets its own bottle -- under whichever
     // folder the launcher keeps them in.
-    const QString prefix = protonPrefixFor(item.command, launcher.prefixesDir);
+    const QString prefix = itemPrefixFor(item.command, launcher.prefixesDir, item.prefix);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the Proton prefix at '%1'.").arg(prefix);
         return call;
@@ -132,7 +135,7 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
 // the next. Left to wine's own default when the launcher names no folder.
 void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
     if (!launcher.usesPrefixes) return;
-    const QString prefix = protonPrefixFor(item.command, launcher.prefixesDir);
+    const QString prefix = itemPrefixFor(item.command, launcher.prefixesDir, item.prefix);
     if (!QDir().mkpath(prefix)) {
         call.error = tr("Could not create the wine prefix at '%1'.").arg(prefix);
         return;
@@ -146,6 +149,9 @@ void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &
 // Terminal=true program in a terminal, and reaches a D-Bus activated one
 // over the bus -- so it does the work wherever it is installed, which on a
 // desktop with .desktop files is very nearly everywhere.
+// A .desktop file takes the item's own arguments: gio hands them to the
+// application the launcher describes, which is how an item comes to open a
+// particular file or start in a particular mode.
 Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &extraArgs) {
     Invocation call;
 
@@ -196,12 +202,21 @@ QString launchProgramItem(const ProgramItem &item) {
             .arg(item.command);
     }
 
-    const QStringList extraArgs = QProcess::splitCommand(item.arguments);
-
     Invocation call;
     const Launcher *launcher = nullptr;
     const LauncherRunner *runner = nullptr;
     launcherForItem(item.command, item.launcher, &launcher, &runner);
+
+    // The launchers that start a program the arguments can reach: wine and
+    // Proton, which pass them to the Windows program, and a .desktop file,
+    // whose application takes them from gio. The rest are each handed a file
+    // or an id of their own working out, and anything appended to that is
+    // noise -- which is why the properties dialog does not offer them the
+    // field at all.
+    const bool takesArguments =
+        isDesktopEntry(item.command) || (launcher && launcher->usesArguments);
+    const QStringList extraArgs =
+        takesArguments ? QProcess::splitCommand(item.arguments) : QStringList();
 
     if (isDesktopEntry(item.command)) {
         call = desktopEntryInvocation(item, extraArgs);
@@ -240,14 +255,30 @@ QString launchProgramItem(const ProgramItem &item) {
     QProcess process;
     process.setProgram(call.program);
     process.setArguments(call.args);
-    // A .desktop file lives in /usr/share/applications, which is no place to
-    // start an application: it runs from home unless the launcher named a
-    // directory of its own, which completeProgramItem() will have picked up.
-    const QString fallbackDir = isDesktopEntry(item.command)
-                                    ? QDir::homePath()
-                                    : QFileInfo(item.command).absolutePath();
-    process.setWorkingDirectory(item.workingDir.isEmpty() ? fallbackDir : item.workingDir);
+    // Where it starts out, which is the item's file's own folder for nearly
+    // everything and never anyone's to choose.
+    process.setWorkingDirectory(workingDirFor(item));
     if (!call.env.isEmpty()) process.setProcessEnvironment(call.env);
 
-    return process.startDetached() ? QString() : call.failureHint;
+    // Whatever it prints, kept while it runs. Started detached, nothing of
+    // it could be seen before: a program that fell over in its first second
+    // left no trace at all, which is the hardest kind of failure to work
+    // out. The file is the item's own and is written over at each launch, so
+    // it is the last run that can be looked at and nothing accumulates.
+    //
+    // Only where the process actually is the program: gio hands a .desktop
+    // file to the application and exits, and so does the handler Steam's
+    // url goes to, so for those an exit says nothing.
+    const bool ourProcess = launcher && !launcher->usesSteamLibraries;
+    const QString log = ourProcess ? launchLogPath(item.name) : QString();
+    if (!log.isEmpty()) {
+        process.setStandardOutputFile(log, QIODevice::Truncate);
+        process.setStandardErrorFile(log, QIODevice::Append);
+    }
+
+    qint64 pid = 0;
+    if (!process.startDetached(&pid)) return call.failureHint;
+
+    LaunchNotices::instance()->watch(item.name, pid, log);
+    return {};
 }

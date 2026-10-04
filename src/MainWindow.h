@@ -20,6 +20,7 @@ class GnomeWallpaper;
 class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
+class NotificationArea;
 class TitleBar;
 
 // The main "Program Manager" window: an MDI desktop holding Program
@@ -150,6 +151,8 @@ private:
     void clearGroupSelections();
 
     DesktopArea *m_mdiArea;
+    // Where a launch that went wrong is said, in the corner of the desktop.
+    NotificationArea *m_notices;
     QMenu *m_windowMenu;
     // Kept so their icons can be recoloured when the scheme changes: a menu
     // is drawn on the scheme's button colour, and a one-colour icon has to

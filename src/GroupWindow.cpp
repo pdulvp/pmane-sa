@@ -5,6 +5,7 @@
 #include "ItemKind.h"
 #include "ItemLauncher.h"
 #include "ItemPropertiesDialog.h"
+#include "LaunchNotices.h"
 
 #include <QFileInfo>
 #include <QIcon>
@@ -83,9 +84,9 @@ void GroupWindow::rebuildList() {
         auto *listItem = new QListWidgetItem(shown, it.name);
         listItem->setData(IconListWidget::IndexRole, i);
         listItem->setData(IconListWidget::NameRole, it.name);
+        listItem->setData(IconListWidget::CustomNameRole, it.customName);
         listItem->setData(IconListWidget::CommandRole, it.command);
         listItem->setData(IconListWidget::ArgumentsRole, it.arguments);
-        listItem->setData(IconListWidget::WorkingDirRole, it.workingDir);
         listItem->setData(IconListWidget::LauncherRole, it.launcher);
         // So an item dragged to another group keeps the icon somebody picked
         // for it, rather than being worked out again from its command.
@@ -120,8 +121,14 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
 void GroupWindow::launch(const ProgramItem &item) {
     const QString error = launchProgramItem(item);
     if (error.isEmpty()) return;
+    // Into the corner of the desktop rather than into a message box: a click
+    // on an icon asked no question, so nothing here needs answering, and
+    // whoever double-clicked the wrong thing should not have to dismiss a
+    // dialog to try the right one.
     const bool opens = isDocument(item.command) || isFolder(item.command);
-    QMessageBox::warning(this, opens ? tr("Open") : tr("Run"), error);
+    LaunchNotices::instance()->report(
+        opens ? tr("Could not open '%1'").arg(item.name) : tr("Could not run '%1'").arg(item.name),
+        error);
 }
 
 void GroupWindow::onFilesDropped(const QStringList &paths) {

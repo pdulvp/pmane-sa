@@ -9,7 +9,9 @@
 #include "SteamGamePickerDialog.h"
 #include "DesktopArea.h"
 #include "GroupWindow.h"
+#include "LaunchNotices.h"
 #include "MinimizedGroupIcon.h"
+#include "NotificationArea.h"
 #include "TitleBar.h"
 #include "WindowEdges.h"
 #include "Theme.h"
@@ -57,6 +59,12 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     setCentralWidget(m_mdiArea);
     // A sibling of the group windows, so it can be raised in front of them.
     m_guides = new AlignmentGuides(m_mdiArea->viewport());
+
+    // The corner the desktop says things in. On the same layer as the drag
+    // guides, which is the one that draws over the group windows.
+    m_notices = new NotificationArea(m_mdiArea->viewport());
+    connect(LaunchNotices::instance(), &LaunchNotices::posted, m_notices,
+            &NotificationArea::post);
 
     buildMenus();
     // --profile on the command line wins over whatever was open last.
@@ -1054,10 +1062,24 @@ void MainWindow::applyThemeColours(const Theme &theme) {
         icon->setPalette(subPal);
         icon->setDesktopColor(theme.desktop);
     }
+
+    // A notice paints its own surface, as a dialog does, so it is redressed
+    // rather than repalettised.
+    if (m_notices) m_notices->applyTheme();
 }
 
 void MainWindow::editLaunchers() {
     LaunchersDialog dialog(this);
+    // What is on the desktop now, so that the dialog can say which wine
+    // prefixes nothing runs in any more: this screen is only written to its
+    // file when it is saved, and an item added since then is only here.
+    QVector<ProgramItem> open;
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (GroupWindow *gw = qobject_cast<GroupWindow *>(sub->widget())) {
+            open += gw->items();
+        }
+    }
+    dialog.setOpenScreen(currentScreen(), open);
     if (dialog.exec() != QDialog::Accepted) return;
     // Kept with the rest of the settings and used from the next launch on --
     // items already on the desktop are unchanged, what they are started with
@@ -1198,10 +1220,11 @@ void MainWindow::load() {
             settings.setArrayIndex(j);
             ProgramItem item;
             item.name = settings.value("name").toString();
+            item.customName = settings.value("customName", false).toBool();
             item.command = settings.value("command").toString();
             item.arguments = settings.value("arguments").toString();
-            item.workingDir = settings.value("workingDir").toString();
             item.launcher = settings.value("launcher").toString();
+            item.prefix = settings.value("prefix").toString();
             item.iconIndex = settings.value("iconIndex", -1).toInt();
             item.iconSource = settings.value("iconSource").toString();
             item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();
@@ -1261,11 +1284,16 @@ void MainWindow::save() {
         for (int j = 0; j < items.size(); ++j) {
             settings.setArrayIndex(j);
             settings.setValue("name", items[j].name);
+            // Only a name someone chose has anything to remember: the rest
+            // are worked out again each time the item is read.
+            if (items[j].customName) settings.setValue("customName", true);
             settings.setValue("command", items[j].command);
             settings.setValue("arguments", items[j].arguments);
-            settings.setValue("workingDir", items[j].workingDir);
             // Only written when set, so a plain wine item stays as it was.
             if (!items[j].launcher.isEmpty()) settings.setValue("launcher", items[j].launcher);
+            // Likewise the prefix: only an item sharing a named one has
+            // anything to remember, the rest having one of their own.
+            if (!items[j].prefix.isEmpty()) settings.setValue("prefix", items[j].prefix);
             // Likewise the icon: only an item wearing one somebody picked out
             // of the several its file holds has anything to remember.
             if (items[j].iconIndex >= 0) {

@@ -133,9 +133,12 @@ QIcon desktopEntryIcon(const QString &icon, bool *legacy) {
     return QIcon::fromTheme(icon);
 }
 
-// Whether a name is one the user chose, as opposed to the file name we
-// would have defaulted to.
+// Whether a name is one of ours to improve on, as opposed to one the user
+// chose. An item that says the name was typed is taken at its word; for the
+// rest -- a file dropped on a group, an item saved before the flag existed --
+// the file name we would have defaulted to is the tell.
 bool nameIsOurs(const ProgramItem &item) {
+    if (item.customName) return false;
     return item.name.isEmpty() || item.name == QFileInfo(item.command).completeBaseName();
 }
 
@@ -186,14 +189,11 @@ void completeProgramItem(ProgramItem &it) {
         // file name ("org.kde.okular") is no use as a label.
         if (!entry.name.isEmpty() && nameIsOurs(it)) it.name = entry.name;
         if (it.icon.isNull()) it.icon = desktopEntryIcon(entry.icon, &it.legacyIcon);
-        // Where the application asks to be started, if it asks at all.
-        if (it.workingDir.isEmpty()) it.workingDir = entry.path;
     } else if (isFolder(it.command)) {
         // The folder's own name, whatever it looks like: a drop would have
         // handed us "photos" for a folder called "photos.2024".
         if (nameIsOurs(it)) it.name = QDir(it.command).dirName();
         if (it.icon.isNull()) it.icon = QIcon::fromTheme(QStringLiteral("folder"));
-        if (it.workingDir.isEmpty()) it.workingDir = it.command;
     } else if (isDocument(it.command)) {
         // Nothing to extract from a document, and nothing legacy to restyle:
         // it wears the icon the desktop gives its file type.
@@ -230,12 +230,23 @@ void completeProgramItem(ProgramItem &it) {
         if (isFolder(it.command)) fallback = QStyle::SP_DirIcon;
         it.icon = QApplication::style()->standardIcon(fallback);
     }
+}
 
-    // Steam starts the game from wherever it installed it; a working
-    // directory beside the manifest would mean nothing.
-    if (it.workingDir.isEmpty() && !isSteamManifest(it.command)) {
-        it.workingDir = QFileInfo(it.command).absolutePath();
+QString workingDirFor(const ProgramItem &item) {
+    // A .desktop file lives in /usr/share/applications, which is no place to
+    // start an application from: wherever its Path line asks for, and home
+    // when it asks for nothing.
+    if (isDesktopEntry(item.command)) {
+        const QString path = readDesktopEntry(item.command).path;
+        return path.isEmpty() ? QDir::homePath() : path;
     }
+    // Steam starts the game from wherever it installed it; a directory
+    // beside the manifest would mean nothing.
+    if (isSteamManifest(item.command)) return {};
+    if (isFolder(item.command)) return item.command;
+    // Everything else runs from the folder it sits in, which is what a
+    // Windows program expects of its own install.
+    return QFileInfo(item.command).absolutePath();
 }
 
 QString iconSourceFile(const ProgramItem &item) {
