@@ -6,6 +6,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include "MainWindow.h"
+#include "Version.h"
 #include "GroupCaptionStyle.h"
 
 namespace {
@@ -39,6 +40,9 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("progman-linux");
     QApplication::setApplicationName("progman-linux");
+    // The build, which is the only version there is: --version says it, and
+    // so does Help > About.
+    QApplication::setApplicationVersion(buildVersion());
     // What the desktop knows this application by. On Wayland it becomes the
     // window's app_id, and a shell matches that against the .desktop file of
     // the same name to work out which application a window belongs to --
@@ -57,6 +61,7 @@ int main(int argc, char *argv[]) {
     parser.setApplicationDescription(
         QCoreApplication::translate("main", "A Progman-style launcher for Windows programs."));
     parser.addHelpOption();
+    parser.addVersionOption();
     // Screens were called profiles once, and shortcuts written then still
     // pass --profile: both names reach the same option.
     QCommandLineOption screenOption(

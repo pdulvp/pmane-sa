@@ -17,6 +17,7 @@
 #include "TitleBar.h"
 #include "WindowEdges.h"
 #include "Theme.h"
+#include "Version.h"
 #include "GnomeWallpaper.h"
 #include "SettingsDialog.h"
 #include "ThemeDialog.h"
@@ -1499,8 +1500,10 @@ void MainWindow::editSettings() {
 void MainWindow::about() {
     QMessageBox::about(
         this, tr("About Program Manager"),
-        tr("Program Manager for Linux\n\n"
-           "A Progman-style launcher for Windows programs, run through Wine."));
+        tr("Program Manager for Linux\n"
+           "Version %1\n\n"
+           "A Progman-style launcher for Windows programs, run through Wine.")
+            .arg(buildVersion()));
 }
 
 void MainWindow::changeEvent(QEvent *event) {

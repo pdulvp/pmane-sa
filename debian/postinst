@@ -1,0 +1,13 @@
+#!/bin/sh
+# What has to be told that an application arrived. The desktop's own index of
+# .desktop files is the only one: GNOME Shell reads the search provider's
+# file when it starts and keeps no cache of its own.
+set -e
+
+if [ "$1" = "configure" ]; then
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications || true
+    fi
+fi
+
+exit 0
