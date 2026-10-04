@@ -225,7 +225,7 @@ void MainWindow::buildMenus() {
     newMenu->addAction(tr("&Steam Game..."), this, &MainWindow::insertSteamGame);
 
     fileMenu->addAction(tr("&Rename Group..."), this, [this] { renameGroup(); });
-    fileMenu->addAction(tr("&Delete Group"), this, &MainWindow::deleteGroup);
+    fileMenu->addAction(tr("&Delete Group"), this, [this] { deleteGroup(); });
     fileMenu->addSeparator();
     m_suspendAction = fileMenu->addAction(tr("S&uspend Computer"), this, [this] {
         requestSystemState(QStringLiteral("suspend"), tr("Suspend the computer?"), false);
@@ -413,8 +413,23 @@ void MainWindow::insertSteamGame() {
     for (const ProgramItem &item : dialog.chosenItems()) gw->addProgramItem(item);
 }
 
-void MainWindow::deleteGroup() {
-    QMdiSubWindow *sub = m_mdiArea->activeSubWindow();
+void MainWindow::removeGroupWindow(QMdiSubWindow *sub) {
+    if (!sub) return;
+
+    // A minimized group is not on the desktop: it is an icon along the
+    // bottom, and that icon outlives the window unless it is taken with it.
+    if (MinimizedGroupIcon *icon = m_minimizedIcons.take(sub)) {
+        m_minimizedOrder.removeAll(sub);
+        icon->deleteLater();
+    }
+    m_normalGeometry.remove(sub);
+    delete sub; // owns and deletes the GroupWindow child widget too
+    arrangeMinimizedIcons();
+    forgetArrangements();
+}
+
+void MainWindow::deleteGroup(QMdiSubWindow *sub) {
+    if (!sub) sub = m_mdiArea->activeSubWindow();
     GroupWindow *gw = sub ? qobject_cast<GroupWindow *>(sub->widget()) : nullptr;
     if (!gw) return;
 
@@ -433,12 +448,9 @@ void MainWindow::deleteGroup() {
     edit.geometry = m_normalGeometry.value(sub, sub->geometry());
     edit.minimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
 
-    m_normalGeometry.remove(sub);
-    delete sub; // owns and deletes the GroupWindow child widget too
-
     // a group taken away: the arrangements remembered no longer describe
-    // what is on screen.
-    forgetArrangements();
+    // what is on screen, which removeGroupWindow() says for us.
+    removeGroupWindow(sub);
     record(edit);
 }
 
@@ -466,10 +478,7 @@ void MainWindow::showGroupCaptionMenu(QMdiSubWindow *sub, const QPoint &where) {
     fillMoveToScreenMenu(move, sub);
     menu.addSeparator();
     menu.addAction(tr("&Rename Group..."), this, [this, sub] { renameGroup(sub); });
-    menu.addAction(tr("&Delete Group"), this, [this, sub] {
-        m_mdiArea->setActiveSubWindow(sub);
-        deleteGroup();
-    });
+    menu.addAction(tr("&Delete Group"), this, [this, sub] { deleteGroup(sub); });
     menu.exec(where);
 }
 
@@ -539,10 +548,7 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
     // Off this desktop only once it is safely on the other: a group is its
     // items, and there is no undo that would reach into another screen's
     // file to fetch them back.
-    if (m_minimizedIcons.contains(sub)) restoreFromIcon(sub);
-    m_normalGeometry.remove(sub);
-    delete sub;
-    forgetArrangements();
+    removeGroupWindow(sub);
 
     // This screen's file is written too, so that what is on screen and what
     // is on disk say the same thing about where the group lives.
@@ -853,6 +859,10 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     icon->setPreviewIcons(preview);
     connect(icon, &MinimizedGroupIcon::restoreRequested, this,
             [this, sub]() { restoreFromIcon(sub); });
+    // The same menu its caption carries while it is open: a group minimized
+    // is still a group to rename, move to another screen or delete.
+    connect(icon, &MinimizedGroupIcon::contextMenuRequested, this,
+            [this, sub](const QPoint &where) { showGroupCaptionMenu(sub, where); });
     connect(icon, &MinimizedGroupIcon::clicked, this, [this, icon]() {
         // Only the icon just clicked stays selected, here or in any group.
         clearGroupSelections();
@@ -1045,11 +1055,7 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
             // the place it had, so the arrangements remembered no longer
             // line up -- addGroupWindow() has said so already.
         } else if (GroupWindow *group = groupById(edit.group)) {
-            if (QMdiSubWindow *sub = qobject_cast<QMdiSubWindow *>(group->parentWidget())) {
-                m_normalGeometry.remove(sub);
-                delete sub;
-                forgetArrangements();
-            }
+            removeGroupWindow(qobject_cast<QMdiSubWindow *>(group->parentWidget()));
         }
         return;
     }

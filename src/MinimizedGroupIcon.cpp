@@ -1,4 +1,6 @@
 #include "MinimizedGroupIcon.h"
+
+#include <QContextMenuEvent>
 #include "Theme.h"
 
 #include <QFontMetrics>
@@ -112,4 +114,13 @@ void MinimizedGroupIcon::mousePressEvent(QMouseEvent *event) {
 void MinimizedGroupIcon::mouseDoubleClickEvent(QMouseEvent *event) {
     Q_UNUSED(event);
     emit restoreRequested();
+}
+
+void MinimizedGroupIcon::contextMenuEvent(QContextMenuEvent *event) {
+    // Selected as well, so that the menu is plainly about this icon and not
+    // about whichever one was last clicked.
+    setSelected(true);
+    emit clicked();
+    emit contextMenuRequested(event->globalPos());
+    event->accept();
 }

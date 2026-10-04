@@ -55,7 +55,13 @@ private slots:
     // group, picked from a list of them.
     void insertApplication();
     void insertSteamGame();
-    void deleteGroup();
+    // The group named, or the active one. A minimized group is hidden, and
+    // a hidden window cannot be made the active one to be deleted by that.
+    void deleteGroup(QMdiSubWindow *sub = nullptr);
+    // Takes a group off the desktop, whatever state it is in: its window,
+    // the icon it is minimized to, and what was remembered about where it
+    // sat. What is done with its items is the caller's business.
+    void removeGroupWindow(QMdiSubWindow *sub);
     // Renames the active group, or the one whose caption was double clicked.
     void renameGroup(QMdiSubWindow *sub = nullptr);
     // Sends a whole group to another screen: off this desktop, and into that

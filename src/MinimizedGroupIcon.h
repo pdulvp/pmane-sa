@@ -29,11 +29,16 @@ public:
 signals:
     void restoreRequested();
     void clicked();
+    // Right-clicked. A minimized group is still a group, so what can be done
+    // to it is what its caption offers while it is open -- which is the
+    // Program Manager's to put up, not this icon's.
+    void contextMenuRequested(const QPoint &globalPos);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
     QString m_title;
