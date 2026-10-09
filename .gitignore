@@ -1,1 +1,3 @@
 build/
+.githooks/prepare-commit-msg
+.gitconfig
