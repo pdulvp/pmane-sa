@@ -1501,9 +1501,10 @@ void MainWindow::about() {
     QMessageBox::about(
         this, tr("About Program Manager"),
         tr("Program Manager for Linux\n"
-           "Version %1\n\n"
+           "Version %1\n"
+           "Build %2\n\n"
            "A Progman-style launcher for Windows programs, run through Wine.")
-            .arg(buildVersion()));
+            .arg(appVersion(), buildVersion()));
 }
 
 void MainWindow::changeEvent(QEvent *event) {

@@ -69,8 +69,8 @@ QVector<SavedItem> allItems(const OpenScreen &open) {
 // An item is counted under its own launcher's prefixes folder, which need not
 // be the one being looked at: what makes a folder wanted is that something
 // leads to it, wherever that something is set up.
-QHash<QString, int> usageByPath(const OpenScreen &open) {
-    QHash<QString, int> counts;
+QHash<QString, QStringList> usageByPath(const OpenScreen &open) {
+    QHash<QString, QStringList> counts;
     for (const SavedItem &item : allItems(open)) {
         const Launcher *launcher = nullptr;
         const LauncherRunner *runner = nullptr;
@@ -78,7 +78,7 @@ QHash<QString, int> usageByPath(const OpenScreen &open) {
         if (!launcher || !launcher->usesPrefixes) continue;
         const QString path =
             itemPrefixPath(item.command, launcher->prefixesDir, item.prefix, item.id);
-        if (!path.isEmpty()) counts[QDir::cleanPath(path)] += 1;
+        if (!path.isEmpty()) counts[QDir::cleanPath(path)] << item.command;
     }
     return counts;
 }
@@ -103,7 +103,7 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
     // Resolved the way a launch resolves it, so that an empty prefixes folder
     // means this application's own directory here too.
     const QString base = QDir::cleanPath(prefixesFolder(baseDir));
-    const QHash<QString, int> counts = usageByPath(open);
+    const QHash<QString, QStringList> counts = usageByPath(open);
 
     QStringList listed; // the paths the named ones took, so they are not listed twice
     for (const QString &name : names) {
@@ -115,7 +115,7 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.name = folder;
         use.path = path;
         use.kind = PrefixUse::Named;
-        use.items = counts.value(path);
+        use.programs = counts.value(path);
         // A prefix set up but not yet run in has nothing on disk, which is
         // not the same as being unused: an item may well be pointed at it.
         use.onDisk = QFileInfo::exists(path);
@@ -138,12 +138,12 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.name = folder;
         use.path = path;
         use.onDisk = true;
-        use.items = counts.value(path);
+        use.programs = counts.value(path);
         use.program = prefixOwner(path).program;
         // One of ours if it carries a marker, or if it has no marker but
         // holds a prefix and something still runs in it -- which is how the
         // ones built before the markers existed read.
-        use.kind = (!use.program.isEmpty() || use.items > 0 || looksLikePrefix(path))
+        use.kind = (!use.program.isEmpty() || !use.programs.isEmpty() || looksLikePrefix(path))
                        ? PrefixUse::PerApplication
                        : PrefixUse::Foreign;
         result.append(use);
@@ -161,7 +161,7 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.name = QFileInfo(it.key()).fileName();
         use.path = it.key();
         use.kind = PrefixUse::PerApplication;
-        use.items = it.value();
+        use.programs = it.value();
         use.onDisk = false;
         result.append(use);
     }

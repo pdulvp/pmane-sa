@@ -54,14 +54,20 @@ private:
         Fixed,    // the prefix every item gets of its own: not ours to touch
         Named,    // one set up here, for the items pointed at it to share
         Leftover, // a folder in there that no item leads to any more
+        Program,  // a program running in the prefix above it, not a prefix
     };
-    void addPrefixRow(PrefixRow kind, const QString &name, const QString &used,
-                      const QString &path, const QString &note);
+    QTreeWidgetItem *addPrefixRow(PrefixRow kind, const QString &name, const QString &used,
+                                  const QString &path, const QString &note);
+    // The programs that run in a prefix, hung under it: a prefix is worth
+    // keeping or not by what is in it, and the names are the answer. Closed
+    // to begin with -- the list as a whole is what is being read -- and the
+    // ones opened stay open across a rebuild.
+    void addPrefixPrograms(QTreeWidgetItem *parent, const QStringList &programs);
     // Rebuilds the table from the names as typed and a fresh look at what is
     // in the prefixes folder, so that what is used and what is not follows
     // the items as they are rather than as they were when the dialog opened.
     void refreshPrefixTable();
-    // The named prefixes as the table has them, blank rows and all: what a
+    // The named prefixes as the tree has them, blank rows and all: what a
     // rebuild has to keep.
     QStringList typedPrefixes() const;
     // Fills the size column, which means walking every prefix: asked for
@@ -69,6 +75,10 @@ private:
     void measurePrefixes();
     // Removes the selected prefix, and offers to take its folder with it.
     void removePrefix();
+    // What can be done to whatever is picked out in the tree: a program is
+    // not a prefix, and the prefix every item gets of its own is not a list
+    // to add to.
+    void updatePrefixButtons();
     // One row of the Steam library table; `discovered` ones are Steam's own
     // and not this dialog's to change.
     void addLibraryRow(const QString &path, bool discovered);
@@ -101,7 +111,10 @@ private:
     QLineEdit *m_prefixesDir;
     // The prefixes an item can be pointed at: the per-application one at the
     // top, then whatever has been set up by hand.
-    QTableWidget *m_prefixes;
+    QTreeWidget *m_prefixes;
+    // Which prefixes were opened, so that a rebuild -- a rename, a removal,
+    // a look at the sizes -- does not shut them again.
+    QStringList m_openPrefixes;
     QPushButton *m_prefixAdd;
     QPushButton *m_prefixRemove;
     QPushButton *m_prefixSizes;

@@ -27,9 +27,13 @@ struct PrefixUse {
     // markers existed reads.
     QString program;
 
-    // How many saved items run in it, counted across every screen.
-    int items = 0;
+    // The programs that run in it: one entry per item on any screen that
+    // leads here, as the path that item names. Counting them says whether a
+    // prefix is still wanted; listing them says what for.
+    QStringList programs;
     bool onDisk = false;
+
+    int items() const { return int(programs.size()); }
 };
 
 // The desktop as it stands rather than as it was last written: a screen is

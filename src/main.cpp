@@ -40,9 +40,9 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("progman-linux");
     QApplication::setApplicationName("progman-linux");
-    // The build, which is the only version there is: --version says it, and
-    // so does Help > About.
-    QApplication::setApplicationVersion(buildVersion());
+    // The version and the build it was made in: --version says both, and so
+    // does Help > About.
+    QApplication::setApplicationVersion(fullVersion());
     // What the desktop knows this application by. On Wayland it becomes the
     // window's app_id, and a shell matches that against the .desktop file of
     // the same name to work out which application a window belongs to --
