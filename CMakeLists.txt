@@ -1,5 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
-project(progman-linux LANGUAGES CXX)
+
+# The version, in one place and in the plainest form there is: three numbers
+# in a file, which the bump tasks move on and which nothing has to parse out
+# of source code.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROGMAN_VERSION)
+string(STRIP "${PROGMAN_VERSION}" PROGMAN_VERSION)
+
+project(progman-linux VERSION ${PROGMAN_VERSION} LANGUAGES CXX)
+
+# So that bumping it is enough: the next build reconfigures rather than
+# carrying yesterday's number.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,12 +34,12 @@ set(BUILD_VERSION_TXT ${CMAKE_CURRENT_BINARY_DIR}/BuildVersion.txt)
 set(GENERATE_VERSION ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake)
 
 # Once now, so the file exists before anything is compiled.
-execute_process(COMMAND ${CMAKE_COMMAND}
+execute_process(COMMAND ${CMAKE_COMMAND} -DVERSION=${PROGMAN_VERSION}
     -DOUT_CPP=${BUILD_VERSION_CPP} -DOUT_TXT=${BUILD_VERSION_TXT} -P ${GENERATE_VERSION})
 
 add_custom_target(build-version ALL
     BYPRODUCTS ${BUILD_VERSION_CPP} ${BUILD_VERSION_TXT}
-    COMMAND ${CMAKE_COMMAND}
+    COMMAND ${CMAKE_COMMAND} -DVERSION=${PROGMAN_VERSION}
         -DOUT_CPP=${BUILD_VERSION_CPP} -DOUT_TXT=${BUILD_VERSION_TXT} -P ${GENERATE_VERSION}
     COMMENT "Stamping the build with the time it was made")
 set_source_files_properties(${BUILD_VERSION_CPP} PROPERTIES GENERATED TRUE)
@@ -190,9 +202,10 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_BUILD_VERSION_FILE "${BUILD_VERSION_TXT}")
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CPackOptions.cmake")
-# Set so that cpack has something before CPackOptions.cmake replaces it with
-# the version this build actually stamped itself with.
-set(CPACK_PACKAGE_VERSION "0")
+# The version is the project's; the build stamp goes on as the Debian
+# release, so that two packages of 1.1.0 built on different days are told
+# apart and the later one is the newer one.
+set(CPACK_PACKAGE_VERSION "${PROGMAN_VERSION}")
 include(CPack)
 
 # One step from a working tree to a package.

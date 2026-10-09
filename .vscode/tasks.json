@@ -1,0 +1,77 @@
+{
+    // What there is to do with this project from the editor. Each one is the
+    // same command that would be typed at a terminal, so nothing here knows
+    // anything the build does not.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Writes the build files. Rarely needed by hand: a build runs it
+            // again on its own whenever CMakeLists.txt or VERSION changes.
+            "label": "Configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["-S", "${workspaceFolder}", "-B", "${workspaceFolder}/build"],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "${workspaceFolder}/build", "--parallel"],
+            "dependsOn": ["Configure"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"],
+            "detail": "Compiles, and stamps the binary with the moment it was made"
+        },
+        {
+            "label": "Package (.deb)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "${workspaceFolder}/build", "--target", "deb"],
+            "dependsOn": ["Configure"],
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "detail": "Builds, then packs build/progman-linux_<version>-<build>_<arch>.deb"
+        },
+        {
+            // The three parts of the version, each on its own task. Raising
+            // one sets the parts under it back to zero; the next build picks
+            // the new number up by itself.
+            "label": "Bump major",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DFILE=${workspaceFolder}/VERSION",
+                "-DPART=major",
+                "-P", "${workspaceFolder}/cmake/BumpVersion.cmake"
+            ],
+            "problemMatcher": [],
+            "detail": "1.1.0 -> 2.0.0"
+        },
+        {
+            "label": "Bump minor",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DFILE=${workspaceFolder}/VERSION",
+                "-DPART=minor",
+                "-P", "${workspaceFolder}/cmake/BumpVersion.cmake"
+            ],
+            "problemMatcher": [],
+            "detail": "1.1.0 -> 1.2.0"
+        },
+        {
+            "label": "Bump micro",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DFILE=${workspaceFolder}/VERSION",
+                "-DPART=patch",
+                "-P", "${workspaceFolder}/cmake/BumpVersion.cmake"
+            ],
+            "problemMatcher": [],
+            "detail": "1.1.0 -> 1.1.1"
+        }
+    ]
+}

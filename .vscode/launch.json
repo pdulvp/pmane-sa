@@ -1,0 +1,82 @@
+{
+    // Everything there is to do with this project, in the Run and Debug list
+    // so that it is one dropdown and F5 rather than two menus.
+    //
+    // The first two start the program under gdb. The rest are commands run
+    // in a terminal: "node-terminal" is the way VS Code's own launcher runs
+    // one, and nothing about them is JavaScript -- it is the shell.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Program Manager",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/progman-linux",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Print containers and strings as what they hold",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build"
+        },
+        {
+            // A screen of its own, so that trying something out is not done
+            // on the desktop being used.
+            "name": "Program Manager (on a named screen)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/progman-linux",
+            "args": ["--screen", "Test"],
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "setupCommands": [
+                { "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ],
+            "preLaunchTask": "Build"
+        },
+        {
+            "name": "Build",
+            "type": "node-terminal",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "command": "cmake -S . -B build && cmake --build build --parallel"
+        },
+        {
+            "name": "Package (.deb)",
+            "type": "node-terminal",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "command": "cmake -S . -B build && cmake --build build --target deb && ls -la build/*.deb"
+        },
+        {
+            // Raising one part sets the ones under it back to zero. The next
+            // build picks the new number up by itself.
+            "name": "Bump major",
+            "type": "node-terminal",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "command": "cmake -DFILE=VERSION -DPART=major -P cmake/BumpVersion.cmake"
+        },
+        {
+            "name": "Bump minor",
+            "type": "node-terminal",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "command": "cmake -DFILE=VERSION -DPART=minor -P cmake/BumpVersion.cmake"
+        },
+        {
+            "name": "Bump micro",
+            "type": "node-terminal",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "command": "cmake -DFILE=VERSION -DPART=patch -P cmake/BumpVersion.cmake"
+        }
+    ]
+}
