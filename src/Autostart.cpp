@@ -13,7 +13,7 @@ namespace {
 // The file's name is ours to choose, but matching the application's own
 // .desktop file keeps a session from listing the Program Manager twice under
 // two names.
-const char *kFileName = "progman-linux.desktop";
+const char *kFileName = "sansame-pmane.desktop";
 
 QString autostartDir() {
     // ~/.config/autostart, wherever this session keeps its config.

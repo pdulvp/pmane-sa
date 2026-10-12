@@ -4,6 +4,8 @@ Another Sans-Ame Program Manager for Linux with program groups full of icons, an
 double click runs what is behind one — a Windows game through Wine or Proton, a
 DOS game through DOSBox, a Steam game, a RetroArch stuff or an ordinary Linux application.
 
+![What is it](docs/images/main.png)
+
 ---
 
 ## What it runs
@@ -32,6 +34,8 @@ guessing: a prefix no item on any screen leads to is the only kind called unused
 - It displays Win16, Win32 or Win64 icons for old programs. And it is possible to change icons by looking at exe or dll files like we used to.
 
 - Separated screens, one for Kids for instance, that is started at launch
+
+- Quick version made mostly by IA, without any soul as I wanted to quickly launch my old `GotoDames.exe` with a cute icon.
 
 ## An item
 
@@ -108,14 +112,14 @@ SVG icons and wallpapers draw nothing).
 ```sh
 cmake -B build
 cmake --build build -j$(nproc)
-./build/progman-linux
+./build/sansame-pmane
 ```
 
 Install, or build a Debian package:
 
 ```sh
 sudo cmake --install build
-cmake --build build --target deb      # build/progman-linux_<version>_amd64.deb
+cmake --build build --target deb      # build/sansame-pmane_<version>_amd64.deb
 ```
 
 The package installs the program, its `.desktop` file and the search provider's
@@ -126,13 +130,13 @@ whose launcher is not installed simply says so.
 ## Running
 
 ```
-progman-linux [--screen <name>] [--configPath <dir>]
+sansame-pmane [--screen <name>] [--configPath <dir>]
 ```
 
 One instance per user: starting a second one raises the first, switching screen
 on the way if one was asked for.
 
-Settings live in `~/.config/progman-linux/`: `screens.ini` indexes them and
+Settings live in `~/.config/sansame-pmane/`: `screens.ini` indexes them and
 each screen is an `.ini` of its own.
 
 `--configPath` keeps that lot in a directory of your own instead, and opens as
@@ -141,7 +145,7 @@ running. [docs/](docs/) is one such directory — the desktop the pictures above
 are taken of, which is how they are retaken:
 
 ```sh
-./build/progman-linux --configPath docs
+./build/sansame-pmane --configPath docs
 ```
 
 Screens there behave as they always do, so **Screens ▸ New** writes another
