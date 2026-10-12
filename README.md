@@ -153,3 +153,9 @@ are taken of, which is how they are retaken:
 Screens there behave as they always do, so **Screens ▸ New** writes another
 `.ini` beside [docs/documentation.ini](docs/documentation.ini), ready to be
 committed.
+
+---
+
+## License
+
+GNU General Public License v3.0 or later — see [LICENSE.md](LICENSE.md).

@@ -182,6 +182,12 @@ install(FILES data/pmane-sansame.desktop
 install(FILES data/pmane-sansame-search-provider.ini
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/gnome-shell/search-providers)
 
+# Every package has to say what it may be done with, in the one place a
+# Debian system looks: /usr/share/doc/<package>/copyright. The same file an
+# install from the source tree lays down, so the two cannot drift apart.
+install(FILES debian/copyright
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/${PROJECT_NAME})
+
 # The Debian package: `cmake --build build --target deb`.
 #
 # What goes in it is what install() puts there -- the program, its .desktop
@@ -198,6 +204,8 @@ set(CPACK_PACKAGE_DESCRIPTION
 program groups, a wine prefix per program, scaling for programs written for
 smaller screens, and a kiosk mode for a machine that boots straight into it.")
 set(CPACK_PACKAGE_CONTACT "pdulvp <pdulvp@laposte.net>")
+# What a graphical installer shows and what cpack checks is there.
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_SECTION "x11")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
