@@ -1,12 +1,24 @@
-# Sans-Ame-PMane
+# PMane-Sans-Ame
 
-Another Sans-Ame Program Manager for Linux with program groups full of icons, and a
+Font Sans Serif ? No, Program Manager Sans Âme here.
+
+It's another Program Manager Sans-Ame for Linux with program groups full of icons, and a
 double click runs what is behind one — a Windows game through Wine or Proton, a
 DOS game through DOSBox, a Steam game, a RetroArch stuff or an ordinary Linux application.
 
 ![What is it](docs/images/main.png)
 
 ---
+
+## The main points of it
+
+- Drag and Drop to add new programs
+
+- It displays Win16, Win32 or Win64 icons for old programs. And it is possible to change icons by looking at exe or dll files like we used to.
+
+- Separated screens, one for Kids for instance, that is started at launch
+
+- Quick version made mostly by IA, without any soul as I wanted to quickly launch my old `GotoDames.exe` with a cute icon.
 
 ## What it runs
 
@@ -26,16 +38,6 @@ what each one is given to work with, is the **Options ▸ Launchers** dialog:
 
 Prefixes are listed with what still uses them, so one can be thrown away without
 guessing: a prefix no item on any screen leads to is the only kind called unused.
-
-## The main points of it
-
-- Drag and Drop to add new programs
-
-- It displays Win16, Win32 or Win64 icons for old programs. And it is possible to change icons by looking at exe or dll files like we used to.
-
-- Separated screens, one for Kids for instance, that is started at launch
-
-- Quick version made mostly by IA, without any soul as I wanted to quickly launch my old `GotoDames.exe` with a cute icon.
 
 ## An item
 
