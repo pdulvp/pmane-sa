@@ -21,6 +21,8 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace {
 const char *const kProgramItemMimeType = "application/x-progman-item";
@@ -45,6 +47,28 @@ constexpr int kGridTopMargin = 4;
 // larger is real artwork and gets scaled down instead.
 constexpr int kNativeDrawSlack = 4;
 
+// The width one unbroken line of the name needs, measured by the same text
+// layout that will wrap it. QFontMetrics is no use here: it rounds the
+// fractional advance of a string down, so a cell built to the number it
+// reports comes out a fraction of a pixel short of the name it was built
+// for -- and a label a fraction short of fitting wraps, putting its last
+// letter alone on a second line.
+int unwrappedLabelWidth(const QString &text, const QFont &font) {
+    if (text.isEmpty()) return 0;
+
+    QTextLayout layout(text, font);
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    // Wide enough that nothing wraps, so the line reports what the name
+    // actually wants rather than what it was squeezed into.
+    if (line.isValid()) line.setLineWidth(std::numeric_limits<int>::max());
+    layout.endLayout();
+    if (!line.isValid()) return 0;
+    // Up, never down: the layout wraps on wanting more room than it has, and
+    // a rounded-down pixel is exactly the room it would be missing.
+    return int(std::ceil(line.naturalTextWidth()));
+}
+
 // Breaks a name into the lines it is drawn on: wrapped at `width`, at most
 // `maxLines` of them, the last cut short with an ellipsis when the name runs
 // on past it. The grid measures labels with this and the delegate draws them
@@ -56,8 +80,11 @@ QStringList labelLines(const QString &text, const QFont &font, int width, int ma
     QStringList lines;
 
     QTextOption option;
-    // A single word longer than the cell has to break somewhere.
-    option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    // Between words and never inside one. A single word wider than the cell
+    // is left to overflow its line and shortened below instead of being
+    // broken: the break would fall at the end of the word and leave its last
+    // letter alone on a line, which reads as a mistake rather than as a name.
+    option.setWrapMode(QTextOption::WordWrap);
 
     QTextLayout layout(text, font);
     layout.setTextOption(option);
@@ -74,7 +101,11 @@ QStringList labelLines(const QString &text, const QFont &font, int width, int ma
                                             Qt::ElideRight, width));
             break;
         }
-        lines.append(text.mid(line.textStart(), line.textLength()).trimmed());
+        // Shortened as well, for the one case the layout cannot help with:
+        // the word it was told not to break is wider than the line it is on.
+        // A line that fits comes back from this untouched.
+        lines.append(metrics.elidedText(text.mid(line.textStart(), line.textLength()).trimmed(),
+                                        Qt::ElideRight, width));
     }
     layout.endLayout();
     return lines;
@@ -287,7 +318,7 @@ void IconListWidget::updateGridSize() {
 
     int widestText = 0;
     for (int i = 0; i < count(); ++i) {
-        widestText = std::max(widestText, metrics.horizontalAdvance(item(i)->text()));
+        widestText = std::max(widestText, unwrappedLabelWidth(item(i)->text(), font()));
     }
 
     int cellWidth = std::max(widestText + kTextPadding, iconSize().width() + kIconPadding);
