@@ -44,10 +44,11 @@ add_custom_target(build-version ALL
     COMMENT "Stamping the build with the time it was made")
 set_source_files_properties(${BUILD_VERSION_CPP} PROPERTIES GENERATED TRUE)
 
-add_executable(sansame-pmane
-    ${BUILD_VERSION_CPP}
+# Every source but main.cpp, which is the only thing the program has that
+# the screenshot tool below does not: the tool brings its own main so that
+# it can drive the windows rather than hand them to the user.
+set(PMANE_SOURCES
     src/Version.h
-    src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
     src/DesktopArea.cpp
@@ -139,12 +140,33 @@ add_executable(sansame-pmane
     src/ThemeDialog.h
 )
 
+add_executable(sansame-pmane
+    ${BUILD_VERSION_CPP}
+    src/main.cpp
+    ${PMANE_SOURCES}
+)
+
 # So the stamp is written before the sources that carry it are compiled.
 add_dependencies(sansame-pmane build-version)
 
 target_link_libraries(sansame-pmane PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
+
+# The pictures in README.md, taken off the desktop in docs/ -- see
+# tools/Screenshots.cpp. Not part of a normal build: it is wanted when the
+# documentation is being refreshed and never otherwise.
+#
+#   cmake --build build --target screenshots
+#   QT_QPA_PLATFORM=offscreen ./build/screenshots docs
+add_executable(screenshots EXCLUDE_FROM_ALL
+    ${BUILD_VERSION_CPP}
+    tools/Screenshots.cpp
+    ${PMANE_SOURCES}
+)
+target_include_directories(screenshots PRIVATE src)
+target_link_libraries(screenshots PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
 if(Qt6Svg_FOUND)
     target_link_libraries(sansame-pmane PRIVATE Qt6::Svg)
+    target_link_libraries(screenshots PRIVATE Qt6::Svg)
 endif()
 
 install(TARGETS sansame-pmane RUNTIME DESTINATION bin)
