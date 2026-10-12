@@ -1,5 +1,7 @@
 #include "Theme.h"
 
+#include <QHash>
+#include <cmath>
 #include <QPainter>
 #include <QPixmap>
 
@@ -63,19 +65,39 @@ QIcon tintedIcon(const QStringList &names, const QColor &ink) {
 
 const QVector<Theme> &builtinThemes() {
     static const QVector<Theme> themes = {
-        //                     desktop    titleAct   titleActTx titleInact titleInactTx windowBg   windowTx   btnFace    btnText    highlight  highlightTx
-        make("Windows Default", "#008080", "#000080", "#ffffff", "#808080", "#c0c0c0", "#ffffff", "#000000", "#c0c0c0", "#000000", "#000080", "#ffffff"),
-        make("Pastel",          "#d8bfd8", "#9370db", "#ffffff", "#b8a8c8", "#efe8f4", "#fffafd", "#2c2130", "#e6e0ee", "#2c2130", "#9370db", "#ffffff"),
-        make("Rose",            "#ffe4e1", "#c08081", "#ffffff", "#d8b8b6", "#fff0ef", "#fffaf9", "#3a2526", "#f3dedd", "#3a2526", "#c08081", "#ffffff"),
-        make("Mint",            "#c8e6c9", "#4c9a83", "#ffffff", "#a9c9b4", "#eaf5ee", "#fbfffb", "#1f3329", "#dcecdf", "#1f3329", "#4c9a83", "#ffffff"),
-        make("Sky",             "#b3d9f2", "#4a7fa5", "#ffffff", "#a8c2d4", "#e8f2f9", "#fbfdff", "#16303f", "#d8e8f4", "#16303f", "#4a7fa5", "#ffffff"),
-        make("Wheat",           "#e8d9b5", "#8b6f3f", "#ffffff", "#c9b894", "#f5eedd", "#fffdf6", "#3a2f18", "#ece1c9", "#3a2f18", "#8b6f3f", "#ffffff"),
-        make("Arizona",         "#c19a6b", "#804000", "#ffffff", "#a89078", "#e8dccc", "#fffaf0", "#2b1a08", "#d9c4a8", "#2b1a08", "#804000", "#ffffff"),
-        make("The Blues",       "#4682b4", "#000080", "#ffffff", "#7590a8", "#d8e4ee", "#f0f4ff", "#000030", "#b0c4de", "#000030", "#000080", "#ffffff"),
-        make("Emerald City",    "#2e8b57", "#004030", "#ffffff", "#6f9c85", "#dceee5", "#f4fff8", "#00241a", "#b8cfc2", "#00241a", "#004030", "#ffffff"),
-        make("Ocean",           "#5f9ea0", "#2f4f4f", "#ffffff", "#8fb0b1", "#e0ecec", "#f6ffff", "#102626", "#c0d4d4", "#102626", "#2f4f4f", "#ffffff"),
-        make("Monochrome",      "#808080", "#000000", "#ffffff", "#a0a0a0", "#e0e0e0", "#ffffff", "#000000", "#c0c0c0", "#000000", "#000000", "#ffffff"),
-        make("Hotdog Stand",    "#ff0000", "#000000", "#ffff00", "#808080", "#ffff00", "#ffff00", "#000000", "#ffff00", "#000000", "#000000", "#ffff00"),
+        //                desktop    titleAct   titleActTx titleInact titleInactTx windowBg   windowTx   btnFace    btnText    highlight  highlightTx
+        // Steel blue over pale grey-blue: the one it opens on, so the quiet
+        // one. Everything else in the list is a departure from this.
+        make("Harbour",   "#3f6076", "#1d3a52", "#ffffff", "#7d94a6", "#38434b", "#fbfdfe", "#14212b", "#ccd8e0", "#14212b", "#1d3a52", "#ffffff"),
+        // Paper and sepia ink. The warm end of neutral, for anyone who finds
+        // a coloured desktop tiring.
+        make("Vellum",    "#c9b596", "#6b4f2f", "#fdf6e8", "#b4a287", "#584f42", "#fffdf7", "#2e2416", "#e8dcc4", "#2e2416", "#6b4f2f", "#fdf6e8"),
+        // Leaf green with a plum caption: the two sides of a fruit tree.
+        make("Orchard",   "#8fae7d", "#5c3a5e", "#ffffff", "#a9b9a0", "#586053", "#fbfff8", "#1f2a1a", "#d8e4cf", "#1f2a1a", "#5c3a5e", "#ffffff"),
+        // Saturated blue, the loudest the list gets without leaving one hue.
+        make("Cobalt",    "#33539e", "#15255c", "#ffffff", "#7f8fb8", "#394053", "#fafbff", "#111a33", "#c8d2ea", "#111a33", "#33539e", "#ffffff"),
+        // Stalk and leaf: a pink desktop under a green caption, which ought
+        // to clash and somehow does not.
+        make("Rhubarb",   "#c76b7e", "#3f6b43", "#ffffff", "#d3a3ad", "#6c5358", "#fffafb", "#2b1a1e", "#f1d7dd", "#2b1a1e", "#3f6b43", "#ffffff"),
+        // Road grey and lane-marking yellow. The caption carries the yellow
+        // as text, and the yellow is also what selects.
+        make("Tarmac",    "#4a4e52", "#26292c", "#f2c230", "#7a7f84", "#303233", "#f7f8f8", "#1a1c1e", "#cfd3d6", "#1a1c1e", "#f2c230", "#1a1c1e"),
+        // Burnt orange and dark earth: the warm scheme with colour actually
+        // in it, where Vellum is the warm scheme without.
+        make("Ochre",     "#c08a4a", "#6d3f16", "#fff4e4", "#cbab85", "#685744", "#fffcf6", "#32200d", "#ecd9bd", "#32200d", "#6d3f16", "#fff4e4"),
+        // Lavender, a long way from grey without being bright about it.
+        make("Lupin",     "#8e86b8", "#45397a", "#ffffff", "#a9a3c6", "#545263", "#fdfcff", "#211c35", "#dcd8ee", "#211c35", "#45397a", "#ffffff"),
+        // Deep red with gold lettering, after lacquerware. The only scheme
+        // whose caption text is not simply black or white.
+        make("Lacquer",   "#8c2f2a", "#4a1310", "#f0c75e", "#b0736f", "#482f2e", "#fffaf9", "#2b1110", "#e6cfcb", "#2b1110", "#8c2f2a", "#f0c75e"),
+        // Ice: the palest scheme, and the one that holds up in a bright room.
+        make("Glacier",   "#a8c6d4", "#3e6b80", "#ffffff", "#bfd3dc", "#677277", "#fdffff", "#16282f", "#e0edf2", "#16282f", "#3e6b80", "#ffffff"),
+        // No colour at all, which is what makes it worth having: it is the
+        // one scheme that never argues with an icon.
+        make("Graphite",  "#6e7175", "#2f3134", "#ffffff", "#9b9ea1", "#4a4c4d", "#fcfcfc", "#1b1c1e", "#d4d5d7", "#1b1c1e", "#2f3134", "#ffffff"),
+        // Tangerine, magenta, lemon and mint, all at once and on purpose.
+        // Every list of colour schemes needs the one nobody admits to using.
+        make("Sherbet",   "#ff7a4d", "#d6166b", "#fff6cf", "#ffb08f", "#7a2a10", "#fffdf2", "#3a1020", "#ffe08a", "#3a1020", "#2bbf9e", "#0b2b24"),
     };
     return themes;
 }
@@ -84,6 +106,32 @@ const Theme &themeByName(const QString &name) {
     const QVector<Theme> &themes = builtinThemes();
     for (const Theme &t : themes) {
         if (t.name == name) return t;
+    }
+
+    // A desktop saved while the schemes were the Windows 3.1 Control Panel's
+    // names the one it was wearing, and that name is no longer in the list.
+    // Each is sent to whichever of the schemes above stands closest to it, so
+    // such a desktop comes back in roughly the colours it was left in rather
+    // than all of them coming back in the first scheme.
+    static const QHash<QString, QString> replaced = {
+        {QStringLiteral("Windows Default"), QStringLiteral("Harbour")},
+        {QStringLiteral("Wheat"), QStringLiteral("Vellum")},
+        {QStringLiteral("Mint"), QStringLiteral("Orchard")},
+        {QStringLiteral("Emerald City"), QStringLiteral("Orchard")},
+        {QStringLiteral("The Blues"), QStringLiteral("Cobalt")},
+        {QStringLiteral("Rose"), QStringLiteral("Rhubarb")},
+        {QStringLiteral("Arizona"), QStringLiteral("Ochre")},
+        {QStringLiteral("Pastel"), QStringLiteral("Lupin")},
+        {QStringLiteral("Sky"), QStringLiteral("Glacier")},
+        {QStringLiteral("Ocean"), QStringLiteral("Glacier")},
+        {QStringLiteral("Monochrome"), QStringLiteral("Graphite")},
+        {QStringLiteral("Hotdog Stand"), QStringLiteral("Sherbet")},
+    };
+    const QString now = replaced.value(name);
+    if (!now.isEmpty()) {
+        for (const Theme &t : themes) {
+            if (t.name == now) return t;
+        }
     }
     return themes.first();
 }
@@ -101,7 +149,7 @@ namespace {
 QColor tintedSurface(const QColor &hueFrom, qreal value, qreal saturation) {
     const QColor hsv = hueFrom.toHsv();
     if (hsv.hue() < 0) {
-        // A scheme with no colour in it stays without: Monochrome's dark
+        // A scheme with no colour in it stays without: Graphite's dark
         // half should be grey, not faintly red.
         return QColor::fromHsvF(0.0, 0.0, qBound(0.0, value, 1.0));
     }
@@ -109,11 +157,31 @@ QColor tintedSurface(const QColor &hueFrom, qreal value, qreal saturation) {
                             qBound(0.0, value, 1.0));
 }
 
+// How far apart two surfaces actually look, which is not how far apart their
+// brightness says they are: the eye weighs green far above red and red above
+// blue, so a dark pink and a dark green of the very same lightness come out
+// one on top of the other. Ratios here read as they do in the accessibility
+// guidelines -- 1.0 is the same colour twice, and a surface a person can see
+// the edge of wants something over 1.2.
+qreal relativeLuminance(const QColor &colour) {
+    const auto channel = [](qreal c) {
+        return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(colour.redF()) + 0.7152 * channel(colour.greenF()) +
+           0.0722 * channel(colour.blueF());
+}
+
+qreal contrast(const QColor &a, const QColor &b) {
+    const qreal la = relativeLuminance(a);
+    const qreal lb = relativeLuminance(b);
+    return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+}
+
 QColor atValue(const QColor &colour, qreal value, qreal saturation) {
     const QColor hsv = colour.toHsv();
     const int hue = hsv.hue() < 0 ? 0 : hsv.hue();
     // Over 360, not 359: the wheel closes, and dividing by one less walks
-    // every hue a little way round -- which showed up as Rose coming back
+    // every hue a little way round -- which showed up as Rhubarb coming back
     // one degree off itself.
     return QColor::fromHsvF(hue / 360.0, qBound(0.0, hsv.saturationF() * saturation, 1.0),
                             qBound(0.0, value, 1.0));
@@ -132,6 +200,12 @@ void rebuildWorn() {
     g_wornBuilt = true;
 }
 
+} // namespace
+
+namespace {
+// How far the dark desktop has to stand off the groups lying on it before the
+// edge of a group is visible without looking for it.
+constexpr qreal kDarkSurfaceGap = 1.25;
 } // namespace
 
 Theme darkVariant(const Theme &light) {
@@ -159,9 +233,13 @@ Theme darkVariant(const Theme &light) {
     // And now the desktop is lifted until it is plainly lighter than the
     // groups on it. A strong colour reads far darker than its brightness
     // suggests -- a saturated teal or red at the same brightness as a grey
-    // comes out below it -- so the gap is measured rather than assumed.
+    // comes out below it -- so the gap is measured rather than assumed, and
+    // measured as the eye takes it: lightness alone leaves a scheme whose
+    // caption and desktop are far apart in hue, a green caption over a pink
+    // desktop, with its groups invisible against the desktop they sit on.
     for (qreal value = 0.26;
-         value < 0.65 && dark.desktop.lightnessF() < dark.windowBg.lightnessF() + 0.05;
+         value < 0.80 && (dark.desktop.lightnessF() < dark.windowBg.lightnessF() + 0.05 ||
+                          contrast(dark.desktop, dark.windowBg) < kDarkSurfaceGap);
          value += 0.03) {
         dark.desktop = atValue(light.desktop, value, 1.0);
     }
