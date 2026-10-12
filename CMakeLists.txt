@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.16)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROGMAN_VERSION)
 string(STRIP "${PROGMAN_VERSION}" PROGMAN_VERSION)
 
-project(sansame-pmane VERSION ${PROGMAN_VERSION} LANGUAGES CXX)
+project(pmane-sansame VERSION ${PROGMAN_VERSION} LANGUAGES CXX)
 
 # So that bumping it is enough: the next build reconfigures rather than
 # carrying yesterday's number.
@@ -140,16 +140,16 @@ set(PMANE_SOURCES
     src/ThemeDialog.h
 )
 
-add_executable(sansame-pmane
+add_executable(pmane-sansame
     ${BUILD_VERSION_CPP}
     src/main.cpp
     ${PMANE_SOURCES}
 )
 
 # So the stamp is written before the sources that carry it are compiled.
-add_dependencies(sansame-pmane build-version)
+add_dependencies(pmane-sansame build-version)
 
-target_link_libraries(sansame-pmane PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
+target_link_libraries(pmane-sansame PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
 
 # The pictures in README.md, taken off the desktop in docs/ -- see
 # tools/Screenshots.cpp. Not part of a normal build: it is wanted when the
@@ -165,21 +165,21 @@ add_executable(screenshots EXCLUDE_FROM_ALL
 target_include_directories(screenshots PRIVATE src)
 target_link_libraries(screenshots PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
 if(Qt6Svg_FOUND)
-    target_link_libraries(sansame-pmane PRIVATE Qt6::Svg)
+    target_link_libraries(pmane-sansame PRIVATE Qt6::Svg)
     target_link_libraries(screenshots PRIVATE Qt6::Svg)
 endif()
 
-install(TARGETS sansame-pmane RUNTIME DESTINATION bin)
+install(TARGETS pmane-sansame RUNTIME DESTINATION bin)
 
 # So a desktop shell can tell which application a window belongs to, and
 # therefore offer to pin it. The file's name must match the app_id the
 # application sets with setDesktopFileName().
-install(FILES data/sansame-pmane.desktop
+install(FILES data/pmane-sansame.desktop
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
 
 # What tells the shell to ask this application for search results. The bus
 # name and object path in it are the ones SearchProvider registers.
-install(FILES data/sansame-pmane-search-provider.ini
+install(FILES data/pmane-sansame-search-provider.ini
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/gnome-shell/search-providers)
 
 # The Debian package: `cmake --build build --target deb`.
@@ -188,8 +188,8 @@ install(FILES data/sansame-pmane-search-provider.ini
 # file and the search provider's -- which is also what an install from the
 # source tree lays down, so the two cannot drift apart.
 set(CPACK_GENERATOR "DEB")
-set(CPACK_PACKAGE_NAME "sansame-pmane")
-set(CPACK_PACKAGE_VENDOR "sansame-pmane")
+set(CPACK_PACKAGE_NAME "pmane-sansame")
+set(CPACK_PACKAGE_VENDOR "pmane-sansame")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A Windows 3.1 Program Manager for Linux")
 # One string, not three: a list would reach the control file with the
 # semicolons that join it still in place.
@@ -201,7 +201,7 @@ set(CPACK_PACKAGE_CONTACT "pdulvp <pdulvp@laposte.net>")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_SECTION "x11")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/pdulvp/sansame-pmane")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/pdulvp/pmane-sansame")
 # The Qt libraries it was built against, worked out from the binary itself
 # rather than written down and left to go stale.
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
@@ -234,6 +234,6 @@ include(CPack)
 add_custom_target(deb
     COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1
         ${CMAKE_CPACK_COMMAND} -G DEB --config ${CMAKE_CURRENT_BINARY_DIR}/CPackConfig.cmake
-    DEPENDS sansame-pmane
+    DEPENDS pmane-sansame
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building the Debian package")

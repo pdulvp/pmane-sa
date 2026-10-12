@@ -32,7 +32,7 @@
             "dependsOn": ["Configure"],
             "group": "build",
             "problemMatcher": ["$gcc"],
-            "detail": "Builds, then packs build/sansame-pmane_<version>-<build>_<arch>.deb"
+            "detail": "Builds, then packs build/pmane-sansame_<version>-<build>_<arch>.deb"
         },
         {
             // The three parts of the version, each on its own task. Raising

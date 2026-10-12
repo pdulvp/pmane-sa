@@ -40,8 +40,8 @@ void ensureIconTheme() {
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    QApplication::setOrganizationName("sansame-pmane");
-    QApplication::setApplicationName("sansame-pmane");
+    QApplication::setOrganizationName("pmane-sansame");
+    QApplication::setApplicationName("pmane-sansame");
     // The version and the build it was made in: --version says both, and so
     // does Help > About.
     QApplication::setApplicationVersion(fullVersion());
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     // the same name to work out which application a window belongs to --
     // which is what lets it be pinned. Without it the app_id falls back to
     // the executable's filename, so it would change with the binary's name.
-    QApplication::setDesktopFileName(QStringLiteral("sansame-pmane"));
+    QApplication::setDesktopFileName(QStringLiteral("pmane-sansame"));
     // Program groups have no close box. The only captions this application
     // draws itself are its group windows', so taking the box out at the
     // style is enough -- and it reaches the buttons a maximized group hands
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
     // running on the real desktop. The path is hashed rather than used, the
     // name being a socket in the temp directory.
     QString serverName =
-        QStringLiteral("sansame-pmane-") + qEnvironmentVariable("USER", QStringLiteral("user"));
+        QStringLiteral("pmane-sansame-") + qEnvironmentVariable("USER", QStringLiteral("user"));
     if (!configPath.isEmpty()) {
         serverName +=
             QLatin1Char('-') +

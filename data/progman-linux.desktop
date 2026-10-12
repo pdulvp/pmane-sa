@@ -3,7 +3,7 @@ Type=Application
 Name=Program Manager
 GenericName=Program Manager
 Comment=A Windows 3.1 Program Manager for Linux
-Exec=sansame-pmane
+Exec=pmane-sansame
 Icon=user-desktop
 Terminal=false
 Categories=System;
@@ -11,4 +11,4 @@ Keywords=progman;program;manager;groups;launcher;
 # Matched against a window's WM_CLASS when running under X11 or XWayland.
 # On Wayland the app_id set by setDesktopFileName() is what matches instead,
 # and it matches this file by its name.
-StartupWMClass=sansame-pmane
+StartupWMClass=pmane-sansame
