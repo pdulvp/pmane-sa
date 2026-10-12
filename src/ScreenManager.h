@@ -12,9 +12,20 @@
 //
 // Screens were called profiles until recently; an index written under the
 // old name is read once and written back out under the new one.
+//
+// --configPath moves the whole lot -- index and screens alike -- to a
+// directory of someone's choosing, which is what makes the desktop kept
+// beside the sources, the one the documentation's pictures are taken of,
+// openable without disturbing the desktop in ~/.config. Nothing else
+// changes: screens there are made, renamed and thrown away as usual.
 class ScreenManager {
 public:
     ScreenManager();
+
+    // Where screens are kept, for the rest of this run. Must be called
+    // before the first ScreenManager exists. An empty path is ignored; one
+    // that does not exist yet is created.
+    static void useConfigPath(const QString &path);
 
     QStringList names() const;
     QString current() const { return m_current; }
@@ -53,4 +64,8 @@ private:
 
     QVector<Entry> m_entries;
     QString m_current;
+
+    // The directory --configPath named, absolute. Empty when screens are kept
+    // where they usually are, under ~/.config.
+    static QString s_configPath;
 };

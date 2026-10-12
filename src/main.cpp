@@ -5,7 +5,9 @@
 #include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QCryptographicHash>
 #include "MainWindow.h"
+#include "ScreenManager.h"
 #include "Version.h"
 #include "GroupCaptionStyle.h"
 
@@ -59,7 +61,7 @@ int main(int argc, char *argv[]) {
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        QCoreApplication::translate("main", "A Progman-style launcher for Windows programs."));
+        QCoreApplication::translate("main", "Another Sans-Ame Program Manager for Linux"));
     parser.addHelpOption();
     parser.addVersionOption();
     // Screens were called profiles once, and shortcuts written then still
@@ -70,13 +72,38 @@ int main(int argc, char *argv[]) {
         QCoreApplication::translate("main", "Open <screen> instead of the one last used."),
         QStringLiteral("screen"));
     parser.addOption(screenOption);
+    // Screens kept somewhere other than ~/.config: the ones the
+    // documentation's pictures are taken of live in docs/, and opening them
+    // this way neither reads nor writes the desktop in use.
+    QCommandLineOption configOption(
+        {QStringLiteral("c"), QStringLiteral("configPath"), QStringLiteral("config-path")},
+        QCoreApplication::translate("main",
+                                    "Keep screens in <dir> instead of the config "
+                                    "directory. Created if it does not exist."),
+        QStringLiteral("dir"));
+    parser.addOption(configOption);
     parser.process(app);
     const QString screen = parser.value(screenOption);
+    const QString configPath = parser.value(configOption);
+    ScreenManager::useConfigPath(configPath);
 
     // Only one Program Manager at a time. The name is per-user so separate
     // logins do not collide over the socket in the temp directory.
-    const QString serverName =
+    // Screens opened from --configPath are their own instance: taking pictures
+    // of them should not raise, or switch, the Program Manager already
+    // running on the real desktop. The path is hashed rather than used, the
+    // name being a socket in the temp directory.
+    QString serverName =
         QStringLiteral("progman-linux-") + qEnvironmentVariable("USER", QStringLiteral("user"));
+    if (!configPath.isEmpty()) {
+        serverName +=
+            QLatin1Char('-') +
+            QString::fromLatin1(
+                QCryptographicHash::hash(QFileInfo(configPath).absoluteFilePath().toUtf8(),
+                                         QCryptographicHash::Sha1)
+                    .toHex()
+                    .left(12));
+    }
 
     {
         QLocalSocket probe;

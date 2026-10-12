@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
@@ -26,6 +27,13 @@ QString slug(const QString &name) {
 
 } // namespace
 
+QString ScreenManager::s_configPath;
+
+void ScreenManager::useConfigPath(const QString &path) {
+    if (path.isEmpty()) return;
+    s_configPath = QFileInfo(path).absoluteFilePath();
+}
+
 ScreenManager::ScreenManager() {
     QDir().mkpath(configDir());
     loadIndex();
@@ -34,6 +42,7 @@ ScreenManager::ScreenManager() {
 }
 
 QString ScreenManager::configDir() const {
+    if (!s_configPath.isEmpty()) return s_configPath;
     return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
 }
 
