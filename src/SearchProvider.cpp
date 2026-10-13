@@ -51,8 +51,8 @@ SearchIconData iconDataFor(const QIcon &icon) {
 // The name the shell knows us by, and where it looks. Both are repeated in
 // the search provider's .ini file, which is how the shell is told to ask at
 // all.
-const char *kBusName = "org.progman.ProgramManager";
-const char *kObjectPath = "/org/progman/ProgramManager/SearchProvider";
+const char *kBusName = "fr.pdulvp.PMane";
+const char *kObjectPath = "/fr/pdulvp/PMane/SearchProvider";
 
 // A result says where its item is: the screen, the group and the place in
 // it, and the name to check all three against. Separated by a character
