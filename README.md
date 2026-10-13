@@ -2,7 +2,7 @@
 
 Font Sans Serif ? No, Program Manager Sans Âme here.
 
-It's another Program Manager Sans-Ame for Linux with program groups full of icons, and a
+It's another Program Manager for Linux with program groups full of icons, and a
 double click runs what is behind one — a Windows game through Wine or Proton, a
 DOS game through DOSBox, a Steam game, a RetroArch stuff or an ordinary Linux application.
 
