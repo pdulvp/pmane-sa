@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: pmane-sans-ame
+Upstream-Name: pmane-sa
 Upstream-Contact: pdulvp
-Source: https://github.com/pdulvp/pmane-sans-ame
+Source: https://github.com/pdulvp/pmane-sa
 
 Files: *
 Copyright: 2026 pdulvp

@@ -2,7 +2,7 @@
 # The same index, told that it went.
 #
 # Nothing here touches anyone's home directory. "Start when you log in"
-# writes ~/.config/autostart/pmane-sans-ame.desktop for the user who asked
+# writes ~/.config/autostart/pmane-sa.desktop for the user who asked
 # for it, and a package removing files from users' homes is both outside
 # what it was given and unable to do it for anyone not logged in. An entry
 # left behind names a program that is no longer there, which a session

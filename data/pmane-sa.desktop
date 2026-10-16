@@ -3,7 +3,7 @@ Type=Application
 Name=Program Manager
 GenericName=Program Manager
 Comment=Another Program Manager for Linux
-Exec=pmane-sans-ame
+Exec=pmane-sa
 Icon=user-desktop
 Terminal=false
 Categories=System;
@@ -11,4 +11,4 @@ Keywords=program;manager;groups;launcher;
 # Matched against a window's WM_CLASS when running under X11 or XWayland.
 # On Wayland the app_id set by setDesktopFileName() is what matches instead,
 # and it matches this file by its name.
-StartupWMClass=pmane-sans-ame
+StartupWMClass=pmane-sa

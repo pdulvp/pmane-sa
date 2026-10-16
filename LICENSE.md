@@ -1,6 +1,6 @@
 # License
 
-PMane-Sans-Ame
+pmane-sa
 Copyright (C) 2026 pdulvp
 
 This program is free software: you can redistribute it and/or modify it under

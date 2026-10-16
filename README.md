@@ -1,4 +1,4 @@
-# PMane-Sans-Ame
+# pmane-sa
 
 Font Sans Serif ? No, Program Manager Sans Âme here.
 
@@ -114,14 +114,14 @@ SVG icons and wallpapers draw nothing).
 ```sh
 cmake -B build
 cmake --build build -j$(nproc)
-./build/pmane-sans-ame
+./build/pmane-sa
 ```
 
 Install, or build a Debian package:
 
 ```sh
 sudo cmake --install build
-cmake --build build --target deb      # build/pmane-sans-ame_<version>_amd64.deb
+cmake --build build --target deb      # build/pmane-sa_<version>_amd64.deb
 ```
 
 The package installs the program, its `.desktop` file and the search provider's
@@ -132,13 +132,13 @@ whose launcher is not installed simply says so.
 ## Running
 
 ```
-pmane-sans-ame [--screen <name>] [--configPath <dir>]
+pmane-sa [--screen <name>] [--configPath <dir>]
 ```
 
 One instance per user: starting a second one raises the first, switching screen
 on the way if one was asked for.
 
-Settings live in `~/.config/pmane-sans-ame/`: `screens.ini` indexes them and
+Settings live in `~/.config/pmane-sa/`: `screens.ini` indexes them and
 each screen is an `.ini` of its own.
 
 `--configPath` keeps that lot in a directory of your own instead, and opens as
@@ -147,7 +147,7 @@ running. [docs/](docs/) is one such directory — the desktop the pictures above
 are taken of, which is how they are retaken:
 
 ```sh
-./build/pmane-sans-ame --configPath docs
+./build/pmane-sa --configPath docs
 ```
 
 Screens there behave as they always do, so **Screens ▸ New** writes another
