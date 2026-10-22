@@ -1,1 +1,3 @@
 build/
+docs/plans/*
+!docs/plans/README.md

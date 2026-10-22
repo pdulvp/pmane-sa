@@ -9,6 +9,11 @@
 # Written in two forms: a source file for the program to carry, and a bare
 # line for the packaging to read, cpack running long after the compiler has
 # finished.
+#
+# With RELEASE, no stamp at all: a version is named by its number and nothing
+# else, and two packages of one version have nothing to tell apart -- there is
+# only one. The release target is what asks for that, and only it; see
+# CMakeLists.txt.
 
 # Packaging builds the program again from inside cpack, after cpack has read
 # the version it is naming the package with. Stamping it again there would
@@ -18,7 +23,11 @@ if(DEFINED ENV{PROGMAN_KEEP_VERSION} AND EXISTS "${OUT_TXT}")
     return()
 endif()
 
-string(TIMESTAMP BUILD_VERSION "%y%m%d%H%M%S")
+if(RELEASE)
+    set(BUILD_VERSION "")
+else()
+    string(TIMESTAMP BUILD_VERSION "%y%m%d%H%M%S")
+endif()
 
 file(WRITE "${OUT_CPP}"
 "// Written at every build by cmake/GenerateVersion.cmake. Not to be edited,

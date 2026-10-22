@@ -232,9 +232,10 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_BUILD_VERSION_FILE "${BUILD_VERSION_TXT}")
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CPackOptions.cmake")
-# The version is the project's; the build stamp goes on as the Debian
-# release, so that two packages of 1.1.0 built on different days are told
-# apart and the later one is the newer one.
+# The version is the project's; the build stamp goes on behind a `~`, so that
+# two packages of 1.2.1 built on different days are told apart and both are
+# taken for what they are: builds on the way to 1.2.1, which installs over
+# them. See cmake/CPackOptions.cmake.
 set(CPACK_PACKAGE_VERSION "${PROGMAN_VERSION}")
 include(CPack)
 
@@ -245,3 +246,32 @@ add_custom_target(deb
     DEPENDS pmane-sa
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building the Debian package")
+
+# ---------------------------------------------------------------------------
+# The package of a version, in one step:
+#
+#     cmake --build build --target release
+#
+# The same deb the target above makes, named by the version alone --
+# pmane-sa_1.2.1_amd64.deb. An ordinary build keeps its stamp, behind a `~`
+# that sorts it before the version it is heading for; see
+# cmake/CPackOptions.cmake.
+#
+# The missing stamp belongs to the target and not to the tree: there is no
+# configuration option to leave switched on without noticing, and so no day
+# on which two different 1.2.1 come out of here.
+add_custom_target(release
+    # 1. The version, with no stamp. PROGMAN_KEEP_VERSION then keeps the
+    #    build-version target quiet: without it the build that follows would
+    #    write it again, timestamped.
+    COMMAND ${CMAKE_COMMAND} -DVERSION=${PROGMAN_VERSION} -DRELEASE=ON
+        -DOUT_CPP=${BUILD_VERSION_CPP} -DOUT_TXT=${BUILD_VERSION_TXT}
+        -P ${GENERATE_VERSION}
+
+    # 2. The binary, then the package, by the targets that make them already.
+    COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1
+        ${CMAKE_COMMAND} --build ${CMAKE_CURRENT_BINARY_DIR} --target pmane-sa
+    COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1
+        ${CMAKE_COMMAND} --build ${CMAKE_CURRENT_BINARY_DIR} --target deb
+
+    COMMENT "The package of version ${PROGMAN_VERSION}")
