@@ -1,5 +1,5 @@
 {
   "buildCommand": "cmake --build build",
   "releaseBuildCommand": "cmake --build build --target release",
-  "artifacts": ["build/*${version}_*.deb", "build-win/*${version}-*.zip"]
+  "artifacts": ["build/*${version}_*.deb"]
 }
