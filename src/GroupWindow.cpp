@@ -68,8 +68,8 @@ void GroupWindow::selectItem(int index) {
 
 void GroupWindow::clearSelection() {
     m_list->clearSelection();
-    // Also drop the current item, or the style still marks it with a focus
-    // rectangle.
+    // The current item is cleared too, or the style still draws a focus
+    // rectangle on it.
     m_list->setCurrentItem(nullptr);
 }
 
@@ -85,9 +85,8 @@ void GroupWindow::rebuildList() {
         const QIcon shown = it.xpStyleIcon ? xpStyleIcon(it.icon) : it.icon;
         auto *listItem = new QListWidgetItem(shown, it.name);
         listItem->setData(IconListWidget::IndexRole, i);
-        // The whole item, so that one dragged to another group arrives as
-        // what it was -- its identity, its prefix, its scaling and the icon
-        // somebody picked for it, not just its name and command.
+        // The whole item, so one dragged to another group arrives intact: its
+        // id, prefix, scaling and chosen icon, not just its name and command.
         listItem->setData(IconListWidget::ItemRole, QVariant::fromValue(it));
         m_list->addItem(listItem);
     }
@@ -103,13 +102,13 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
     const int idx = indexOfListItem(item);
     if (idx < 0 || idx >= m_items.size()) return;
 
-    // Answered before it is acted on: starting a program can sit for a
-    // moment -- a wine prefix to build, a Steam client to wake -- and until
-    // something appears there is no telling whether the click was taken.
+    // Feedback is shown before the launch: starting a program can take a
+    // moment, to create a wine prefix or wake the Steam client, and until
+    // something appears there is no sign the click was registered.
     m_list->flashItem(idx);
 
-    // Started on the next turn of the loop, so the first frame of that is
-    // on screen before anything that blocks.
+    // Started on the next event loop turn, so the first frame of the animation
+    // is on screen before anything blocks.
     const ProgramItem starting = m_items[idx];
     QTimer::singleShot(0, this, [this, starting] { launch(starting); });
 }
@@ -117,10 +116,9 @@ void GroupWindow::onItemActivated(QListWidgetItem *item) {
 void GroupWindow::launch(const ProgramItem &item) {
     const QString error = launchProgramItem(item);
     if (error.isEmpty()) return;
-    // Into the corner of the desktop rather than into a message box: a click
-    // on an icon asked no question, so nothing here needs answering, and
-    // whoever double-clicked the wrong thing should not have to dismiss a
-    // dialog to try the right one.
+    // Reported in the corner of the desktop rather than in a message box: a
+    // click on an icon asked no question, so nothing needs answering, and a
+    // mistaken double click should not require dismissing a dialog.
     const bool opens = isDocument(item.command) || isFolder(item.command);
     LaunchNotices::instance()->report(
         opens ? tr("Could not open '%1'").arg(item.name) : tr("Could not run '%1'").arg(item.name),
@@ -133,8 +131,8 @@ void GroupWindow::onFilesDropped(const QStringList &paths) {
         ProgramItem item;
         item.name = QFileInfo(path).completeBaseName();
         item.command = path;
-        // The working directory is left to completeProgramItem(): beside the
-        // file for most items, but a folder item works inside itself.
+        // The working directory is left to workingDirFor(): the file's own
+        // folder for most items, and the folder itself for a folder item.
         addProgramItem(item);
     }
 }
@@ -148,12 +146,12 @@ void GroupWindow::onProgramItemsDropped(const QVector<ProgramItem> &items, int r
 }
 
 void GroupWindow::onProgramItemsReordered(const QVector<int> &sourceRows, int row) {
-    if (sourceRows.size() != 1) return; // the grid only ever selects one
+    if (sourceRows.size() != 1) return; // the grid selects only one item
     const int from = sourceRows.first();
     if (from < 0 || from >= m_items.size()) return;
 
-    // The insertion point was measured before the row was lifted out, so it
-    // shifts down by one once the row ahead of it is removed.
+    // The insertion point was computed before the row was removed, so it shifts
+    // down by one once a row ahead of it is taken out.
     int to = row > from ? row - 1 : row;
     to = std::clamp(to, 0, int(m_items.size()) - 1);
     if (to == from) return;
@@ -182,10 +180,9 @@ void GroupWindow::showPropertiesDialog(int index) {
     if (it.command.isEmpty()) return;
 
     if (index >= 0) {
-        // The command may now point somewhere else, so the icon is derived
-        // again from scratch rather than kept from the previous target. An
-        // icon picked by hand in the dialog is not derived at all: it is the
-        // one the item is meant to wear.
+        // The command may point elsewhere now, so the icon is derived again
+        // rather than kept from the previous target. An icon picked by hand in
+        // the dialog is not derived at all.
         if (it.iconIndex < 0) {
             it.icon = QIcon();
             it.iconSource.clear();
@@ -206,8 +203,8 @@ void GroupWindow::deleteItem(int index) {
                                         tr("Delete '%1'?").arg(m_items[index].name));
     if (reply != QMessageBox::Yes) return;
 
-    // Kept for whoever is remembering what was done, so that Undo can hand
-    // it back rather than the answer to that question being final.
+    // Emitted so the undo history can restore it, rather than the deletion
+    // being final.
     const ProgramItem deleted = m_items[index];
     removeProgramItem(index);
     emit itemDeleted(index, deleted);
@@ -217,10 +214,9 @@ void GroupWindow::duplicateItem(int index) {
     if (index < 0 || index >= m_items.size()) return;
 
     ProgramItem copy = m_items[index];
-    // Everything about it except what makes it itself: the copy is a second
-    // icon for the same program, so it gets an identity of its own and, with
-    // it, a wine prefix of its own. A named prefix is kept -- that one was
-    // chosen, and sharing it is what choosing it was for.
+    // Everything except the id: the copy is a second icon for the same program,
+    // so it gets an id of its own and with it a wine prefix of its own. A named
+    // prefix is kept, since it was chosen in order to be shared.
     copy.id.clear();
     copy.name = tr("%1 (copy)").arg(copy.name);
     copy.customName = true;
@@ -245,8 +241,8 @@ void GroupWindow::onContextMenuRequested(const QPoint &pos) {
         QAction *runAction = menu.addAction(
             (isDocument(command) || isFolder(command)) ? tr("Open") : tr("Run"));
         QAction *propsAction = menu.addAction(tr("Properties..."));
-        // The way to have one program twice: the same command set up two
-        // ways, each with a prefix of its own.
+        // How to have one program twice: the same command configured two ways,
+        // each with its own prefix.
         QAction *duplicateAction = menu.addAction(tr("Duplicate"));
         menu.addSeparator();
         QAction *deleteAction = menu.addAction(tr("Delete"));

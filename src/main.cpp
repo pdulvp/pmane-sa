@@ -13,10 +13,10 @@
 
 namespace {
 
-// Qt settles on the bare "hicolor" theme when the desktop has not told it
-// which icon theme to use, and hicolor carries next to nothing -- which
-// leaves file-type icons, the ones documents are shown with, empty. Point
-// the fallback at an icon theme that is actually installed.
+// Qt falls back to the bare "hicolor" theme when the desktop does not say which
+// icon theme to use, and hicolor contains almost nothing, which leaves the
+// file-type icons documents are shown with empty. This points the fallback at
+// an icon theme that is actually installed.
 void ensureIconTheme() {
     const QString configured = QIcon::themeName();
     if (!configured.isEmpty() && configured != QLatin1String("hicolor")) return;
@@ -42,19 +42,18 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName("pmane-sa");
     QApplication::setApplicationName("pmane-sa");
-    // The version and the build it was made in: --version says both, and so
-    // does Help > About.
+    // The version and its build stamp, reported by --version and Help > About.
     QApplication::setApplicationVersion(fullVersion());
-    // What the desktop knows this application by. On Wayland it becomes the
-    // window's app_id, and a shell matches that against the .desktop file of
-    // the same name to work out which application a window belongs to --
-    // which is what lets it be pinned. Without it the app_id falls back to
-    // the executable's filename, so it would change with the binary's name.
+    // How the desktop identifies this application. On Wayland it becomes the
+    // window's app_id, which the shell matches against the .desktop file of the
+    // same name to tell which application a window belongs to, and that is what
+    // allows it to be pinned. Without it the app_id falls back to the
+    // executable's file name and would change with the binary's name.
     QApplication::setDesktopFileName(QStringLiteral("pmane-sa"));
     // Program groups have no close box. The only captions this application
-    // draws itself are its group windows', so taking the box out at the
-    // style is enough -- and it reaches the buttons a maximized group hands
-    // up to the menu bar, which belong to the menu bar rather than to the
+    // draws itself are its group windows', so removing the box in the style is
+    // enough, and doing it there also covers the buttons a maximized group
+    // moves up to the menu bar, which belong to the menu bar rather than the
     // group.
     QApplication::setStyle(new GroupCaptionStyle);
     ensureIconTheme();
@@ -64,17 +63,17 @@ int main(int argc, char *argv[]) {
         QCoreApplication::translate("main", "Another Sans-Ame Program Manager for Linux"));
     parser.addHelpOption();
     parser.addVersionOption();
-    // Screens were called profiles once, and shortcuts written then still
-    // pass --profile: both names reach the same option.
+    // Screens were once called profiles, and shortcuts written then still pass
+    // --profile, so both names map to the same option.
     QCommandLineOption screenOption(
         {QStringLiteral("s"), QStringLiteral("screen"), QStringLiteral("p"),
          QStringLiteral("profile")},
         QCoreApplication::translate("main", "Open <screen> instead of the one last used."),
         QStringLiteral("screen"));
     parser.addOption(screenOption);
-    // Screens kept somewhere other than ~/.config: the ones the
-    // documentation's pictures are taken of live in docs/, and opening them
-    // this way neither reads nor writes the desktop in use.
+    // Screens kept outside ~/.config: the ones the documentation's screenshots
+    // are taken from live in docs/, and opening them this way neither reads nor
+    // writes the desktop in use.
     QCommandLineOption configOption(
         {QStringLiteral("c"), QStringLiteral("configPath"), QStringLiteral("config-path")},
         QCoreApplication::translate("main",
@@ -88,11 +87,11 @@ int main(int argc, char *argv[]) {
     ScreenManager::useConfigPath(configPath);
 
     // Only one Program Manager at a time. The name is per-user so separate
-    // logins do not collide over the socket in the temp directory.
-    // Screens opened from --configPath are their own instance: taking pictures
-    // of them should not raise, or switch, the Program Manager already
-    // running on the real desktop. The path is hashed rather than used, the
-    // name being a socket in the temp directory.
+    // logins do not collide over the socket in the temp directory. Screens
+    // opened from --configPath get their own instance, so taking screenshots of
+    // them does not raise or switch the Program Manager already running on the
+    // real desktop. The path is hashed rather than used directly, the name
+    // being a socket in the temp directory.
     QString serverName =
         QStringLiteral("pmane-sa-") + qEnvironmentVariable("USER", QStringLiteral("user"));
     if (!configPath.isEmpty()) {
@@ -109,9 +108,9 @@ int main(int argc, char *argv[]) {
         QLocalSocket probe;
         probe.connectToServer(serverName);
         if (probe.waitForConnected(300)) {
-            // Someone answered, so an instance is live: ask it to come
-            // forward -- switching screen on the way, if one was asked for
-            // -- and leave rather than opening a second window.
+            // Something answered, so an instance is already running: ask it to
+            // come forward, switching screen if one was requested, and exit
+            // rather than opening a second window.
             probe.write(screen.isEmpty() ? QByteArray("raise")
                                          : QByteArray("screen:") + screen.toUtf8());
             probe.waitForBytesWritten(300);
@@ -119,8 +118,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Nothing answered, so any socket file still lying around was left by an
-    // instance that did not exit cleanly.
+    // Nothing answered, so any remaining socket file was left by an instance
+    // that did not exit cleanly.
     QLocalServer::removeServer(serverName);
     QLocalServer server;
     server.listen(serverName);
@@ -135,8 +134,8 @@ int main(int argc, char *argv[]) {
         const QByteArray request = client->readAll();
         client->deleteLater();
 
-        // "profile:" is what an instance from before the rename would send,
-        // which is worth answering while one is still running.
+        // "profile:" is what an instance from before the rename sends, which is
+        // still worth accepting while one may be running.
         for (const QByteArray &prefix : {QByteArray("screen:"), QByteArray("profile:")}) {
             if (!request.startsWith(prefix)) continue;
             window.switchToScreen(QString::fromUtf8(request.mid(prefix.size())));

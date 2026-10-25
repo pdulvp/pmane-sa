@@ -15,22 +15,22 @@
 
 namespace {
 
-// The same shape as the month pane beside it: a strip down the left with
-// what it is written up it, a band across the top, and the working area on
-// the colour a group window's interior wears.
+// The same layout as the month pane beside it: a strip down the left with the
+// pane's name written up it, a band across the top, and the working area in the
+// colour of a group window's interior.
 constexpr int kBannerWidth = 36;
 constexpr int kHeaderHeight = 32;
 constexpr int kContentWidth = 290;
 constexpr int kPaneWidth = kBannerWidth + kContentWidth;
 constexpr int kPaneHeight = 384;
 
-// The keys: four across, and tall enough to hit without aiming.
+// The keys: four per row, and tall enough to be easy targets.
 constexpr int kKeyHeight = 28;
 constexpr int kKeySpacing = 4;
 constexpr int kMargin = 8;
 
-// How many sums are kept. Enough to look back over what was just worked
-// out, not so many that it becomes something to scroll through.
+// How many results are kept: enough to look back over recent calculations, not
+// so many that the list needs scrolling.
 constexpr int kRemembered = 12;
 
 QColor blend(const QColor &under, const QColor &over, qreal weight) {
@@ -40,7 +40,7 @@ QColor blend(const QColor &under, const QColor &over, qreal weight) {
                   qRound(under.blue() * keep + over.blue() * weight));
 }
 
-// A reader over the expression, which is all the state the parsing needs.
+// A cursor over the expression, which is all the state the parser needs.
 struct Reader {
     QString text;
     int at = 0;
@@ -66,8 +66,8 @@ struct Reader {
 
 double readSum(Reader &reader);
 
-// A number, a bracketed sum, or either of those with a minus in front --
-// and any of them may be followed by a % sign.
+// A number, a bracketed expression, or either with a leading minus; any of them
+// may be followed by a % sign.
 double readTerm(Reader &reader) {
     if (reader.take(QLatin1Char('-'))) return -readTerm(reader);
     if (reader.take(QLatin1Char('+'))) return readTerm(reader);
@@ -93,8 +93,8 @@ double readTerm(Reader &reader) {
             }
             return 0.0;
         }
-        // A comma is a decimal point to most of the world, and nothing else
-        // here, so it is taken as one.
+        // A comma is a decimal point in most locales and means nothing else
+        // here, so it is accepted as one.
         QString number = reader.text.mid(from, reader.at - from);
         number.replace(QLatin1Char(','), QLatin1Char('.'));
         bool read = false;
@@ -104,7 +104,7 @@ double readTerm(Reader &reader) {
         }
     }
 
-    // Trailing per cent, as many as are written: 50% is a half.
+    // Trailing percent signs, however many are written: 50% is 0.5.
     while (reader.take(QLatin1Char('%'))) value /= 100.0;
     return value;
 }
@@ -171,8 +171,8 @@ CalculationResult calculate(const QString &expression) {
 }
 
 QString formatNumber(double value) {
-    // Up to ten significant places, then the zeroes nobody wants to read
-    // taken off the end: 1/4 is 0.25, not 0.2500000000.
+    // Up to ten significant digits, with trailing zeroes removed: 1/4 is 0.25,
+    // not 0.2500000000.
     QString text = QString::number(value, 'g', 10);
     if (text.contains(QLatin1Char('.'))) {
         while (text.endsWith(QLatin1Char('0'))) text.chop(1);
@@ -206,8 +206,8 @@ CalculatorPane::CalculatorPane(QWidget *parent) : QWidget(parent, Qt::Popup) {
 }
 
 void CalculatorPane::type(const QString &what) {
-    // Over whatever is selected, which is how the answer left in the entry
-    // is replaced by a new sum rather than appended to.
+    // Replaces the selection, which is how the answer left in the entry is
+    // overwritten by a new expression rather than appended to.
     m_entry->insert(what);
     m_entry->setFocus();
 }
@@ -218,8 +218,8 @@ QWidget *CalculatorPane::buildKeys() {
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(kKeySpacing);
 
-    // What each key says, and what it puts in: the signs people expect to
-    // see are not the ones arithmetic is written with.
+    // Each key's label and what it inserts: the symbols users expect are not
+    // the ones the parser reads.
     struct Key {
         const char *face;
         const char *types;
@@ -237,8 +237,8 @@ QWidget *CalculatorPane::buildKeys() {
             const Key &key = rows[row][column];
             auto *button = new QPushButton(QString::fromUtf8(key.face), keys);
             button->setFixedHeight(kKeyHeight);
-            // The strip is for typing into; a key that took focus would
-            // take the keyboard away from the entry.
+            // A key that took focus would take the keyboard away from the entry
+            // field.
             button->setFocusPolicy(Qt::NoFocus);
             button->setAutoDefault(false);
             m_keys.append(button);
@@ -287,7 +287,7 @@ void CalculatorPane::wearTheScheme() {
     m_history->setStyleSheet(dressed);
     m_entry->setStyleSheet(dressed);
 
-    // The keys are the scheme's buttons, as a dialog's are.
+    // The keys use the scheme's button colours, as a dialog's do.
     const QString keyLook =
         QStringLiteral("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                        "border-radius: 3px; }"
@@ -312,18 +312,17 @@ void CalculatorPane::evaluateEntry() {
     if (!result.ok) row->setForeground(currentTheme().titleActive);
     m_history->scrollToItem(row);
 
-    // Only the last few are kept: this is somewhere to glance back at, not
-    // a record of anything.
+    // Only the last few are kept; this is not a record.
     while (m_history->count() > kRemembered) delete m_history->takeItem(0);
 
-    // The answer is the obvious thing to carry into the next sum, so it is
-    // left ready to be typed over or used.
+    // The answer is left in the entry, selected, so it can be used in the next
+    // expression or typed over.
     if (result.ok) m_entry->setText(formatNumber(result.value));
     m_entry->selectAll();
 }
 
 void CalculatorPane::popUpAt(QWidget *anchor) {
-    // The scheme may have changed since it was last opened.
+    // The scheme may have changed since it was last shown.
     wearTheScheme();
 
     QPoint where = anchor->mapToGlobal(QPoint(0, anchor->height()));

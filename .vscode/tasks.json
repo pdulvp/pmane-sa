@@ -1,12 +1,12 @@
 {
-    // What there is to do with this project from the editor. Each one is the
-    // same command that would be typed at a terminal, so nothing here knows
-    // anything the build does not.
+    // The tasks available for this project from the editor. Each one runs the
+    // same command that would be typed in a terminal, so nothing here depends
+    // on editor-specific knowledge.
     "version": "2.0.0",
     "tasks": [
         {
-            // Writes the build files. Rarely needed by hand: a build runs it
-            // again on its own whenever CMakeLists.txt or VERSION changes.
+            // Writes the build files. Rarely needed by hand: a build reruns it
+            // whenever CMakeLists.txt or VERSION changes.
             "label": "Configure",
             "type": "shell",
             "command": "cmake",
@@ -35,9 +35,9 @@
             "detail": "Builds, then packs build/pmane-sa_<version>-<build>_<arch>.deb"
         },
         {
-            // The three parts of the version, each on its own task. Raising
-            // one sets the parts under it back to zero; the next build picks
-            // the new number up by itself.
+            // The three parts of the version, one task each. Incrementing one
+            // resets the parts below it to zero; the next build picks up the
+            // new number.
             "label": "Bump major",
             "type": "shell",
             "command": "cmake",

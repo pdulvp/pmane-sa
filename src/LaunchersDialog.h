@@ -14,10 +14,10 @@ class QTableWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 
-// "Launchers": what each kind of file is started with. The launchers down the
-// left, and what the one selected there has to be said about it on the right:
-// the file types it claims, the programs that can act as it, and the folders
-// it keeps things in.
+// "Launchers": what each kind of file is started with. The launchers are
+// listed on the left; the settings of the selected one are on the right: the
+// file types it claims, the programs that can act as it, and the folders it
+// uses.
 //
 // Nothing here is a command line. How a launcher is handed a file belongs to
 // the launcher, and a program's own arguments belong to the item.
@@ -26,79 +26,76 @@ class LaunchersDialog : public QDialog {
 public:
     explicit LaunchersDialog(QWidget *parent = nullptr);
 
-    // The launchers as the dialog leaves them. Only meaningful after OK.
+    // The edited launchers. Only meaningful after OK.
     QVector<Launcher> launchers() const { return m_launchers; }
 
-    // The desktop as it stands, so that counting what still runs in a prefix
-    // counts the items on screen rather than the ones last written to file:
-    // a screen is saved when it is closed, and an item added a moment ago is
-    // not in there yet.
+    // The current desktop, so the prefix usage count covers the items on
+    // screen rather than the ones last written to file: a screen is only saved
+    // when it is closed, so a newly added item is not in the file yet.
     void setOpenScreen(const QString &name, const QVector<ProgramItem> &items);
 
 private:
-    // Which launcher a row stands for, kept on the row itself.
+    // The launcher a row stands for, stored on the row itself.
     enum Role { LauncherRole = Qt::UserRole };
 
     void buildLauncherPage();
-    // One row of the runners table. A wine or a Proton build read off the
-    // machine is shown but not edited.
+    // One row of the runners table. A detected wine or Proton build is shown
+    // but not editable.
     void addRunnerRow(const LauncherRunner &runner);
     bool runnerRowIsDiscovered(int row) const;
-    // How many rows are this dialog's own, the discovered ones being the
-    // machine's: the last of those cannot be removed.
+    // How many rows are editable, the detected ones not being: the last
+    // editable row cannot be removed.
     int editableRunnerRows() const;
     void browseForRunner();
 
     // What a row of the prefixes table stands for.
     enum class PrefixRow {
-        Fixed,    // the prefix every item gets of its own: not ours to touch
-        Named,    // one set up here, for the items pointed at it to share
-        Leftover, // a folder in there that no item leads to any more
+        Fixed,    // the per-item prefix, which cannot be edited here
+        Named,    // one created here, shared by the items pointed at it
+        Leftover, // a folder in there that no item refers to any more
         Program,  // a program running in the prefix above it, not a prefix
     };
     QTreeWidgetItem *addPrefixRow(PrefixRow kind, const QString &name, const QString &used,
                                   const QString &path, const QString &note);
-    // The programs that run in a prefix, hung under it: a prefix is worth
-    // keeping or not by what is in it, and the names are the answer. Closed
-    // to begin with -- the list as a whole is what is being read -- and the
-    // ones opened stay open across a rebuild.
+    // The programs running in a prefix, listed as children of it, which is how
+    // one tells whether a prefix is still needed. Collapsed initially; the ones
+    // expanded stay expanded across a rebuild.
     void addPrefixPrograms(QTreeWidgetItem *parent, const QStringList &programs);
-    // Rebuilds the table from the names as typed and a fresh look at what is
-    // in the prefixes folder, so that what is used and what is not follows
-    // the items as they are rather than as they were when the dialog opened.
+    // Rebuilds the table from the names as typed and a fresh scan of the
+    // prefixes folder, so used and unused follow the current items rather than
+    // those present when the dialog opened.
     void refreshPrefixTable();
-    // The named prefixes as the tree has them, blank rows and all: what a
-    // rebuild has to keep.
+    // The named prefixes as the tree holds them, blank rows included, which a
+    // rebuild has to preserve.
     QStringList typedPrefixes() const;
-    // Fills the size column, which means walking every prefix: asked for
-    // rather than done on the way past.
+    // Fills the size column, which means walking every prefix, so it runs on
+    // request rather than automatically.
     void measurePrefixes();
-    // Removes the selected prefix, and offers to take its folder with it.
+    // Removes the selected prefix, and offers to delete its folder too.
     void removePrefix();
-    // What can be done to whatever is picked out in the tree: a program is
-    // not a prefix, and the prefix every item gets of its own is not a list
-    // to add to.
+    // Enables the buttons according to what is selected: a program row is not
+    // a prefix, and the per-item prefix cannot be added to or removed.
     void updatePrefixButtons();
-    // One row of the Steam library table; `discovered` ones are Steam's own
-    // and not this dialog's to change.
+    // One row of the Steam library table; a `discovered` one comes from Steam
+    // itself and is not editable.
     void addLibraryRow(const QString &path, bool discovered);
     void browseForLibrary();
 
     void buildTree(int selectLauncher);
-    // Reads the page on show back into the launcher it belongs to, which is
-    // what makes moving between rows keep what was typed.
+    // Writes the visible page back into its launcher, so moving between rows
+    // keeps what was typed.
     void commitCurrentPage();
     void showPageFor(QTreeWidgetItem *item);
 
     QVector<Launcher> m_launchers;
 
-    // The screen on show and what is on it, for the prefix usage count.
+    // The current screen and its items, for the prefix usage count.
     QString m_openScreen;
     QVector<ProgramItem> m_openItems;
 
     QTreeWidget *m_tree;
 
-    // The launcher page: the only page there is.
+    // The launcher page, the only page there is.
     QWidget *m_launcherPage;
     QLineEdit *m_extensions;
     QFormLayout *m_launcherForm;
@@ -109,17 +106,17 @@ private:
     QPushButton *m_runnerBrowse;
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
-    // The prefixes an item can be pointed at: the per-application one at the
-    // top, then whatever has been set up by hand.
+    // The prefixes an item can be pointed at: the per-item one first, then the
+    // named ones created by hand.
     QTreeWidget *m_prefixes;
-    // Which prefixes were opened, so that a rebuild -- a rename, a removal,
-    // a look at the sizes -- does not shut them again.
+    // Which prefixes were expanded, so a rebuild after a rename, a removal or
+    // a size measurement does not collapse them.
     QStringList m_openPrefixes;
     QPushButton *m_prefixAdd;
     QPushButton *m_prefixRemove;
     QPushButton *m_prefixSizes;
-    // The Steam page: where Steam keeps its libraries. The ones Steam
-    // lists itself are shown but not edited, like a discovered runner.
+    // The Steam library folders. The ones Steam lists itself are shown but not
+    // editable, like a detected runner.
     QWidget *m_librariesBox;
     QTableWidget *m_libraries;
     QPushButton *m_libraryAdd;
@@ -129,7 +126,7 @@ private:
     QLineEdit *m_coresDir;
     QTableWidget *m_cores;
 
-    // The launcher the fields on show belong to, so they can be written back
-    // before another row takes their place.
+    // The launcher the visible fields belong to, so they can be written back
+    // before another row replaces them.
     int m_editingLauncher = -1;
 };

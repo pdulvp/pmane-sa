@@ -70,7 +70,7 @@ bool readDirEntries(const Reader &r, qint64 dirOffset, QVector<ResourceDirEntry>
         if (!r.u32(entryOffset, nameField)) return false;
         if (!r.u32(entryOffset + 4, dataField)) return false;
         ResourceDirEntry e;
-        e.nameOrId = nameField & 0x7fffffff; // ignore string-named entries' content, just skip matching by id
+        e.nameOrId = nameField & 0x7fffffff; // string-named entries are skipped when matching by id
         e.isDirectory = (dataField & 0x80000000) != 0;
         e.offset = dataField & 0x7fffffff;
         out.append(e);
@@ -108,16 +108,16 @@ struct GrpIconEntry {
     quint16 id;
 };
 
-// How much this desktop wants a given image: a classic 32x32 first (closest
-// to the win3.1 look), otherwise the largest and deepest one on offer.
+// Ranks an image: a classic 32x32 first, being closest to the Windows 3.1 look,
+// otherwise the largest and deepest available.
 int iconScore(int width, int bitCount) {
     const int w = width ? width : 256;
     return (w == 32 ? 1000 : 0) + w * 10 + bitCount;
 }
 
-// Decodes a legacy ICO "raw" image (either a PNG blob, or an old-style
-// DIB: BITMAPINFOHEADER + optional palette + XOR bitmap + AND mask) into
-// a QImage with a proper alpha channel.
+// Decodes a legacy ICO "raw" image, either a PNG blob or an old-style DIB
+// (BITMAPINFOHEADER + optional palette + XOR bitmap + AND mask), into a QImage
+// with a real alpha channel.
 QImage decodeIconImage(const QByteArray &raw) {
     if (raw.size() >= 8 &&
         (uchar)raw[0] == 0x89 && raw[1] == 'P' && raw[2] == 'N' && raw[3] == 'G') {
@@ -249,7 +249,7 @@ QImage decodeIconImage(const QByteArray &raw) {
                 }
             } else if (alpha == 0) {
                 // Some 32bpp icons still rely on the AND mask even though
-                // they carry an (unused) alpha channel of all zeroes.
+                // they carry an unused, all-zero alpha channel.
                 if (haveAnd) {
                     quint8 byte = d[andRowOff + x / 8];
                     int bit = (byte >> (7 - (x % 8))) & 1;
@@ -286,7 +286,7 @@ QVector<GrpIconEntry> parseGroupDir(const QByteArray &blob) {
     return members;
 }
 
-// Which image of a group this desktop would rather show.
+// Which image of a group to display.
 GrpIconEntry bestMember(const QVector<GrpIconEntry> &members) {
     GrpIconEntry best = members.first();
     for (const GrpIconEntry &e : members) {
@@ -349,8 +349,8 @@ PeResTable parsePeResources(const Reader &r, quint32 peOffset) {
     return t;
 }
 
-// The bytes of a resource, given its level-2 entry: down through the
-// language directory to the leaf that points at the payload.
+// The bytes of a resource, given its level-2 entry: through the language
+// directory to the leaf pointing at the payload.
 QByteArray peLeafData(const Reader &r, const uchar *d, const PeResTable &t,
                       const ResourceDirEntry &res) {
     if (!res.isDirectory) return {};
@@ -409,7 +409,7 @@ struct NeResource {
 
 // Parses the NE resource table into a type-id -> resource list map. Only
 // numeric (non-string) type and resource ids are collected, which covers
-// RT_ICON/RT_GROUP_ICON in every executable we have ever seen in the wild.
+// RT_ICON and RT_GROUP_ICON in every executable encountered so far.
 QMap<quint16, QVector<NeResource>> parseNeResourceTable(const Reader &r, qint64 neHeaderOffset) {
     QMap<quint16, QVector<NeResource>> result;
 
@@ -453,9 +453,9 @@ QMap<quint16, QVector<NeResource>> parseNeResourceTable(const Reader &r, qint64 
     return result;
 }
 
-// One icon a file offers, with its payload left unread until somebody
-// actually wants to decode it: listing the icons of an executable that
-// embeds dozens should not decode all of them.
+// One icon a file holds, with its payload left unread until it is actually
+// decoded: listing the icons of an executable that embeds dozens should not
+// decode them all.
 struct IconSlot {
     int index = 0;
     int width = 0;    // 0 when the container does not say
@@ -515,8 +515,8 @@ void walkNeIcons(const Reader &r, const uchar *d, qint64 neHeaderOffset, const S
     }
     if (listed > 0) return;
 
-    // No usable group-icon resource: the individual icon resources are all
-    // there is to offer, so they are listed one by one instead.
+    // No usable group-icon resource, so the individual icon resources are
+    // listed one by one instead.
     for (int i = 0; i < iconList.size(); ++i) {
         const NeResource &icon = iconList[i];
         IconSlot slot;
@@ -529,11 +529,11 @@ void walkNeIcons(const Reader &r, const uchar *d, qint64 neHeaderOffset, const S
 void walkIcoIcons(const Reader &r, const uchar *d, const SlotVisitor &visit) {
     quint16 reserved, type, count;
     if (!r.u16(0, reserved) || !r.u16(2, type) || !r.u16(4, count)) return;
-    // type 1 is an icon, 2 a cursor; anything else is not an .ico at all.
+    // Type 1 is an icon and 2 a cursor; anything else is not an .ico.
     if (reserved != 0 || (type != 1 && type != 2) || count == 0) return;
 
-    // An .ico directory entry is like a PE group-icon entry, except the
-    // trailing field is a 4-byte file offset instead of a 2-byte resource id.
+    // An .ico directory entry matches a PE group-icon entry, except that the
+    // trailing field is a 4-byte file offset rather than a 2-byte resource id.
     for (int i = 0; i < count; ++i) {
         qint64 o = 6 + qint64(i) * 16;
         if (!r.bytes(o, 16)) break;
@@ -555,9 +555,9 @@ void walkIcoIcons(const Reader &r, const uchar *d, const SlotVisitor &visit) {
     }
 }
 
-// Hands `visit` every icon the file holds, whichever container it is, and
-// reports which container that was. The file is read once and its bytes
-// stay alive for the whole walk.
+// Passes every icon the file holds to `visit`, whatever the container, and
+// reports which container it was. The file is read once and its bytes stay
+// valid for the whole walk.
 void forEachIcon(const QString &path, PeIconExtractor::Source &source, const SlotVisitor &visit) {
     source = PeIconExtractor::Source::None;
 
@@ -584,8 +584,8 @@ void forEachIcon(const QString &path, PeIconExtractor::Source &source, const Slo
             source = PeIconExtractor::Source::Ne;
             walkNeIcons(r, d, newHeaderOffset, visit);
         }
-        // Anything else is an unrecognized executable format (e.g. OS/2
-        // LE/LX) and holds nothing we know how to read.
+        // Anything else is an unrecognized executable format, such as OS/2
+        // LE/LX, and holds nothing this code can read.
         return;
     }
 
@@ -629,10 +629,10 @@ QIcon PeIconExtractor::extractIconAt(const QString &path, int index, Source *sou
         if (index >= 0) {
             if (slot.index != index) return true;
             chosen = decodeIconImage(slot.payload());
-            return false; // the one that was asked for, decoded or not
+            return false; // the requested index, whether or not it decoded
         }
-        // Nothing asked for in particular: an executable leads with its main
-        // icon, while an .ico is a set of sizes to pick the best from.
+        // No index requested: an executable's first icon is its main one, while
+        // an .ico is a set of sizes to pick the best from.
         if (found != Source::Ico) {
             chosen = decodeIconImage(slot.payload());
             return chosen.isNull();
@@ -646,8 +646,8 @@ QIcon PeIconExtractor::extractIconAt(const QString &path, int index, Source *sou
         return true;
     });
 
-    // The file's icons have changed since the item was set up and the one it
-    // remembers is gone: better its default icon than none at all.
+    // The file's icons changed since the item was set up and the stored one is
+    // gone, so fall back to the default icon rather than none.
     if (chosen.isNull() && index >= 0) return extractIconAt(path, -1, source);
 
     if (chosen.isNull()) return {};

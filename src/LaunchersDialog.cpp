@@ -29,44 +29,44 @@
 
 namespace {
 
-// Wide enough for the tree to sit beside a form rather than above it.
+// Wide enough for the tree to sit beside the form rather than above it.
 constexpr int kTreeWidth = 190;
-// Rows with some air in them: there are only a handful, and they read as
-// tabs down the side rather than as a list to be scrolled.
+// Roomy rows: there are only a handful, and they read as tabs down the side
+// rather than as a scrollable list.
 constexpr int kTreeRowHeight = 28;
 
-// Which column of the runners table holds what. No arguments among them:
-// how a launcher is handed its file is the launcher's business.
+// The columns of the runners table. No arguments column: how a launcher is
+// handed its file is the launcher's business.
 constexpr int kRunnerName = 0;
 constexpr int kRunnerCommand = 1;
 constexpr int kRunnerShell = 2;
 
-// Set on a runners-table row that was read off the machine rather than set
-// up here, so that it is shown but not edited.
+// Set on a runners-table row that was detected rather than configured here,
+// so it is shown but not editable.
 constexpr int kDiscoveredRole = Qt::UserRole + 1;
 
-// What a prefixes-table row stands for, and where it is on disk: a row that
-// is not a name anyone typed is neither edited nor saved, and only a row with
-// a folder behind it has anything to delete.
+// What a prefixes-table row stands for, and where it is on disk. A row that is
+// not a typed name is neither editable nor saved, and only a row with a folder
+// behind it has anything to delete.
 constexpr int kPrefixKindRole = Qt::UserRole + 2;
 constexpr int kPrefixPathRole = Qt::UserRole + 3;
-// How many items run in the prefix a row stands for, so that deleting one
-// that is still in use can say so.
+// How many items run in the prefix a row stands for, so deleting one still in
+// use can warn about it.
 constexpr int kPrefixItemsRole = Qt::UserRole + 4;
 
-// Which column of the prefixes table holds what.
+// The columns of the prefixes table.
 constexpr int kPrefixName = 0;
 constexpr int kPrefixUsed = 1;
 constexpr int kPrefixSize = 2;
 
-// How many rows a table on this page shows. Past that it scrolls: a
-// launcher with twenty Proton builds should not push everything below it
-// off the dialog, and a launcher with one should not leave a hole.
+// How many rows a table on this page shows before it scrolls. A launcher with
+// twenty Proton builds must not push everything below it off the dialog, and
+// one with a single runner must not leave a gap.
 constexpr int kVisibleTableRows = 4;
 
-// Holds a table to that many rows and stops it growing with the dialog.
-// The space the dialog gains goes to the bottom instead, so the controls
-// stay where they are whatever size the window is.
+// Fixes a table to that many rows and stops it growing with the dialog. Extra
+// space goes to the bottom instead, so the controls stay put at any window
+// size.
 void showAtMostFourRows(QTableWidget *table) {
     const int header = table->horizontalHeader()->sizeHint().height();
     const int row = table->verticalHeader()->defaultSectionSize();
@@ -75,8 +75,8 @@ void showAtMostFourRows(QTableWidget *table) {
     table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 }
 
-// The same, for a tree: it has no vertical header to ask for a row height,
-// so the height one row wants is asked of the widget itself.
+// The same for a tree, which has no vertical header to give a row height, so
+// it is derived from the widget's font metrics.
 void showAtMostFourRows(QTreeWidget *tree) {
     const int header = tree->header()->sizeHint().height();
     const int row = tree->fontMetrics().height() + 8;
@@ -91,8 +91,8 @@ QString joinExtensions(const QStringList &extensions) {
 
 QStringList splitExtensions(const QString &text) {
     QStringList out;
-    // Written however it comes naturally -- spaces, commas, dots and all --
-    // and kept as bare lower-case extensions.
+    // Accepts spaces, commas and leading dots, and stores bare lower-case
+    // extensions.
     for (const QString &piece :
          text.split(QRegularExpression(QStringLiteral("[\\s,;]+")), Qt::SkipEmptyParts)) {
         QString extension = piece.trimmed().toLower();
@@ -110,9 +110,8 @@ void fillCoreTable(QTableWidget *table, const QVector<QPair<QString, QString>> &
     }
 }
 
-// An id no other runner of this launcher is using. A runner keeps the id it
-// was given for as long as it lives, renaming and all: it is what the items
-// pointing at it store.
+// An id no other runner of this launcher uses. A runner keeps its id for life,
+// renames included, since that is what the items pointing at it store.
 QString uniqueRunnerId(const QStringList &taken, const QString &name) {
     static const QRegularExpression unsafe(QStringLiteral("[^a-z0-9]+"));
     QString base = QFileInfo(name).fileName().toLower().replace(unsafe, QStringLiteral("-"));
@@ -141,7 +140,7 @@ LaunchersDialog::LaunchersDialog(QWidget *parent) : QDialog(parent) {
     m_tree->setHeaderHidden(true);
     m_tree->setFrameShape(QFrame::NoFrame); // the style sheet draws the edge
     m_tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    // A flat list: a launcher has nothing under it any more.
+    // A flat list: a launcher no longer has children.
     m_tree->setRootIsDecorated(false);
 
     buildLauncherPage();
@@ -172,17 +171,16 @@ LaunchersDialog::LaunchersDialog(QWidget *parent) : QDialog(parent) {
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     buildTree(0);
-    // Tall enough for the roomiest launcher, so that picking through them
-    // never resizes the window: the slack sits at the bottom of the pages
-    // that need less.
+    // Tall enough for the largest launcher page, so selecting another one never
+    // resizes the window; smaller pages leave space at the bottom.
     resize(760, 620);
 }
 
 void LaunchersDialog::setOpenScreen(const QString &name, const QVector<ProgramItem> &items) {
     m_openScreen = name;
     m_openItems = items;
-    // Said after the page was built, so what it counted without them is
-    // counted again.
+    // Called after the page was built, so the count made without these items is
+    // redone.
     refreshPrefixTable();
 }
 
@@ -206,9 +204,9 @@ void LaunchersDialog::buildLauncherPage() {
     m_launcherForm->addRow(tr("File types:"), m_extensions);
     layout->addLayout(m_launcherForm);
 
-    // The programs that can act as this launcher. For wine and Proton the
-    // list is read off the machine; for the rest it is where a full path to
-    // an install outside the PATH goes.
+    // The programs that can act as this launcher. For wine and Proton the list
+    // is detected; for the others it is where a full path to an install
+    // outside the PATH is entered.
     m_runnersTitle = new QLabel(m_launcherPage);
     layout->addWidget(m_runnersTitle);
 
@@ -248,16 +246,16 @@ void LaunchersDialog::buildLauncherPage() {
     connect(m_runnerRemove, &QPushButton::clicked, this, [this] {
         const int row = m_runners->currentRow();
         if (row < 0) return;
-        // A wine or a Proton build goes when the machine stops carrying it,
-        // not from here; and a launcher with nothing of its own left could
-        // start nothing at all, so the last one stays.
+        // A detected wine or Proton build disappears when it is uninstalled,
+        // not from here; and a launcher with no runner at all could start
+        // nothing, so the last editable row stays.
         if (runnerRowIsDiscovered(row)) return;
         if (editableRunnerRows() > 1) m_runners->removeRow(row);
     });
     connect(m_runnerBrowse, &QPushButton::clicked, this, &LaunchersDialog::browseForRunner);
 
-    // Where the wine prefixes its programs build are kept: one to a program,
-    // holding its C: drive, its registry and its saved games.
+    // Where the wine prefixes its programs create are kept: one per program,
+    // holding its C: drive, registry and saved games.
     m_prefixesBox = new QWidget(m_launcherPage);
     auto *prefixesLayout = new QVBoxLayout(m_prefixesBox);
     prefixesLayout->setContentsMargins(0, 0, 0, 0);
@@ -275,17 +273,14 @@ void LaunchersDialog::buildLauncherPage() {
     prefixesLayout->addLayout(prefixesRow);
 
     // Which prefixes an item can be pointed at. Every program gets one of its
-    // own without anything being set up here -- that is the first row, and it
-    // is not ours or anyone's to take away. The rest are bottles set up by
-    // hand, for programs meant to share one.
+    // own with no configuration, which is the first row and cannot be removed.
+    // The rest are prefixes created by hand, for programs meant to share one.
     prefixesLayout->addWidget(new QLabel(tr("Prefixes:"), m_prefixesBox));
 
-    // Three columns, because a prefix nobody wants looks exactly like one in
-    // daily use until you are told how many items run in it and how much of
-    // the disk it is holding.
-    // A tree rather than a list: each prefix opens on what actually runs in
-    // it, which is the thing worth knowing before taking one away. Closed to
-    // begin with, the prefixes themselves being what is being read.
+    // Three columns, since an unused prefix looks like one in daily use until
+    // the item count and the disk usage are shown. A tree rather than a list,
+    // so each prefix expands to what runs in it, which is what matters before
+    // deleting one; collapsed initially.
     m_prefixes = new QTreeWidget(m_prefixesBox);
     m_prefixes->setColumnCount(3);
     m_prefixes->setHeaderLabels({tr("Name"), tr("Used by"), tr("Size")});
@@ -329,15 +324,15 @@ void LaunchersDialog::buildLauncherPage() {
     connect(m_prefixes, &QTreeWidget::itemSelectionChanged, this,
             &LaunchersDialog::updatePrefixButtons);
     connect(m_prefixSizes, &QPushButton::clicked, this, &LaunchersDialog::measurePrefixes);
-    // A prefix renamed is a different bottle: what is used and what is not
-    // has to be counted again, and so has the folder that holds them all.
+    // A renamed prefix is a different folder, so the usage counts and the
+    // folder listing have to be recomputed.
     connect(m_prefixes, &QTreeWidget::itemChanged, this,
             [this](QTreeWidgetItem *item, int column) {
                 if (column == kPrefixName && !item->parent()) refreshPrefixTable();
             });
-    // Which ones are open is remembered rather than reset: a rebuild happens
-    // at every rename and every removal, and shutting them each time would
-    // undo whoever just opened one.
+    // The expanded rows are remembered rather than reset: a rebuild happens on
+    // every rename and removal, and collapsing them each time would undo what
+    // the user just expanded.
     const auto remember = [this](QTreeWidgetItem *item, bool open) {
         if (item->parent()) return;
         const QString name = item->text(kPrefixName);
@@ -359,9 +354,9 @@ void LaunchersDialog::buildLauncherPage() {
         refreshPrefixTable();
     });
 
-    // Where Steam keeps its games. Steam lists its own libraries in a file
-    // of its own, so those are read rather than asked for; a folder it does
-    // not list -- a disk it has not been told about -- is added here.
+    // Where Steam keeps its games. Steam lists its own libraries in its config,
+    // so those are read rather than entered; a folder it does not list, on a
+    // disk it has not been told about, is added here.
     m_librariesBox = new QWidget(m_launcherPage);
     auto *librariesLayout = new QVBoxLayout(m_librariesBox);
     librariesLayout->setContentsMargins(0, 0, 0, 0);
@@ -395,13 +390,13 @@ void LaunchersDialog::buildLauncherPage() {
         const int row = m_libraries->currentRow();
         if (row < 0) return;
         const QTableWidgetItem *cell = m_libraries->item(row, 0);
-        // Steam's own list is not ours to take from.
+        // Steam's own entries cannot be removed here.
         if (cell && cell->data(kDiscoveredRole).toBool()) return;
         m_libraries->removeRow(row);
     });
 
-    // The cores an emulator plays each file type with, shared by every
-    // profile that has not pinned one of its own.
+    // The cores an emulator plays each file type with, shared by every profile
+    // that has not set one of its own.
     m_coresBox = new QWidget(m_launcherPage);
     auto *coresLayout = new QVBoxLayout(m_coresBox);
     coresLayout->setContentsMargins(0, 0, 0, 0);
@@ -464,14 +459,15 @@ void LaunchersDialog::addRunnerRow(const LauncherRunner &runner) {
     m_runners->insertRow(row);
 
     auto *name = new QTableWidgetItem(runner.name);
-    // The id travels with the row rather than being shown: it is what the
-    // items have stored, so it has to survive a rename.
+    // The id is carried on the row rather than displayed: items store it, so it
+    // has to survive a rename.
     name->setData(Qt::UserRole, runner.id);
     name->setData(kDiscoveredRole, runner.discovered);
     m_runners->setItem(row, kRunnerName, name);
     m_runners->setItem(row, kRunnerCommand, new QTableWidgetItem(runner.command));
 
-    // Not typed but ticked: whether the program is an alias needing a shell.
+    // A checkbox rather than a field: whether the program is an alias needing a
+    // shell.
     auto *shell = new QTableWidgetItem;
     shell->setFlags((shell->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsEditable);
     shell->setCheckState(runner.useShell ? Qt::Checked : Qt::Unchecked);
@@ -481,9 +477,9 @@ void LaunchersDialog::addRunnerRow(const LauncherRunner &runner) {
 
     if (!runner.discovered) return;
 
-    // Read off the machine, so there is nothing here to change: the row is
-    // shown so that an item can be pointed at it, and greyed so that it is
-    // plainly not this dialog's to edit.
+    // Detected rather than configured, so there is nothing to change. The row
+    // is shown so an item can be pointed at it, and greyed to make clear it is
+    // not editable.
     const QString note = tr("Found on this machine, so it comes and goes with what is "
                             "installed rather than being set here.");
     for (int column = 0; column < m_runners->columnCount(); ++column) {
@@ -518,8 +514,8 @@ void LaunchersDialog::browseForRunner() {
                                                         tr("All Files (*)"));
     if (picked.isEmpty()) return;
     command->setText(picked);
-    // A program picked by hand is a path, so no shell is wanted for it, and
-    // a row still unnamed takes the program's own name.
+    // A program picked from the file dialog is a path, so no shell is needed,
+    // and a row still unnamed takes the program's file name.
     if (QTableWidgetItem *shell = m_runners->item(row, kRunnerShell)) {
         shell->setCheckState(Qt::Unchecked);
     }
@@ -538,16 +534,15 @@ QTreeWidgetItem *LaunchersDialog::addPrefixRow(PrefixRow kind, const QString &na
     if (!path.isEmpty()) row->setToolTip(kPrefixName, path);
     if (!note.isEmpty()) row->setToolTip(kPrefixUsed, note);
 
-    // Only a name someone typed is a name to type over.
+    // Only a typed name is editable.
     if (kind == PrefixRow::Named) {
         row->setFlags(row->flags() | Qt::ItemIsEditable);
         return row;
     }
 
-    // Neither the prefix every program gets of its own nor a folder left
-    // behind by an item that is gone is a name anyone typed: both are shown
-    // so the list reads as the whole of what is in there, and greyed so that
-    // neither reads as a row to edit.
+    // Neither the per-program prefix nor a folder left behind by a deleted item
+    // is a typed name. Both are shown so the list covers everything in the
+    // folder, and greyed so neither looks editable.
     row->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     const QBrush grey = m_prefixes->palette().brush(QPalette::Disabled, QPalette::Text);
     for (int column = 0; column < m_prefixes->columnCount(); ++column) {
@@ -559,15 +554,15 @@ QTreeWidgetItem *LaunchersDialog::addPrefixRow(PrefixRow kind, const QString &na
 
 void LaunchersDialog::addPrefixPrograms(QTreeWidgetItem *parent, const QStringList &programs) {
     const int programKind = static_cast<int>(PrefixRow::Program);
-    // Under a row that is itself greyed -- a prefix nothing uses any more --
-    // what it was built for is greyed with it.
+    // Under a greyed row, a prefix nothing uses any more, the programs are
+    // greyed too.
     const bool greyed = parent->data(kPrefixName, kPrefixKindRole).toInt() ==
                         static_cast<int>(PrefixRow::Leftover);
 
     for (const QString &program : programs) {
         auto *child = new QTreeWidgetItem(parent);
-        // The program's own name, the path being too long to read across a
-        // column and no more use: it is on the row as a tooltip.
+        // The file name only: the full path is too long for the column and is
+        // put in the tooltip instead.
         child->setText(kPrefixName, QFileInfo(program).fileName());
         child->setToolTip(kPrefixName, program);
         child->setData(kPrefixName, kPrefixKindRole, programKind);
@@ -598,8 +593,8 @@ void LaunchersDialog::refreshPrefixTable() {
     if (m_editingLauncher < 0 || m_editingLauncher >= m_launchers.size()) return;
     if (!m_launchers[m_editingLauncher].usesPrefixes) return;
 
-    // Whatever has been typed so far is what the table is rebuilt around: a
-    // name half entered is still that row's name.
+    // The table is rebuilt around the names as typed, a half-entered name
+    // included.
     const QStringList names = typedPrefixes();
     const QTreeWidgetItem *current = m_prefixes->currentItem();
     const QString selected = current && !current->parent() ? current->text(kPrefixName)
@@ -611,13 +606,13 @@ void LaunchersDialog::refreshPrefixTable() {
     const QVector<PrefixUse> found =
         prefixesIn(m_prefixesDir->text().trimmed(), names, open);
 
-    // Rebuilt wholesale, and the edit signal held off while it is: each row
-    // put in would otherwise ask for another rebuild.
+    // Rebuilt from scratch with the edit signal blocked, since each row added
+    // would otherwise trigger another rebuild.
     const QSignalBlocker blocker(m_prefixes);
     m_prefixes->clear();
 
-    // How many items are running in a prefix of their own, which is what the
-    // first row stands for.
+    // How many items run in a prefix of their own, which is what the first row
+    // stands for.
     int perApplication = 0;
     for (const PrefixUse &use : found) {
         if (use.kind == PrefixUse::PerApplication) perApplication += use.items();
@@ -628,17 +623,15 @@ void LaunchersDialog::refreshPrefixTable() {
         tr("What an item gets when it names no prefix: one of its own, under the "
            "folder above, built the first time it runs."));
 
-    // Under it, the prefixes it stands for: one per program, which is the
-    // whole of what the row means. Each is a folder of its own, so each has
-    // a size of its own worth knowing -- and one whose program has left the
-    // desktop is said to be unused there, where it can be deleted, rather
-    // than being listed away from the row it belongs under.
+    // Under it, the prefixes it stands for, one per program. Each is a separate
+    // folder with a size of its own, and one whose program has left the desktop
+    // is marked unused here, under the row it belongs to, where it can be
+    // deleted.
     for (const PrefixUse &use : found) {
         if (use.kind != PrefixUse::PerApplication) continue;
-        // The ones that exist. An item whose prefix has never been built
-        // leads to a folder that is not there, and a row for a folder that
-        // is not there is a row with nothing to say and nothing to do: the
-        // count on the row above already has that item in it.
+        // Only prefixes that exist. An item whose prefix has never been created
+        // points at a missing folder, which has nothing to show and nothing to
+        // delete; the count on the row above already includes that item.
         if (!use.onDisk) continue;
 
         const bool inUse = use.items() > 0;
@@ -661,8 +654,8 @@ void LaunchersDialog::refreshPrefixTable() {
         child->setTextAlignment(kPrefixSize, Qt::AlignRight | Qt::AlignVCenter);
 
         if (inUse) continue;
-        // Nothing runs in it: greyed, like any other prefix nothing leads
-        // to, and said to be so rather than only looking it.
+        // Nothing runs in it: greyed like any other unused prefix, and labelled
+        // as unused rather than only looking different.
         const QBrush grey = m_prefixes->palette().brush(QPalette::Disabled, QPalette::Text);
         for (int column = 0; column < m_prefixes->columnCount(); ++column) {
             child->setForeground(column, grey);
@@ -676,8 +669,8 @@ void LaunchersDialog::refreshPrefixTable() {
                                     .arg(program));
     }
 
-    // The named ones in the order they were given, blank rows and all: a row
-    // someone has begun must not vanish under them as they type.
+    // The named ones in the order given, blank rows included: a row being typed
+    // must not disappear as it is edited.
     for (const QString &name : names) {
         const PrefixUse *use = nullptr;
         for (const PrefixUse &candidate : found) {
@@ -701,17 +694,14 @@ void LaunchersDialog::refreshPrefixTable() {
         QTreeWidgetItem *row =
             addPrefixRow(PrefixRow::Named, name, used, use ? use->path : QString(), note);
         row->setData(kPrefixName, kPrefixItemsRole, use ? use->items() : 0);
-        // What is actually running in it, which is what makes a shared
-        // prefix worth having and what says whether it can go.
+        // What actually runs in it, which is what tells whether a shared prefix
+        // is still needed.
         if (use) addPrefixPrograms(row, use->programs);
     }
 
-    // What is left in the folder: a prefix built for a program that is no
-    // longer on any screen, and anything in there that was never ours. These
-    // are the ones worth clearing out, and the only ones nothing points at.
-    // What is left at the top is what belongs to neither: a folder in the
-    // prefixes directory that this application did not make. The prefixes it
-    // did make are all under one row or another by now.
+    // Last, at the top level: folders in the prefixes directory that this
+    // application did not create. The ones it did create are all listed under a
+    // row by now.
     for (const PrefixUse &use : found) {
         if (use.kind != PrefixUse::Foreign) continue;
         addPrefixRow(PrefixRow::Leftover, use.name, tr("not ours"), use.path,
@@ -719,8 +709,8 @@ void LaunchersDialog::refreshPrefixTable() {
                         "make. Left alone."));
     }
 
-    // Back to the row that was selected, and open again at whatever was
-    // open: the rebuild has put a whole new tree in its place.
+    // Restore the selection and the expanded rows, since the rebuild replaced
+    // the whole tree.
     for (int row = 0; row < m_prefixes->topLevelItemCount(); ++row) {
         QTreeWidgetItem *item = m_prefixes->topLevelItem(row);
         const QString name = item->text(kPrefixName);
@@ -734,31 +724,28 @@ void LaunchersDialog::refreshPrefixTable() {
 }
 
 void LaunchersDialog::updatePrefixButtons() {
-    // What is picked out rather than what the keyboard was last on: clicking
-    // the empty space under the rows drops the selection, and the buttons
-    // follow that.
+    // The selection rather than the current item: clicking the empty space
+    // below the rows clears the selection, and the buttons follow it.
     const QList<QTreeWidgetItem *> picked = m_prefixes->selectedItems();
     const QTreeWidgetItem *row = picked.isEmpty() ? nullptr : picked.first();
     const QTreeWidgetItem *parent = row ? row->parent() : nullptr;
 
-    // Add makes a new prefix at the end of the list. The prefixes are the
-    // rows at the top, so that is where adding one belongs; the programs
-    // hanging under them are not a list to add to.
+    // Add appends a new prefix to the list. Prefixes are the top-level rows,
+    // so Add applies there; the programs listed under them cannot be added to.
     m_prefixAdd->setEnabled(parent == nullptr);
 
-    // Remove takes away a prefix -- one set up by hand, or one of the
-    // automatic ones under the default row, each of which is a folder of its
-    // own. Neither a program nor the default row itself is a prefix to take
-    // away, and a folder this application did not make is left alone.
+    // Remove deletes a prefix: one created by hand, or one of the automatic
+    // ones under the default row, each being a folder of its own. Neither a
+    // program row nor the default row itself is a prefix, and a folder this
+    // application did not create is left alone.
     const auto kindOf = [](const QTreeWidgetItem *item) {
         return item ? static_cast<PrefixRow>(item->data(kPrefixName, kPrefixKindRole).toInt())
                     : PrefixRow::Program;
     };
     const bool namedPrefix = row && !parent && kindOf(row) == PrefixRow::Named;
-    // An automatic prefix is a folder and nothing else -- there is no list
-    // it is in -- so when the folder is not there yet there is nothing to
-    // remove, and the button says so by being off rather than by doing
-    // nothing when it is pressed.
+    // An automatic prefix is only a folder, not an entry in a list, so when the
+    // folder does not exist yet there is nothing to remove and the button is
+    // disabled rather than silently doing nothing.
     const bool automaticPrefix =
         parent && kindOf(parent) == PrefixRow::Fixed &&
         QFileInfo::exists(row->data(kPrefixName, kPrefixPathRole).toString());
@@ -766,14 +753,14 @@ void LaunchersDialog::updatePrefixButtons() {
 }
 
 void LaunchersDialog::measurePrefixes() {
-    // Every prefix is a Windows installation, so this is a walk of some
-    // thousands of files: said so, and the button held, while it runs.
+    // Every prefix is a Windows installation, so this walks some thousands of
+    // files; the button is disabled and relabelled while it runs.
     m_prefixSizes->setEnabled(false);
     m_prefixSizes->setText(tr("Reading..."));
     QCoreApplication::processEvents();
 
-    // Every row that has a folder behind it, the per-application ones under
-    // the first row included: those are where the disk actually goes.
+    // Every row with a folder behind it, including the per-application ones
+    // under the first row, which is where most of the disk usage is.
     QTreeWidgetItemIterator rows(m_prefixes);
     for (; *rows; ++rows) {
         QTreeWidgetItem *row = *rows;
@@ -797,8 +784,8 @@ void LaunchersDialog::removePrefix() {
         return item ? static_cast<PrefixRow>(item->data(kPrefixName, kPrefixKindRole).toInt())
                     : PrefixRow::Program;
     };
-    // The two kinds of row that stand for a prefix of their own: one set up
-    // by hand, and one of the automatic ones under the default row.
+    // The two kinds of row that stand for a prefix of their own: one created by
+    // hand, and one of the automatic ones under the default row.
     const bool named = !parent && kindOf(row) == PrefixRow::Named;
     const bool automatic = parent && kindOf(parent) == PrefixRow::Fixed;
     if (!named && !automatic) return;
@@ -807,17 +794,16 @@ void LaunchersDialog::removePrefix() {
     const QString path = row->data(kPrefixName, kPrefixPathRole).toString();
     const bool onDisk = !path.isEmpty() && QFileInfo::exists(path);
 
-    // What is in there, so that nobody deletes several gigabytes of saved
-    // games on the strength of a folder name.
+    // The path and its size, so the confirmation is not based on a folder name
+    // alone when it may hold gigabytes of saved games.
     QString what = path;
     if (onDisk) {
         what = tr("%1\n\n%2").arg(path, QLocale().formattedDataSize(folderSize(path)));
     }
 
     if (!onDisk) {
-        // Nothing built yet. A named prefix is still a row to take out of
-        // the list; an automatic one is only ever a folder, so there is
-        // nothing to do at all.
+        // Nothing created yet. A named prefix is still a row to remove from the
+        // list; an automatic one is only a folder, so there is nothing to do.
         if (named) {
             delete row;
             refreshPrefixTable();
@@ -830,11 +816,11 @@ void LaunchersDialog::removePrefix() {
     box.setWindowTitle(tr("Remove Prefix"));
     box.setText(named ? tr("Remove the prefix '%1'?").arg(name)
                       : tr("Delete the prefix '%1'?").arg(name));
-    // A prefix is a C: drive: its saved games are in there and nowhere else.
+    // A prefix is a C: drive: its saved games are there and nowhere else.
     QString warning = tr("A prefix holds the programs' settings and saved games, and "
                          "deleting its folder cannot be undone.");
-    // And one still in use is one a program on the desktop will build again
-    // from nothing the next time it is started.
+    // One still in use will be recreated from scratch the next time the
+    // program runs.
     const int items = row->data(kPrefixName, kPrefixItemsRole).toInt();
     if (items > 0) {
         warning += QLatin1Char(' ') +
@@ -861,8 +847,8 @@ void LaunchersDialog::removePrefix() {
         return;
     }
     if (listOnly && box.clickedButton() == listOnly) {
-        // Out of the list, and the folder left where it is: it becomes one of
-        // the leftovers, to be dealt with or not.
+        // Removed from the list with the folder left in place, where it is
+        // listed as a leftover.
         delete row;
         refreshPrefixTable();
     }
@@ -877,8 +863,7 @@ void LaunchersDialog::addLibraryRow(const QString &path, bool discovered) {
     folder->setFlags(folder->flags() & ~Qt::ItemIsEditable);
     m_libraries->setItem(row, 0, folder);
 
-    // What is actually in it, which is the thing worth knowing about a
-    // folder someone has just added.
+    // How many games it holds, which is what matters about a folder just added.
     const int found = steamGamesIn({path}).size();
     auto *count = new QTableWidgetItem(QString::number(found));
     count->setFlags(count->flags() & ~Qt::ItemIsEditable);
@@ -931,13 +916,13 @@ void LaunchersDialog::commitCurrentPage() {
         launcher.extensions = splitExtensions(m_extensions->text());
         if (launcher.usesPrefixes) {
             launcher.prefixesDir = m_prefixesDir->text().trimmed();
-            // Only the named ones are kept: the first row stands for the
-            // prefix an item gets when it names none, which is not a name.
+            // Only the named ones are saved: the first row stands for the
+            // prefix an item gets when it names none.
             QStringList prefixes;
             for (const QString &typed : typedPrefixes()) {
                 const QString name = prefixFolderName(typed);
-                // A row someone began and left blank is not a prefix yet, and
-                // one spelled the same as another is the same bottle.
+                // A row left blank is not a prefix yet, and two rows with the
+                // same name are the same prefix.
                 if (name.isEmpty() || prefixes.contains(name)) continue;
                 prefixes << name;
             }
@@ -955,15 +940,15 @@ void LaunchersDialog::commitCurrentPage() {
 
             LauncherRunner runner;
             runner.command = commandCell->text().trimmed();
-            // A row with no program names nothing that could be started, so
-            // it is not a runner yet: it is a row someone has begun.
+            // A row with no program cannot start anything, so it is not a
+            // runner yet.
             if (runner.command.isEmpty()) continue;
             runner.name = nameCell->text().trimmed();
             if (runner.name.isEmpty()) runner.name = runner.command;
             runner.id = nameCell->data(Qt::UserRole).toString();
 
-            // What was read off the machine stays what it was: its id, and
-            // the fact that it is not ours to save.
+            // A detected runner is restored as it was, id included, and is not
+            // saved.
             runner.discovered = nameCell->data(kDiscoveredRole).toBool();
             if (runner.discovered) {
                 if (const LauncherRunner *was = launcher.runner(runner.id)) runner = *was;
@@ -972,22 +957,22 @@ void LaunchersDialog::commitCurrentPage() {
                 if (runner.id.isEmpty()) {
                     runner.id = uniqueRunnerId(taken, runner.name);
                     taken << runner.id;
-                    // Back onto the row, so that leaving the page and coming
-                    // back does not mint a second id for the same runner.
+                    // Written back onto the row, so leaving the page and
+                    // returning does not generate a second id for the same
+                    // runner.
                     nameCell->setData(Qt::UserRole, runner.id);
                 }
             }
             runners.append(runner);
         }
-        // Emptied out entirely -- every row cleared rather than removed --
-        // leaves the launcher what it had: it has to keep something to start
-        // things with, whether its own or the machine's.
+        // If every row was cleared rather than removed, the launcher keeps the
+        // runners it had: it needs at least one way to start something.
         if (!runners.isEmpty()) launcher.runners = runners;
 
         if (launcher.usesSteamLibraries) {
-            // Only the ones added by hand are kept: Steam's own are read
-            // afresh each time, and saving them would freeze a list that
-            // should follow what Steam knows.
+            // Only the ones added by hand are saved: Steam's own are re-read
+            // each time, and saving them would freeze a list that has to follow
+            // Steam.
             QStringList folders;
             for (int row = 0; row < m_libraries->rowCount(); ++row) {
                 const QTableWidgetItem *cell = m_libraries->item(row, 0);
@@ -1026,12 +1011,10 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
     m_runners->setRowCount(0);
     for (const LauncherRunner &runner : launcher.runners) addRunnerRow(runner);
 
-    // Whether the list is the machine's or ours: a machine's own list is
-    // not something to add to or take from.
+    // A detected list cannot be added to or removed from.
     int discovered = 0;
     for (const LauncherRunner &runner : launcher.runners) discovered += runner.discovered;
 
-    // A machine's own list is not ours to add to or take from.
     m_runnerAdd->setEnabled(discovered == 0);
     m_runnerRemove->setEnabled(discovered == 0);
     m_runnerBrowse->setEnabled(discovered == 0);
@@ -1049,10 +1032,10 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
         refreshPrefixTable();
     }
 
-    // Everything that does not belong to this launcher goes first. Showing
-    // one before hiding another leaves both in the layout for a pass, and
-    // the dialog grows to hold the pair -- then stays grown, because a
-    // window is not shrunk back when its contents need less.
+    // Hide the sections this launcher does not use before showing the others.
+    // Showing one before hiding another leaves both in the layout for a pass,
+    // which grows the dialog to fit the pair, and a window is not shrunk back
+    // when its contents need less.
     if (!launcher.usesSteamLibraries) m_librariesBox->hide();
     if (!launcher.usesCores) m_coresBox->hide();
     if (!launcher.usesPrefixes) m_prefixesBox->hide();
@@ -1060,7 +1043,7 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
     m_librariesBox->setVisible(launcher.usesSteamLibraries);
     if (launcher.usesSteamLibraries) {
         m_libraries->setRowCount(0);
-        // Steam's own first, then whatever has been added by hand.
+        // Steam's own first, then the folders added by hand.
         const QStringList discovered = discoveredSteamLibraries();
         for (const QString &path : discovered) addLibraryRow(path, true);
         for (const QString &path : launcher.libraryFolders) {

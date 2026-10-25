@@ -7,16 +7,16 @@
 class IconListWidget;
 class QListWidgetItem;
 
-// A Program Group window: a titled MDI child holding a grid of
-// ProgramItem icons, equivalent to a [group] section in progman.ini.
+// A Program Group window: a titled MDI child holding a grid of ProgramItem
+// icons, equivalent to a [group] section in progman.ini.
 class GroupWindow : public QWidget {
     Q_OBJECT
 public:
     explicit GroupWindow(const QString &title, QWidget *parent = nullptr);
 
-    // This group, as against another with the same title. Given when the
-    // group is made and kept from then on -- see Ids.h -- so that what is
-    // remembered about a group survives it being renamed or moved.
+    // Identifies this group as distinct from another with the same title.
+    // Assigned when the group is created and kept from then on, see Ids.h, so
+    // that what is recorded about a group survives a rename or a move.
     QString id() const { return m_id; }
     void setId(const QString &id) { if (!id.isEmpty()) m_id = id; }
 
@@ -24,24 +24,22 @@ public:
     void setTitle(const QString &title);
 
     const QVector<ProgramItem> &items() const { return m_items; }
-    // Takes one out without asking and without announcing it: what redoing
-    // a deletion does, the asking and the announcing having happened the
-    // first time round.
+    // Removes an item without confirmation and without emitting itemDeleted:
+    // what redoing a deletion does, both having happened the first time.
     void removeProgramItem(int index);
     void addProgramItem(const ProgramItem &item);
     void insertProgramItem(const ProgramItem &item, int row);
     void newItemDialog() { showPropertiesDialog(-1); }
 
-    // Migration for desktops saved when XP icon styling was one switch for
-    // the whole Program Manager: what that switch actually restyled was the
-    // legacy-artwork items, and each item now carries the setting itself.
+    // Migration for desktops saved when XP icon styling was a single
+    // application-wide switch: it restyled the legacy-artwork items, and each
+    // item now carries the setting itself.
     void adoptGlobalXpStyleIcons();
 
-    // Drops this group's highlighted icon, so only the active group carries
-    // a selection.
+    // Clears this group's selection, so only the active group has one.
     void clearSelection();
-    // Picks one out and shows it: scrolled into view, selected and focused.
-    // What a search result does when it is activated.
+    // Scrolls an item into view, selects it and gives it focus. Called when a
+    // search result is activated.
     void selectItem(int index);
 
 signals:
@@ -50,9 +48,8 @@ signals:
     // should stay selected.
     void itemSelected();
     void modified();
-    // An item the user deleted, and where it was, so that it can be put
-    // back. Not emitted for an item dragged to another group: that one has
-    // not gone anywhere.
+    // An item the user deleted, and its position, so it can be restored. Not
+    // emitted for an item dragged to another group, which still exists.
     void itemDeleted(int index, const ProgramItem &item);
 
 private slots:
@@ -68,8 +65,8 @@ private:
     void launch(const ProgramItem &item);
     void showPropertiesDialog(int index); // -1 == new item
     void deleteItem(int index);
-    // A second icon for the same program, with an identity -- and so a wine
-    // prefix -- of its own.
+    // A second icon for the same program, with an id, and so a wine prefix, of
+    // its own.
     void duplicateItem(int index);
     int indexOfListItem(QListWidgetItem *listItem) const;
 

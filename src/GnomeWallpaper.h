@@ -6,27 +6,27 @@
 
 class QProcess;
 
-// The picture the GNOME desktop is wearing, so the Program Manager can wear
-// the same one behind its group windows.
+// The picture the GNOME desktop is using, so the Program Manager can show the
+// same one behind its group windows.
 //
 // Read with gsettings rather than through the desktop portal: the portal
-// publishes the appearance settings but not the background, and pulling GIO
-// in to read one string is more than this is worth.
+// publishes the appearance settings but not the background, and pulling in GIO
+// to read one string is not worth it.
 class GnomeWallpaper : public QObject {
     Q_OBJECT
 public:
     explicit GnomeWallpaper(QObject *parent = nullptr);
 
-    // The image GNOME is showing now, empty when there is none to be found
-    // -- no gsettings to ask, no background set, or a file that has gone.
-    // `preferred` is the size it will be shown at: a themed wallpaper offers
-    // one picture per screen size and the nearest is taken.
+    // The image GNOME is currently showing, empty when there is none to be
+    // found: no gsettings available, no background set, or a missing file.
+    // `preferred` is the size it will be shown at, a themed wallpaper offering
+    // one picture per screen size, of which the nearest is taken.
     static QString currentPath(bool dark, const QSize &preferred = QSize());
 
 signals:
-    // Someone changed the desktop's background. What it is now is read back
-    // with currentPath(); the signal carries nothing because the setting may
-    // name a theme file whose picture depends on the screen.
+    // The desktop background changed. Read the new one with currentPath(); the
+    // signal carries nothing, since the setting may name a theme file whose
+    // picture depends on the screen.
     void changed();
 
 private:

@@ -24,10 +24,10 @@ bool desktopSearchAvailable() {
 bool openDesktopSearch() {
     if (!desktopSearchAvailable()) return false;
 
-    // The property rather than FocusSearch(): the methods on this interface
-    // are refused to callers the shell does not trust, but the overview's
-    // own property can be set by anyone -- and the overview opens with its
-    // search focused, which is the whole of what is wanted.
+    // The property rather than FocusSearch(): the methods on this interface are
+    // refused to untrusted callers, but the overview property can be set by
+    // anyone, and the overview opens with its search focused, which is all that
+    // is needed.
     QDBusInterface properties(QLatin1String(kService), QLatin1String(kPath),
                               QStringLiteral("org.freedesktop.DBus.Properties"),
                               QDBusConnection::sessionBus());

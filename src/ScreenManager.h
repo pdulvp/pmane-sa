@@ -4,38 +4,38 @@
 #include <QStringList>
 #include <QVector>
 
-// The named desktops the Program Manager can switch between. A screen owns
-// a whole workspace: its program groups, where their windows sit and how big
-// they are, the order of the icons inside them, and its colour scheme. Each
-// one is a .ini of its own in the config directory, listed by a small index
-// that also remembers which was last open.
+// The named desktops the Program Manager can switch between. A screen holds a
+// whole workspace: its program groups, their window positions and sizes, the
+// order of the icons inside them, and its colour scheme. Each is a .ini of its
+// own in the config directory, listed by a small index that also records which
+// was last open.
 //
-// Screens were called profiles until recently; an index written under the
-// old name is read once and written back out under the new one.
+// Screens were called profiles until recently; an index written under the old
+// name is read once and written back under the new one.
 //
-// --configPath moves the whole lot -- index and screens alike -- to a
-// directory of someone's choosing, which is what makes the desktop kept
-// beside the sources, the one the documentation's pictures are taken of,
-// openable without disturbing the desktop in ~/.config. Nothing else
-// changes: screens there are made, renamed and thrown away as usual.
+// --configPath moves the index and the screens to a chosen directory, which is
+// what makes the desktop kept beside the sources, the one the documentation's
+// screenshots are taken from, openable without disturbing the desktop in
+// ~/.config. Nothing else changes: screens there are created, renamed and
+// deleted as usual.
 class ScreenManager {
 public:
     ScreenManager();
 
-    // Where screens are kept, for the rest of this run. Must be called
-    // before the first ScreenManager exists. An empty path is ignored; one
-    // that does not exist yet is created.
+    // Sets where screens are kept for the rest of this run. Must be called
+    // before the first ScreenManager is created. An empty path is ignored; one
+    // that does not exist is created.
     static void useConfigPath(const QString &path);
 
     QStringList names() const;
     QString current() const { return m_current; }
     bool contains(const QString &name) const { return indexOf(name) >= 0; }
 
-    // Where one screen's desktop is stored. Empty for an unknown name.
+    // The file one screen's desktop is stored in. Empty for an unknown name.
     QString filePath(const QString &name) const;
 
     // Each of these writes the index back out. They return false and change
-    // nothing when the name is blank or already taken.
+    // nothing when the name is empty or already in use.
     bool create(const QString &name);
     bool duplicate(const QString &source, const QString &name);
     bool rename(const QString &from, const QString &to);
@@ -53,19 +53,19 @@ private:
     QString configDir() const;
     QString indexPath() const;
     QString legacyIndexPath() const;
-    // A file name derived from the screen's name that no other screen is
-    // already using.
+    // A file name derived from the screen's name and not already in use by
+    // another screen.
     QString uniqueFileName(const QString &name) const;
     void loadIndex();
     void saveIndex() const;
-    // First run: adopt a groups.ini from before there were screens as the
+    // On first run, adopts a groups.ini from before screens existed as the
     // default screen, so an existing desktop is not lost.
     void seedFirstScreen();
 
     QVector<Entry> m_entries;
     QString m_current;
 
-    // The directory --configPath named, absolute. Empty when screens are kept
-    // where they usually are, under ~/.config.
+    // The absolute directory given by --configPath. Empty when screens are kept
+    // in the usual place under ~/.config.
     static QString s_configPath;
 };

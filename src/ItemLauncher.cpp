@@ -33,25 +33,21 @@ struct Invocation {
     QStringList args;
     // Left empty to inherit ours; only Proton needs anything added.
     QProcessEnvironment env;
-    // What to tell the user if the process will not start.
+    // The message to show if the process will not start.
     QString failureHint;
-    // Set instead of all of the above when the item cannot be started at
-    // all, so there is nothing to try.
+    // Set instead of all of the above when the item cannot be started at all,
+    // so there is nothing to attempt.
     QString error;
 };
 
-// Runs the program inside gamescope, which draws it at its own size and
-// scales the result. Nothing about the program's own command line changes:
-// gamescope takes it whole, after a "--".
-// Wine's own scaling: the program is told it is on a higher-resolution
-// screen and draws itself bigger. The DPI recorded in the prefix is what
-// says so, and the whole of what says so -- WINE_DPI_SCALE, which gets
-// passed around as the way to do this, is read by no part of wine.
+// Wine's own scaling: the program is told it is on a higher-resolution screen
+// and draws itself larger. The DPI recorded in the prefix is the only thing
+// that controls this; WINE_DPI_SCALE, often cited as the way to do it, is read
+// by no part of wine.
 //
-// Run for every wine launch, not only a scaled one: the DPI lives in the
-// prefix and stays there, so turning scaling off has to put it back. Left
-// alone when it is already right, which is the ordinary case and costs
-// nothing to establish.
+// Run for every wine launch, not only a scaled one: the DPI is stored in the
+// prefix and persists, so turning scaling off has to reset it. Left alone when
+// it is already correct, which is the usual case and cheap to check.
 void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &launcher,
                   const LauncherRunner &runner) {
     if (!launcher.usesDpiScale) return;
@@ -65,13 +61,15 @@ void applyWineDpi(Invocation &call, const ProgramItem &item, const Launcher &lau
                  wanted);
 }
 
-// Gamescope's scaling, which wraps the program rather than telling it
-// anything. Wine's own scaling is handled by applyWineDpi(), which runs
-// whether or not anything is being scaled.
+// Gamescope's scaling: the program is wrapped rather than told anything, and
+// draws at its own size while gamescope scales the result. The program's
+// command line is unchanged, gamescope taking it whole after a "--". Wine's own
+// scaling is handled by applyWineDpi(), which runs whether or not anything is
+// being scaled.
 void applyWindowScale(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
     if (!launcher.usesWindowScale) return;
     if (item.windowScaleMode != WindowScaleMode::Gamescope) return;
-    // A shader needs gamescope as much as a scale does.
+    // A shader needs gamescope just as a scale does.
     if (item.windowScalePercent <= 100 && item.shader.isEmpty()) return;
 
     const QString scale = item.windowScalePercent > 100
@@ -110,10 +108,10 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
         return call;
     }
 
-    // Proton keeps the wine prefix in STEAM_COMPAT_DATA_PATH and builds it
+    // Proton takes the wine prefix from STEAM_COMPAT_DATA_PATH and creates it
     // on first run; it refuses to start without one. The path is per
-    // executable, so each program gets its own bottle -- under whichever
-    // folder the launcher keeps them in.
+    // executable, so each program gets its own prefix under whichever folder
+    // the launcher uses.
     const QString prefix =
         itemPrefixFor(item.command, launcher.prefixesDir, item.prefix, item.id);
     if (!QDir().mkpath(prefix)) {
@@ -132,9 +130,9 @@ Invocation protonInvocation(const ProgramItem &item, const Launcher &launcher,
     return call;
 }
 
-// A wine prefix per program, the way Proton gets one: two games cannot tread
-// on each other's C: drive, and a prefix built for one is not disturbed by
-// the next. Left to wine's own default when the launcher names no folder.
+// One wine prefix per program, as Proton gets: two games cannot interfere with
+// each other's C: drive. Left to wine's own default when the launcher names no
+// folder.
 void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &launcher) {
     if (!launcher.usesPrefixes) return;
     const QString prefix =
@@ -147,14 +145,14 @@ void applyWinePrefix(Invocation &call, const ProgramItem &item, const Launcher &
     call.env.insert(QStringLiteral("WINEPREFIX"), prefix);
 }
 
-// A .desktop file is a recipe for starting an application rather than an
-// application itself. gio knows how to follow one properly -- it puts a
-// Terminal=true program in a terminal, and reaches a D-Bus activated one
-// over the bus -- so it does the work wherever it is installed, which on a
-// desktop with .desktop files is very nearly everywhere.
-// A .desktop file takes the item's own arguments: gio hands them to the
-// application the launcher describes, which is how an item comes to open a
-// particular file or start in a particular mode.
+// A .desktop file describes how to start an application rather than being one.
+// gio follows one correctly, running a Terminal=true program in a terminal and
+// reaching a D-Bus activated one over the bus, so it is used wherever it is
+// installed, which is almost everywhere .desktop files are used.
+//
+// The item's own arguments are passed through: gio hands them to the
+// application the entry describes, which is how an item opens a particular
+// file or starts in a particular mode.
 Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &extraArgs) {
     Invocation call;
 
@@ -172,8 +170,8 @@ Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &ex
         return call;
     }
 
-    // No gio: run the Exec line ourselves. A program that wanted a terminal
-    // of its own does not get one this way, but it does start.
+    // No gio: run the Exec line directly. A program asking for a terminal does
+    // not get one this way, but it does start.
     QStringList command = desktopEntryCommand(entry);
     if (command.isEmpty()) {
         call.error = tr("'%1' names no program to run.").arg(item.command);
@@ -189,17 +187,17 @@ Invocation desktopEntryInvocation(const ProgramItem &item, const QStringList &ex
 
 QString launchProgramItem(const ProgramItem &item) {
     if (isFolder(item.command)) {
-        // Handed to the file manager the desktop has registered, the same
-        // way a document goes to its own application.
+        // Handed to the file manager the desktop has registered, as a document
+        // is handed to its own application.
         if (QDesktopServices::openUrl(QUrl::fromLocalFile(item.command))) return {};
         return tr("Could not open '%1'. No file manager is registered for folders.")
             .arg(item.command);
     }
 
     if (isDocument(item.command)) {
-        // Opened by whatever the desktop has registered for the type, which
-        // is the one launcher here that is not a command of our own -- so
-        // the item's arguments have nowhere to go and are not used.
+        // Opened by whatever the desktop has registered for the type. This is
+        // the one path with no command line of ours, so the item's arguments
+        // have nowhere to go and are not used.
         if (QDesktopServices::openUrl(QUrl::fromLocalFile(item.command))) return {};
         return tr("Could not open '%1'. No application is registered for this file type.")
             .arg(item.command);
@@ -210,12 +208,11 @@ QString launchProgramItem(const ProgramItem &item) {
     const LauncherRunner *runner = nullptr;
     launcherForItem(item.command, item.launcher, &launcher, &runner);
 
-    // The launchers that start a program the arguments can reach: wine and
-    // Proton, which pass them to the Windows program, and a .desktop file,
-    // whose application takes them from gio. The rest are each handed a file
-    // or an id of their own working out, and anything appended to that is
-    // noise -- which is why the properties dialog does not offer them the
-    // field at all.
+    // The launchers whose arguments reach the program: wine and Proton, which
+    // pass them to the Windows program, and a .desktop file, whose application
+    // receives them from gio. The others are each given a file or an id they
+    // determine themselves, where anything appended would be meaningless,
+    // which is why the properties dialog hides the field for them.
     const bool takesArguments =
         isDesktopEntry(item.command) || (launcher && launcher->usesArguments);
     const QStringList extraArgs =
@@ -228,9 +225,9 @@ QString launchProgramItem(const ProgramItem &item) {
                         "types each launcher takes.")
                          .arg(item.command);
     } else if (runner->isCompatTool()) {
-        // A Proton build is a runner like any other to pick, but not to
-        // start: it wants a prefix of its own and the environment that
-        // points at it, so its command line is not what runs.
+        // A Proton build is selected like any other runner but started
+        // differently: it needs a prefix of its own and the environment
+        // pointing at it, so its command line is not what runs.
         call = protonInvocation(item, *launcher, *runner, extraArgs);
     } else if (runner->command.isEmpty()) {
         call.error = tr("'%1' names no program to run '%2' with. Options > Launchers is "
@@ -238,14 +235,14 @@ QString launchProgramItem(const ProgramItem &item) {
                          .arg(launcher->name, item.command);
     } else {
         // The runner's program, the launcher's arguments with the item's path
-        // filled in, and the interactive shell around it when the program is
-        // an alias.
+        // substituted in, and an interactive shell around it when the program
+        // is an alias.
         const LauncherCommand command =
             launcherCommandFor(*launcher, *runner, item.command, extraArgs);
         call.program = command.program;
         call.args = command.args;
-        // Named by the program actually started, which is what would have to
-        // be put right.
+        // Names the program actually started, which is what would have to be
+        // fixed.
         call.failureHint =
             tr("Could not launch '%1' with %2.").arg(item.command, runner->name);
         applyWinePrefix(call, item, *launcher);
@@ -258,20 +255,20 @@ QString launchProgramItem(const ProgramItem &item) {
     QProcess process;
     process.setProgram(call.program);
     process.setArguments(call.args);
-    // Where it starts out, which is the item's file's own folder for nearly
-    // everything and never anyone's to choose.
+    // The working directory, which is the item file's own folder for nearly
+    // everything and is not configurable.
     process.setWorkingDirectory(workingDirFor(item));
     if (!call.env.isEmpty()) process.setProcessEnvironment(call.env);
 
-    // Whatever it prints, kept while it runs. Started detached, nothing of
-    // it could be seen before: a program that fell over in its first second
-    // left no trace at all, which is the hardest kind of failure to work
-    // out. The file is the item's own and is written over at each launch, so
-    // it is the last run that can be looked at and nothing accumulates.
+    // The program's output, captured while it runs. Being started detached, it
+    // used to leave no trace at all when it failed in its first second, which
+    // is the hardest kind of failure to diagnose. The file is per item and
+    // truncated at each launch, so the last run can be inspected and nothing
+    // accumulates.
     //
-    // Only where the process actually is the program: gio hands a .desktop
-    // file to the application and exits, and so does the handler Steam's
-    // url goes to, so for those an exit says nothing.
+    // Only where the process is the program itself: gio hands a .desktop file
+    // to the application and exits, as does the handler for Steam's url, so
+    // their exit says nothing.
     const bool ourProcess = launcher && !launcher->usesSteamLibraries;
     const QString log = ourProcess ? launchLogPath(item.name, item.id) : QString();
     if (!log.isEmpty()) {

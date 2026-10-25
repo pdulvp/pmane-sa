@@ -47,7 +47,7 @@ Qt::CursorShape cursorForWindowEdges(Qt::Edges edges) {
 bool startWindowResize(QWidget *window, Qt::Edges edges) {
     if (!edges || !window) return false;
     QWindow *handle = window->windowHandle();
-    // The resize is the window manager's to carry out: it knows about
-    // snapping, the other windows, and the pointer grab.
+    // The window manager performs the resize: it handles snapping, the other
+    // windows and the pointer grab.
     return handle && handle->startSystemResize(edges);
 }

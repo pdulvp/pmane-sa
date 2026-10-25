@@ -6,9 +6,9 @@
 #include <QStringList>
 
 namespace {
-// Which file types belong to a kind is the launcher's business now: it is set
-// in Options > Launchers, so a machine that plays its ROMs from a different
-// extension says so there rather than here.
+// Which file types belong to a kind is now the launcher's business: it is
+// configured in Options > Launchers, so a machine whose ROMs use a different
+// extension is set up there rather than here.
 bool claimedBy(const char *id, const QString &path) {
     const Launcher *launcher = launcherById(QLatin1String(id));
     return launcher && launcher->handles(path);

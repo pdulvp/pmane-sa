@@ -8,49 +8,47 @@
 class QProcess;
 class QTimer;
 
-// The machine's own output volume, as the desktop's mixer sees it.
+// The machine's output volume, as the desktop's mixer reports it.
 //
-// Spoken to through wpctl, WirePlumber's command line, which is what a
-// PipeWire desktop keeps its mixer behind. There is no library to link and
-// no D-Bus interface to call: the session's sound is the session manager's,
-// and this is the way it is asked.
+// Accessed through wpctl, WirePlumber's command line tool, which is how a
+// PipeWire desktop exposes its mixer. There is no library to link and no D-Bus
+// interface to call: the session's audio belongs to the session manager, and
+// this is how it is queried.
 
-// Whether there is a mixer to talk to at all. False on a machine without
-// WirePlumber, where no volume control should be offered. Blocking, and so
-// for asking once at startup rather than over and over.
+// Whether a mixer is available at all. False on a machine without WirePlumber,
+// where no volume control should be offered. Blocking, so it is meant to be
+// called once at startup.
 bool systemVolumeAvailable();
 double systemVolume();
 bool systemVolumeMuted();
 
-// The same question without waiting for the answer: `tell` is called with
-// the volume and whether it is muted, once the mixer has replied. Nothing
-// is called if it never does.
+// The same query without blocking: `tell` is called with the volume and the
+// mute state once the mixer replies, and not at all if it never does.
 //
-// Asked this way wherever the answer is wanted while the desktop is in use:
-// running a program and waiting for it stops everything else for as long as
-// it takes, which during a drag is long enough to lose the drag.
+// Used wherever the answer is wanted while the desktop is in use: running a
+// program and waiting for it blocks everything else for as long as it takes,
+// which during a drag is long enough to lose the drag.
 void readSystemVolume(QObject *context, std::function<void(double, bool)> tell);
 
-// Sets them, without waiting.
+// Set them, without blocking.
 void setSystemVolume(double volume);
 void setSystemVolumeMuted(bool muted);
 
-// Watches the mixer and says when something about it has changed -- the
-// volume keys, the desktop's own slider, headphones going in.
+// Watches the mixer and reports when anything about it changes: the volume
+// keys, the desktop's own slider, headphones being plugged in.
 //
-// PipeWire reports its changes as they happen, so there is no need to ask
-// every few seconds whether anything has. Where there is nothing to watch
-// with, it falls back to asking on a timer, which is what this replaced.
+// PipeWire reports changes as they happen, so there is no need to poll. Where
+// no watcher is available it falls back to polling on a timer, which is what
+// this replaced.
 class SystemVolumeWatch : public QObject {
     Q_OBJECT
 public:
     explicit SystemVolumeWatch(QObject *parent = nullptr);
-    // Stops the watcher. Without this it outlives the window that wanted
-    // it, and Qt is right to complain about being torn down around a
-    // process that is still running.
+    // Stops the watcher. Without this it outlives the window that created it,
+    // and Qt warns about being torn down around a running process.
     ~SystemVolumeWatch() override;
 
-    // Whether changes are being listened for rather than asked after.
+    // Whether changes are being listened for rather than polled.
     bool listening() const { return m_listening; }
 
 signals:

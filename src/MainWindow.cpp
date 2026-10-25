@@ -48,35 +48,31 @@
 
 namespace {
 
-// One item's fields, read and written in one place: a group moved to another
-// screen is written into that screen's file by the same hand that writes this
-// one, so neither can drift from the other.
+// Serializes one item. Kept beside readProgramItem() so the two stay in step;
+// moving a group to another screen writes its items through here as well.
 void writeProgramItem(QSettings &settings, const ProgramItem &item) {
-    // What tells this icon from another pointing at the same program, and
-    // what its own wine prefix is named after: written first because it is
-    // the one field that is not about what the item does.
+    // Identity: distinguishes two icons for the same program, and names the
+    // item's own wine prefix.
     settings.setValue("id", item.id);
     settings.setValue("name", item.name);
-    // Only a name someone chose has anything to remember: the rest are
-    // worked out again each time the item is read.
+    // Only a user-chosen name is stored; a default one is derived on read.
     if (item.customName) settings.setValue("customName", true);
     settings.setValue("command", item.command);
     settings.setValue("arguments", item.arguments);
-    // Only written when set, so a plain wine item stays as it was.
+    // Absent for a plain wine item.
     if (!item.launcher.isEmpty()) settings.setValue("launcher", item.launcher);
-    // Likewise the prefix: only an item sharing a named one has anything to
-    // remember, the rest having one of their own.
+    // Stored only when the item shares a named prefix; otherwise it uses its
+    // own, derived from the id.
     if (!item.prefix.isEmpty()) settings.setValue("prefix", item.prefix);
-    // Likewise the icon: only an item wearing one somebody picked out of the
-    // several its file holds has anything to remember.
+    // Stored only when the user picked one of the several icons in the file.
     if (item.iconIndex >= 0) {
         settings.setValue("iconIndex", item.iconIndex);
         if (!item.iconSource.isEmpty()) settings.setValue("iconSource", item.iconSource);
     }
     if (item.xpStyleIcon) settings.setValue("xpStyleIcon", true);
-    // Only a program being scaled has anything to remember about it, and the
-    // size is kept whatever the scale, so that turning it off and on again
-    // does not mean measuring again.
+    // Scaling settings are stored only when scaling is on. The measured
+    // native size is stored either way, so toggling scaling off and on does
+    // not force a new measurement.
     if (item.windowScalePercent > 100) {
         settings.setValue("windowScalePercent", item.windowScalePercent);
         if (item.windowScaleMode == WindowScaleMode::WineDpi) {
@@ -91,8 +87,8 @@ void writeProgramItem(QSettings &settings, const ProgramItem &item) {
 
 ProgramItem readProgramItem(const QSettings &settings) {
     ProgramItem item;
-    // Empty for an item saved before identities: completeProgramItem() gives
-    // it one as it is put on the desktop.
+    // Empty for items saved before ids existed; completeProgramItem() assigns
+    // one when the item is placed on the desktop.
     item.id = settings.value("id").toString();
     item.name = settings.value("name").toString();
     item.customName = settings.value("customName", false).toBool();
@@ -118,9 +114,9 @@ ProgramItem readProgramItem(const QSettings &settings) {
 MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWindow(parent) {
     resize(900, 650);
 
-    // No window manager caption: the menu strip carries the title and the
-    // caption buttons itself, and the window keeps a band along its other
-    // three edges to be resized by.
+    // No window manager decoration: the menu strip carries the title and the
+    // caption buttons, and a margin along the other three edges serves as the
+    // resize grip.
     setWindowFlag(Qt::FramelessWindowHint);
     setContentsMargins(kResizeMargin, 0, kResizeMargin, kResizeMargin);
     setMouseTracking(true);
@@ -131,19 +127,17 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     m_mdiArea = new DesktopArea(this);
     m_mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
     setCentralWidget(m_mdiArea);
-    // A sibling of the group windows, so it can be raised in front of them.
+    // Sibling of the group windows, so it can be raised above them.
     m_guides = new AlignmentGuides(m_mdiArea->viewport());
 
-    // The corner the desktop says things in. On the same layer as the drag
-    // guides, which is the one that draws over the group windows.
+    // Launch notices, on the viewport like the drag guides so they draw over
+    // the group windows.
     m_notices = new NotificationArea(m_mdiArea->viewport());
     connect(LaunchNotices::instance(), &LaunchNotices::posted, m_notices,
             &NotificationArea::post);
 
-    // Scrolling the desktop moves everything the viewport holds, including
-    // the things that are not on the desktop but over it: the row of
-    // minimized groups along the bottom and the corner the notices sit in
-    // both stay where they are.
+    // Scrolling moves every child of the viewport, so the minimized-group row
+    // and the notice area have to be repositioned to stay in place.
     for (QScrollBar *bar : {m_mdiArea->horizontalScrollBar(), m_mdiArea->verticalScrollBar()}) {
         connect(bar, &QScrollBar::valueChanged, this, [this] {
             arrangeMinimizedIcons();
@@ -152,7 +146,7 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     }
 
     buildMenus();
-    // --profile on the command line wins over whatever was open last.
+    // --profile on the command line overrides the screen last in use.
     if (!startupScreen.isEmpty() && m_screens.contains(startupScreen)) {
         m_screens.setCurrent(startupScreen);
     }
@@ -161,14 +155,12 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     rebuildScreenMenu();
     updateWindowTitle();
 
-    // Offered to the desktop's search once there is a desktop to search:
-    // it answers out of the groups now on screen, so it has to come after
-    // they are loaded.
+    // Registered after load(): the provider answers out of the groups
+    // currently on screen.
     m_searchProvider = new SearchProvider(this);
     m_searchProvider->registerOnBus();
 
-    // Long enough that a drag is one change, short enough that the undo is
-    // there by the time anyone reaches for it.
+    // Coalesces a drag into a single undo entry without a noticeable delay.
     m_layoutSettle = new QTimer(this);
     m_layoutSettle->setSingleShot(true);
     m_layoutSettle->setInterval(400);
@@ -176,15 +168,13 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     m_layoutNow = currentLayout();
     updateEditActions();
 
-    // Whatever the desktop is wearing, worn here too -- now, and again
-    // whenever it is switched over.
+    // Follow the desktop light/dark preference, now and on every change.
     m_schemeWatch = new DesktopColorSchemeWatch(this);
     connect(m_schemeWatch, &DesktopColorSchemeWatch::schemeChanged, this,
             &MainWindow::followDesktopScheme);
     followDesktopScheme(desktopColorScheme());
 
-    // The same for the wallpaper, when the setting asks for it: shown now,
-    // and shown again whenever the desktop's background is changed.
+    // Same for the wallpaper, when the setting asks for it.
     m_wallpaperWatch = new GnomeWallpaper(this);
     connect(m_wallpaperWatch, &GnomeWallpaper::changed, this,
             &MainWindow::refreshDesktopWallpaper);
@@ -192,9 +182,8 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
 
     connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
         setDarkMode(dark);
-        // Every palette in the application comes from the scheme, so the
-        // whole thing is put on again rather than patched -- and moved to,
-        // the whole desktop changing at once being worth easing.
+        // Every palette derives from the scheme, so reapply the whole theme
+        // rather than patch it; animated, since everything changes at once.
         applyTheme(m_themeName, true);
         save();
     });
@@ -216,9 +205,8 @@ void MainWindow::buildMenus() {
 
     QMenu *fileMenu = bar->addMenu(tr("&File"));
 
-    // Everything that puts something new on the desktop, in one place: an
-    // empty group, an empty item, and the two that fill an item in from
-    // somewhere the machine already knows about.
+    // Everything that adds to the desktop: an empty group, an empty item, and
+    // the two that fill an item in from an installed application or game.
     QMenu *newMenu = fileMenu->addMenu(tr("&New"));
     newMenu->addAction(tr("Program &Group..."), this, &MainWindow::newGroup);
     newMenu->addAction(tr("&Item..."), this, &MainWindow::newItem);
@@ -261,9 +249,8 @@ void MainWindow::buildMenus() {
     m_screenGroup = new QActionGroup(this);
     m_screenGroup->setExclusive(true);
 
-    // Undoing a move is what anyone wants after dragging a group somewhere
-    // by accident; cascading them all is what nobody wants. Owned by the
-    // window so the Window menu can be rebuilt around them.
+    // Undo covers accidental drags, not the Window menu's arrange commands.
+    // Owned by the window so the Window menu can be rebuilt around them.
     m_undoAction = new QAction(tr("&Undo"), this);
     m_undoAction->setShortcut(QKeySequence::Undo);
     m_undoAction->setShortcutContext(Qt::ApplicationShortcut);
@@ -274,8 +261,8 @@ void MainWindow::buildMenus() {
     m_redoAction->setShortcutContext(Qt::ApplicationShortcut);
     connect(m_redoAction, &QAction::triggered, this, &MainWindow::redoEdit);
 
-    // On the window as well as in the menu, so the shortcuts answer before
-    // the menu has ever been opened.
+    // Added to the window as well as the menu, so the shortcuts work before
+    // the menu has been opened once.
     addAction(m_undoAction);
     addAction(m_redoAction);
     updateEditActions();
@@ -295,10 +282,10 @@ GroupWindow *MainWindow::activeGroup() const {
 
 QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
     QMdiSubWindow *sub = m_mdiArea->addSubWindow(group);
-    // A group is never closed, only minimized to an icon: it leaves the
-    // desktop through File > Delete Group, which asks first. So the caption
-    // carries no close box, and the system menu's Close entry -- along with
-    // the shortcut that lives on it -- is greyed out to match.
+    // A group is never closed, only minimized to an icon; it is removed
+    // through File > Delete Group, which asks first. Hence no close box on
+    // the caption, and the system menu's Close entry and its shortcut
+    // disabled to match.
     if (QMenu *systemMenu = sub->systemMenu()) {
         for (QAction *action : systemMenu->actions()) {
             if (action->shortcut() == QKeySequence(QKeySequence::Close)) {
@@ -308,9 +295,8 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
         }
     }
     if (QMenu *systemMenu = sub->systemMenu()) {
-        // Right-clicking a group's caption opens this menu, so this is where
-        // a group is sent to another screen from: the group itself is what
-        // is being moved, and its caption is where it is held.
+        // Right-clicking a group's caption opens this menu, so it is also
+        // where the group is sent to another screen from.
         systemMenu->addSeparator();
         QMenu *move = systemMenu->addMenu(tr("Move to &Screen"));
         connect(systemMenu, &QMenu::aboutToShow, this,
@@ -341,7 +327,7 @@ QMdiSubWindow *MainWindow::addGroupWindow(GroupWindow *group) {
             });
 
     sub->show();
-    // The arrangements remembered were of a different set of windows.
+    // The remembered arrangements described a different set of windows.
     forgetArrangements();
     return sub;
 }
@@ -376,13 +362,12 @@ void MainWindow::requestSystemState(const QString &verb, const QString &question
         return;
     }
 
-    // The desktop would otherwise go down with the session unsaved, closeEvent
-    // never having run.
+    // closeEvent() will not run when the session ends, so save here or the
+    // layout is lost.
     if (endsSession && m_saveOnExitAction->isChecked()) save();
 
-    // Started detached rather than waited on: when the machine is allowed to
-    // do this the process outlives us, and when it is not, the desktop's own
-    // authorisation agent takes over the conversation.
+    // Detached rather than waited on: on success the process outlives us, and
+    // otherwise the desktop's own authorisation agent takes over the prompt.
     if (!QProcess::startDetached(systemctl, {verb})) {
         QMessageBox::warning(this, tr("Program Manager"),
                               tr("Could not run '%1 %2'.").arg(systemctl, verb));
@@ -418,8 +403,8 @@ void MainWindow::insertSteamGame() {
 void MainWindow::removeGroupWindow(QMdiSubWindow *sub) {
     if (!sub) return;
 
-    // A minimized group is not on the desktop: it is an icon along the
-    // bottom, and that icon outlives the window unless it is taken with it.
+    // A minimized group is represented by an icon along the bottom, which has
+    // to be deleted with the window.
     if (MinimizedGroupIcon *icon = m_minimizedIcons.take(sub)) {
         m_minimizedOrder.removeAll(sub);
         icon->deleteLater();
@@ -439,9 +424,8 @@ void MainWindow::deleteGroup(QMdiSubWindow *sub) {
         this, tr("Delete"), tr("Delete group '%1' and all its items?").arg(gw->title()));
     if (reply != QMessageBox::Yes) return;
 
-    // The whole of it, before it is gone: a group is its items, and they go
-    // with it. Undo is the only thing between one answer to one question
-    // and setting the lot up again by hand.
+    // Record the group and all of its items before deleting, since undo is
+    // the only way back from one confirmation click.
     Edit edit;
     edit.kind = Edit::GroupDeleted;
     edit.group = gw->id();
@@ -450,8 +434,8 @@ void MainWindow::deleteGroup(QMdiSubWindow *sub) {
     edit.geometry = m_normalGeometry.value(sub, sub->geometry());
     edit.minimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
 
-    // a group taken away: the arrangements remembered no longer describe
-    // what is on screen, which removeGroupWindow() says for us.
+    // removeGroupWindow() also drops the remembered arrangements, which no
+    // longer describe what is on screen.
     removeGroupWindow(sub);
     record(edit);
 }
@@ -473,8 +457,8 @@ void MainWindow::showGroupCaptionMenu(QMdiSubWindow *sub, const QPoint &where) {
     GroupWindow *gw = sub ? qobject_cast<GroupWindow *>(sub->widget()) : nullptr;
     if (!gw) return;
 
-    // Made where it is shown rather than kept: the screens it offers are
-    // made, renamed and deleted while the desktop stands.
+    // Built on demand rather than kept: screens are added, renamed and
+    // deleted while the desktop is running.
     QMenu menu(this);
     QMenu *move = menu.addMenu(tr("Move to &Screen"));
     fillMoveToScreenMenu(move, sub);
@@ -496,8 +480,7 @@ void MainWindow::fillMoveToScreenMenu(QMenu *menu, QMdiSubWindow *sub) {
     }
 
     if (any) return;
-    // Something to read rather than an empty menu, which says nothing about
-    // why it is empty.
+    // A disabled entry rather than an empty menu, which would not say why.
     QAction *none = menu->addAction(tr("No other screens"));
     none->setEnabled(false);
 }
@@ -515,9 +498,8 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
     const QRect geometry = m_normalGeometry.value(sub, sub->geometry());
     const bool minimized = sub->isMinimized() || m_minimizedIcons.contains(sub);
 
-    // Written straight into the other screen's file: that screen is not
-    // open, so there is no desktop of its own to put the group on. It goes
-    // on the end of what is already there, where a new group would go.
+    // Written straight into the other screen's file, since that screen is not
+    // loaded. Appended after the groups already there, like a new group.
     {
         QSettings settings(path, QSettings::IniFormat);
         const int existing = settings.beginReadArray("Groups");
@@ -547,13 +529,12 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
         }
     }
 
-    // Off this desktop only once it is safely on the other: a group is its
-    // items, and there is no undo that would reach into another screen's
-    // file to fetch them back.
+    // Removed here only once the write succeeded: no undo entry can recover a
+    // group from another screen's file.
     removeGroupWindow(sub);
 
-    // This screen's file is written too, so that what is on screen and what
-    // is on disk say the same thing about where the group lives.
+    // Write this screen's file too, so disk and screen agree on where the
+    // group lives.
     save();
 
     m_notices->post(tr("'%1' moved to %2").arg(title, screen),
@@ -563,10 +544,8 @@ void MainWindow::moveGroupToScreen(QMdiSubWindow *sub, const QString &screen) {
 void MainWindow::updateWindowMenu() {
     m_windowMenu->clear();
 
-    // The way back from a maximized window, whose caption carries no buttons
-    // while it fills the screen.
-    // The active group's own entry first: what the Window menu is otherwise
-    // about is this window, and this is about the group in front of it.
+    // The active group's entries come first; the rest of the menu is about
+    // the main window.
     if (QMdiSubWindow *active = m_mdiArea->activeSubWindow()) {
         if (qobject_cast<GroupWindow *>(active->widget())) {
             QMenu *move = m_windowMenu->addMenu(tr("Move Group to &Screen"));
@@ -575,16 +554,16 @@ void MainWindow::updateWindowMenu() {
         }
     }
 
+    // The way out of a maximized window, whose caption has no buttons while
+    // it fills the screen. Disabled under a kiosk lock, which exists to
+    // prevent exactly that; the lock is lifted in Options > Settings.
     QAction *restore = m_windowMenu->addAction(tr("&Restore"), this, &QWidget::showNormal);
-    // Locked, there is no way back out of full screen at all -- that being
-    // what the lock is -- and a menu entry that undid it would be a hole in
-    // the middle of it. Options > Settings is where it is unlocked.
     restore->setEnabled(isMaximized() && !kioskSettings().locked);
     m_windowMenu->addSeparator();
 
-    // Added rather than created: this menu is emptied and built again every
-    // time it opens, and a menu deletes the actions it owns. These belong to
-    // the window, so that they keep the enabled state the history gives them
+    // Added rather than created: this menu is cleared and rebuilt each time
+    // it opens, and a menu deletes the actions it owns. These belong to the
+    // window instead, so they keep the enabled state the undo history sets
     // and their shortcuts work whether or not the menu has been opened.
     m_windowMenu->addAction(m_undoAction);
     m_windowMenu->addAction(m_redoAction);
@@ -613,7 +592,7 @@ void MainWindow::updateWindowMenu() {
 
 void MainWindow::rebuildScreenMenu() {
     // The menu owns the per-screen actions, so clearing it deletes them and
-    // they fall out of the exclusive group on the way.
+    // removes them from the exclusive group.
     m_screenMenu->clear();
 
     const QStringList names = m_screens.names();
@@ -622,7 +601,7 @@ void MainWindow::rebuildScreenMenu() {
         QAction *act = m_screenMenu->addAction(name);
         act->setCheckable(true);
         act->setChecked(name == m_screens.current());
-        // The first nine are a keystroke away, in menu order.
+        // Ctrl+1..9 for the first nine screens, in menu order.
         if (i < 9) act->setShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_1 + i)));
         m_screenGroup->addAction(act);
         connect(act, &QAction::triggered, this, [this, name]() { switchToScreen(name); });
@@ -634,7 +613,7 @@ void MainWindow::rebuildScreenMenu() {
     m_screenMenu->addAction(tr("&Rename Screen..."), this, &MainWindow::renameScreen);
     QAction *del = m_screenMenu->addAction(tr("&Delete Screen..."), this,
                                             &MainWindow::deleteScreen);
-    // There is always one screen to fall back on, so the last cannot go.
+    // At least one screen must remain, so the last one cannot be deleted.
     del->setEnabled(names.size() > 1);
     m_screenMenu->addSeparator();
     m_screenMenu->addAction(tr("&Save Screen Now"), QKeySequence::Save, this,
@@ -653,7 +632,7 @@ QString MainWindow::askScreenName(const QString &windowTitle, const QString &ini
         const QString name = askForText(this, windowTitle, tr("Screen"),
                                          tr("Screen name:"), suggestion, &ok);
         if (!ok || name.isEmpty()) return {};
-        // Leaving a rename dialog on the name it opened with is not a clash.
+        // Keeping the name a rename dialog opened with is not a clash.
         if (!m_screens.contains(name) || name == initial) return name;
 
         QMessageBox::warning(this, windowTitle,
@@ -667,30 +646,28 @@ void MainWindow::clearDesktop() {
     m_minimizedIcons.clear();
     m_minimizedOrder.clear();
 
-    // Deleted rather than closeAllSubWindows()'d: a close is only a request,
-    // and the windows would still be alive when the next screen's groups
-    // opened on top of them.
+    // Deleted rather than closed: closeAllSubWindows() only requests a close,
+    // and the windows would still be alive when the next screen's groups are
+    // created.
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) delete sub;
-    // After the deletions, so a resize on the way out cannot file geometry
-    // against a window that is already gone.
+    // After the deletions, so a resize during teardown cannot record geometry
+    // for a window that is already gone.
     m_normalGeometry.clear();
 
-    // the desktop emptied: nothing remembered is about the groups that will
-    // take their place.
+    // The undo history refers to groups that are no longer on the desktop.
     forgetEdits();
 }
 
 void MainWindow::followDesktopScheme(DesktopScheme scheme) {
-    // A desktop that says nothing either way is left alone: the switch in
-    // the strip is then the only thing that decides.
+    // When the desktop states no preference, the toggle in the menu strip
+    // decides on its own.
     if (scheme == DesktopScheme::Unknown) return;
 
     const bool wantsDark = scheme == DesktopScheme::Dark;
     if (wantsDark == darkMode()) return;
 
     setDarkMode(wantsDark);
-    // Moved to, as the switch in the strip is: the whole desktop changing
-    // at once is worth easing whoever asked for it.
+    // Animated, like the toggle in the menu strip: everything changes at once.
     applyTheme(m_themeName, true);
     save();
 }
@@ -709,25 +686,22 @@ QVector<GroupWindow *> MainWindow::groups() const {
 
 bool MainWindow::revealItem(const QString &screen, int groupIndex, int itemIndex,
                             const QString &itemName) {
-    // The screen it lives on first: a group on another one is not on the
-    // desktop at all until that screen is loaded.
+    // Switch screens first: a group on another screen is not loaded yet.
     if (!screen.isEmpty() && screen != m_screens.current()) switchToScreen(screen);
 
     const QVector<GroupWindow *> all = groups();
     GroupWindow *group = groupIndex >= 0 && groupIndex < all.size() ? all[groupIndex] : nullptr;
 
-    // The desktop may have been rearranged since the search last looked, so
-    // the name is checked and, failing that, searched for. Better a slightly
-    // wrong group than the wrong item.
+    // The desktop may have been rearranged since the search index was built,
+    // so the name at that position is checked before it is trusted.
     const auto itemAt = [](GroupWindow *candidate, int index) {
         return candidate && index >= 0 && index < candidate->items().size()
                    ? candidate->items()[index].name
                    : QString();
     };
-    // No group at that position, or something else sitting there now: look
-    // for the item by name instead. The null case has to be checked outright
-    // -- comparing names would let an item with no name match nothing at all
-    // and skip the search.
+    // No group at that position, or a different item there now: fall back to
+    // searching by name. The null group is tested separately, because an
+    // unnamed item would otherwise compare equal and skip the search.
     if (!group || itemAt(group, itemIndex) != itemName) {
         group = nullptr;
         for (GroupWindow *candidate : all) {
@@ -743,8 +717,8 @@ bool MainWindow::revealItem(const QString &screen, int groupIndex, int itemIndex
     }
     if (!group) return false;
 
-    // The window it is in, brought out of whatever state it is in and made
-    // the one in front.
+    // Bring the containing window out of whatever state it is in and make it
+    // the active one.
     if (auto *sub = qobject_cast<QMdiSubWindow *>(group->parentWidget())) {
         if (sub->isMinimized() || !sub->isVisible()) sub->showNormal();
         m_mdiArea->setActiveSubWindow(sub);
@@ -752,8 +726,8 @@ bool MainWindow::revealItem(const QString &screen, int groupIndex, int itemIndex
     }
     group->selectItem(itemIndex);
 
-    // And the application itself, which is the whole point of a result that
-    // shows something rather than starting it.
+    // Then the application itself, since this result reveals the item rather
+    // than launching it.
     if (isMinimized()) showNormal();
     raise();
     activateWindow();
@@ -781,7 +755,7 @@ void MainWindow::newScreen() {
     save();
     clearDesktop();
     m_screens.setCurrent(name);
-    // Nothing saved under this name yet, so load() lays out a fresh desktop.
+    // Nothing saved under this name yet, so load() produces an empty desktop.
     load();
     rebuildScreenMenu();
     updateWindowTitle();
@@ -789,7 +763,7 @@ void MainWindow::newScreen() {
 
 void MainWindow::duplicateScreen() {
     const QString source = m_screens.current();
-    // Copied from disk, so what is on screen has to be written out first.
+    // The copy is made from disk, so write the current screen out first.
     save();
 
     const QString name = askScreenName(tr("Duplicate Screen"),
@@ -826,7 +800,7 @@ void MainWindow::deleteScreen() {
 
     if (!m_screens.remove(name)) return;
 
-    // remove() already moved current on to a surviving screen.
+    // remove() has already made a surviving screen the current one.
     clearDesktop();
     load();
     rebuildScreenMenu();
@@ -861,8 +835,8 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     icon->setPreviewIcons(preview);
     connect(icon, &MinimizedGroupIcon::restoreRequested, this,
             [this, sub]() { restoreFromIcon(sub); });
-    // The same menu its caption carries while it is open: a group minimized
-    // is still a group to rename, move to another screen or delete.
+    // The same menu the caption carries when the group is open: a minimized
+    // group can still be renamed, moved to another screen or deleted.
     connect(icon, &MinimizedGroupIcon::contextMenuRequested, this,
             [this, sub](const QPoint &where) { showGroupCaptionMenu(sub, where); });
     connect(icon, &MinimizedGroupIcon::clicked, this, [this, icon]() {
@@ -877,10 +851,10 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     m_minimizedIcons.insert(sub, icon);
     m_minimizedOrder.append(sub);
 
-    // Hiding has to wait a turn: this runs from within showMinimized(), which
-    // would show the stub again straight after we hid it. The window stays in
-    // its minimized state while hidden, so showNormal() later brings back the
-    // geometry it had before.
+    // Hiding is deferred one event loop turn: this runs from inside
+    // showMinimized(), which would show the stub again right after we hid it.
+    // The window keeps its minimized state while hidden, so a later
+    // showNormal() restores its previous geometry.
     QMetaObject::invokeMethod(
         sub, [sub]() { sub->hide(); }, Qt::QueuedConnection);
     arrangeMinimizedIcons();
@@ -907,7 +881,8 @@ void MainWindow::arrangeMinimizedIcons() {
     const int cellH = MinimizedGroupIcon::kCellHeight;
     const QRect area = m_mdiArea->viewport()->rect();
 
-    // Filled left to right along the bottom, stacking upwards, like Progman.
+    // Laid out left to right along the bottom, stacking upwards, as in
+    // Progman.
     int x = 4;
     int y = area.height() - cellH - 4;
     for (QMdiSubWindow *sub : m_minimizedOrder) {
@@ -937,9 +912,8 @@ void MainWindow::clearGroupSelections() {
 MainWindow::LayoutSnapshot MainWindow::currentLayout() const {
     LayoutSnapshot layout;
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
-        // Where a minimized group would go back to, not where its icon sits:
-        // undoing a move should put it back where it was, whether or not it
-        // happens to be minimized now.
+        // The restored geometry, not the icon's position: undoing a move has
+        // to work whether or not the group is minimized at the time.
         layout.geometry.append(m_normalGeometry.value(sub, sub->geometry()));
         layout.minimized.append(sub->isMinimized() || m_minimizedIcons.contains(sub));
     }
@@ -970,8 +944,8 @@ void MainWindow::recordLayoutChange() {
     if (m_applyingLayout) return;
 
     const LayoutSnapshot now = currentLayout();
-    // Only a gesture that moved something counts; a click that selects a
-    // group sends geometry events too.
+    // Only a change that actually moved something counts; selecting a group
+    // also produces geometry events.
     if (now.geometry.size() != m_layoutNow.geometry.size() || now == m_layoutNow) {
         m_layoutNow = now;
         return;
@@ -987,12 +961,11 @@ void MainWindow::recordLayoutChange() {
 
 void MainWindow::record(const Edit &edit) {
     m_undo.append(edit);
-    // Deep enough to get out of real trouble, and still nothing: fifty
-    // arrangements of a dozen groups is a few thousand numbers, and a
-    // deleted group is the group.
+    // Deep enough to recover from a mistake and still cheap: fifty
+    // arrangements of a dozen groups is a few thousand integers.
     constexpr int kMaxRemembered = 50;
     while (m_undo.size() > kMaxRemembered) m_undo.removeFirst();
-    // Doing something by hand is a new branch: what was undone away is gone.
+    // A new edit starts a new branch, so the redo stack no longer applies.
     m_redo.clear();
     updateEditActions();
 }
@@ -1030,9 +1003,8 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
 
     case Edit::ItemDeleted: {
         GroupWindow *group = groupById(edit.group);
-        // The group it was in has since gone itself. Nothing sensible can be
-        // done with the item, and putting it somewhere else would be a
-        // worse answer than leaving it where it is not.
+        // The group the item belonged to has since been deleted; restoring it
+        // into some other group would be worse than doing nothing.
         if (!group) return;
         if (undoing) {
             group->insertProgramItem(edit.item, edit.itemIndex);
@@ -1045,17 +1017,17 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
     case Edit::GroupDeleted:
         if (undoing) {
             auto *group = new GroupWindow(edit.title);
-            // The same group as the one that went, not a new one wearing its
-            // name: anything else remembered about it still points here.
+            // Restored under its original id, so the other recorded edits
+            // still refer to it.
             group->setId(edit.group);
             for (const ProgramItem &item : edit.items) group->addProgramItem(item);
             QMdiSubWindow *sub = addGroupWindow(group);
             sub->setGeometry(edit.geometry);
             m_normalGeometry[sub] = edit.geometry;
             if (edit.minimized) minimizeToIcon(sub);
-            // It comes back at the end of the desktop's order rather than in
-            // the place it had, so the arrangements remembered no longer
-            // line up -- addGroupWindow() has said so already.
+            // It comes back at the end of the window order rather than at its
+            // old position, so the recorded arrangements no longer line up;
+            // addGroupWindow() has already dropped them.
         } else if (GroupWindow *group = groupById(edit.group)) {
             removeGroupWindow(qobject_cast<QMdiSubWindow *>(group->parentWidget()));
         }
@@ -1064,9 +1036,8 @@ void MainWindow::applyEdit(const Edit &edit, bool undoing) {
 }
 
 void MainWindow::updateEditActions() {
-    // Named after what it will actually do: "Undo" alone, in front of a
-    // desktop someone has just emptied a group off, says nothing about
-    // whether the group is coming back.
+    // The action is named after the edit it will reverse, so "Undo Delete
+    // Group" says what a bare "Undo" would not.
     const auto name = [this](const Edit &edit) {
         switch (edit.kind) {
         case Edit::Arrangement: return tr("Arrangement");
@@ -1089,9 +1060,8 @@ void MainWindow::updateEditActions() {
 }
 
 void MainWindow::forgetArrangements() {
-    // The deletions stay: each carries the whole of what it took away and
-    // where it came from, so none of them depends on the windows standing
-    // where they stood.
+    // Deletions are kept: each one records everything it removed and where it
+    // came from, so none of them depends on the current window positions.
     const auto isArrangement = [](const Edit &edit) { return edit.kind == Edit::Arrangement; };
     m_undo.removeIf(isArrangement);
     m_redo.removeIf(isArrangement);
@@ -1109,26 +1079,26 @@ void MainWindow::forgetEdits() {
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_mdiArea->viewport()) {
         if (event->type() == QEvent::Resize) arrangeMinimizedIcons();
-        // A press that reaches the viewport landed on bare desktop; one on an
-        // icon is consumed by the icon itself.
+        // A press that reaches the viewport landed on bare desktop; an icon
+        // consumes its own presses.
         if (event->type() == QEvent::MouseButtonPress) {
             clearMinimizedIconSelection();
             clearGroupSelections();
-            // Deactivate the group too, so no caption stays highlighted when
-            // the click landed on bare desktop.
+            // Deactivate the group too, so no caption stays highlighted after
+            // a click on bare desktop.
             m_mdiArea->setActiveSubWindow(nullptr);
         }
     }
 
     if (auto *sub = qobject_cast<QMdiSubWindow *>(watched)) {
         // A right click on a group's caption. Qt opens the system menu only
-        // from the little box at the left of it, so the caption as a whole
-        // is ours to answer -- and what belongs on it is what can be done to
-        // the group rather than to the window.
+        // from the small box at its left, so the rest of the caption is handled
+        // here, and the menu shown offers what can be done to the group rather
+        // than to the window.
         if (event->type() == QEvent::ContextMenu) {
             auto *menu = static_cast<QContextMenuEvent *>(event);
-            // Above the group's own widget is the caption and the frame; the
-            // group's client area answers for itself.
+            // Anything above the group's widget is the caption or the frame;
+            // the client area handles its own context menu.
             const QWidget *client = sub->widget();
             if (client && menu->pos().y() < client->geometry().top()) {
                 showGroupCaptionMenu(sub, menu->globalPos());
@@ -1136,9 +1106,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             }
         }
 
-        // A drag of this group has begun: which edges it moves, and so which
-        // of them are to be lined up with the neighbours, is whatever has
-        // changed by the time the geometry comes through.
+        // A drag of this group has begun. Which edges it moves, and so which
+        // are candidates for snapping, is deduced later from the geometry
+        // change.
         if (event->type() == QEvent::MouseButtonPress) {
             m_resizingSub = sub;
             m_resizeStartGeometry = sub->geometry();
@@ -1153,39 +1123,36 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             }
             m_guides->setGuides(xs, ys);
         }
-        // Letting go is the answer to the line that is showing: whatever the
-        // pointer was still a few pixels off, the edge lands on it.
+        // On release, snap to the guide that is showing even if the pointer
+        // is still a few pixels off it.
         if (event->type() == QEvent::MouseButtonRelease) {
-            // Whichever it was: one of the two does nothing, each being
-            // told apart by whether the size changed.
+            // Only one of the two applies; each returns early according to
+            // whether the size changed.
             snapWhileMoving(sub, AlignmentGuides::kShowDistance);
             snapWhileResizing(sub, AlignmentGuides::kShowDistance);
             m_resizingSub = nullptr;
             m_guides->clear();
         }
-        // Each step of the resize arrives as a geometry change; a move drags
-        // all four edges at once and is left alone.
-        // Cascade, tile and loading a screen resize windows too; only a
-        // resize the pointer is carrying out is worth lining up. The hold is
-        // left until this resize has been seen through -- a geometry set from
-        // inside the subwindow's own resize does not survive it -- and `sub`
-        // as the context means a group closed in between drops it.
+        // Each step of a resize arrives as a resize event. Tiling and loading
+        // a screen resize windows too, so only resizes with the left button
+        // down are snapped. The snap is deferred until this resize has
+        // finished, because a geometry set from inside the subwindow's own
+        // resize handling does not survive it; `sub` as the context object
+        // drops the call if the group is closed in between.
         if (event->type() == QEvent::Resize &&
             (QApplication::mouseButtons() & Qt::LeftButton)) {
             QTimer::singleShot(0, sub, [this, sub] { snapWhileResizing(sub); });
         }
-        // And each step of a carry arrives as a move. Loading a screen and
-        // undoing an arrangement move windows too; only one the pointer is
-        // carrying is worth lining up.
+        // Each step of a move arrives as a move event. Loading a screen and
+        // undoing an arrangement also move windows, hence the button test.
         if (event->type() == QEvent::Move &&
             (QApplication::mouseButtons() & Qt::LeftButton)) {
             QTimer::singleShot(0, sub, [this, sub] { snapWhileMoving(sub); });
         }
 
-        // A group's caption has no maximize box, so double clicking it is
-        // free for what a caption double click is otherwise no use for here:
-        // renaming the group. Anywhere else on the subwindow -- its own
-        // contents having had first refusal -- it does nothing.
+        // A group's caption has no maximize box, so a double click on it
+        // renames the group instead. Elsewhere on the subwindow, where the
+        // contents have already had the event, it does nothing.
         if (event->type() == QEvent::MouseButtonDblClick) {
             auto *mouse = static_cast<QMouseEvent *>(event);
             const QWidget *contents = sub->widget();
@@ -1195,8 +1162,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             }
             return true;
         }
-        // And should a group be maximized by some other route -- the system
-        // menu still on a right click -- it is put straight back.
+        // Should a group be maximized by another route, such as the system
+        // menu, restore it at once.
         if (event->type() == QEvent::WindowStateChange && sub->isMaximized()) {
             sub->showNormal();
             return true;
@@ -1209,9 +1176,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             if (!collapsed && sub->isVisible()) {
                 m_normalGeometry[sub] = sub->geometry();
             }
-            // A drag arrives as a run of these. The arrangement is taken
-            // down once it has stopped moving, so one drag is one thing to
-            // undo rather than a hundred.
+            // A drag produces a stream of these events; the arrangement is
+            // recorded once movement stops, so one drag is one undo entry.
             if (!m_applyingLayout && m_layoutSettle) m_layoutSettle->start();
         }
     }
@@ -1221,12 +1187,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
 void MainWindow::snapWhileMoving(QMdiSubWindow *sub, int reach) {
     if (sub != m_resizingSub || m_snapping) return;
 
-    // Shift asks for the position under the pointer and nothing else: the
-    // lines stay up to judge by eye, but nothing is held on one.
+    // Shift keeps the position exactly under the pointer: the guides stay
+    // drawn as a visual aid, but nothing snaps to them.
     if (QApplication::keyboardModifiers() & Qt::ShiftModifier) reach = -1;
 
     const QRect rect = sub->geometry();
-    // Only a carry: anything that changed the size is the resize's business.
+    // Moves only; a size change is the resize path's business.
     if (rect.size() != m_resizeStartGeometry.size()) return;
 
     const QRect held = m_guides->applyMove(rect, reach);
@@ -1240,15 +1206,13 @@ void MainWindow::snapWhileMoving(QMdiSubWindow *sub, int reach) {
 void MainWindow::snapWhileResizing(QMdiSubWindow *sub, int reach) {
     if (sub != m_resizingSub || m_snapping) return;
 
-    // Shift asks for the size under the pointer and nothing else: the lines
-    // stay up, as something to judge the edge against by eye, but no edge is
-    // held on one. A reach nothing can be within is what leaves them drawn
-    // and inert.
+    // Shift keeps the size exactly under the pointer. A negative reach leaves
+    // the guides drawn, as a visual aid, but makes nothing snap to them.
     if (QApplication::keyboardModifiers() & Qt::ShiftModifier) reach = -1;
 
     const QRect rect = sub->geometry();
-    // A move drags all four edges at once, and holding two opposite ones to
-    // different lines would resize what was only being carried about.
+    // A move shifts all four edges at once; snapping two opposite edges to
+    // different guides would resize a window that was only being moved.
     if (rect.size() == m_resizeStartGeometry.size()) return;
 
     Qt::Edges edges;
@@ -1268,8 +1232,8 @@ void MainWindow::snapWhileResizing(QMdiSubWindow *sub, int reach) {
 }
 
 void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
-    // Only the active group keeps its highlighted icon, so there is never
-    // more than one selection on screen.
+    // Only the active group keeps a highlighted icon, so there is never more
+    // than one selection on screen.
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
         if (sub == active) continue;
         if (auto *group = qobject_cast<GroupWindow *>(sub->widget())) {
@@ -1280,22 +1244,22 @@ void MainWindow::onSubWindowActivated(QMdiSubWindow *active) {
 }
 
 void MainWindow::applyTheme(const QString &themeName, bool moved) {
-    // Where it is coming from: the colours on screen, not what the desktop
-    // is set to. Dark mode is flipped before this is called, so asking the
-    // scheme would say the destination and there would be nothing to move.
+    // The animation starts from the colours on screen, not from the scheme:
+    // dark mode is already switched by the time this runs, so the scheme
+    // would give the destination and there would be nothing to animate.
     const Theme from = m_wornTheme;
 
     m_themeName = themeByName(themeName).name;
-    // So the dialogs, which paint surfaces no palette role covers, can reach
-    // the scheme too -- and so that what follows is the half being worn
-    // rather than the light one it was derived from.
+    // Published so the dialogs, which paint surfaces no palette role covers,
+    // can read the theme; it also resolves to the light or dark variant
+    // actually in use.
     setCurrentTheme(m_themeName);
     const Theme to = currentTheme();
 
     if (m_themeFade) m_themeFade->stop();
 
-    // Nothing to move on the way in, nothing to move between when the
-    // colours are the same, and nothing to move when it was not asked for.
+    // Nothing to animate before the window is shown, between identical
+    // colours, or when the caller did not ask for it.
     if (!moved || !isVisible() || !from.windowBg.isValid() ||
         from.windowBg == to.windowBg) {
         applyThemeColours(to);
@@ -1305,13 +1269,13 @@ void MainWindow::applyTheme(const QString &themeName, bool moved) {
 
     if (!m_themeFade) {
         m_themeFade = new QVariantAnimation(this);
-        // Straight through, at one rate: an eased move slows at both ends,
-        // which on a flat colour reads as hesitating rather than as easing.
+        // Linear: easing slows at both ends, which on a flat colour looks
+        // like hesitation.
         m_themeFade->setEasingCurve(QEasingCurve::Linear);
     }
     m_themeFade->setStartValue(0.0);
     m_themeFade->setEndValue(1.0);
-    // Long enough to be seen as a move, short enough that nobody waits.
+    // Long enough to read as a transition, short enough not to delay anyone.
     m_themeFade->setDuration(220);
     m_themeFade->disconnect(this);
     connect(m_themeFade, &QVariantAnimation::valueChanged, this,
@@ -1320,8 +1284,8 @@ void MainWindow::applyTheme(const QString &themeName, bool moved) {
             });
     connect(m_themeFade, &QVariantAnimation::finished, this,
             [this, to] { applyThemeColours(to); });
-    // Once, at the start: the picture does not fade with the colours, and
-    // reading the setting on every frame of the move would be absurd.
+    // Once, at the start: the wallpaper does not fade with the colours, and
+    // re-reading the setting every frame would be wasteful.
     refreshDesktopWallpaper();
     m_themeFade->start();
 }
@@ -1345,10 +1309,10 @@ void MainWindow::applyThemeColours(const Theme &theme) {
     pal.setColor(QPalette::ToolTipText, theme.windowText);
     qApp->setPalette(pal);
 
-    // The menu strip takes the desktop's own colour, so the window reads as
-    // one surface rather than a grey band sitting above a coloured one. It is
-    // told directly: a platform theme hands QMenuBar a palette of its own,
-    // and that outranks the application's.
+    // The menu strip takes the desktop colour, so the window reads as one
+    // surface rather than a grey band above a coloured one. Set directly,
+    // because a platform theme gives QMenuBar its own palette, which
+    // outranks the application's.
     QPalette stripPal = pal;
     const QColor stripText = readableTextOn(theme.desktop);
     stripPal.setColor(QPalette::Window, theme.desktop);
@@ -1358,11 +1322,10 @@ void MainWindow::applyThemeColours(const Theme &theme) {
     stripPal.setColor(QPalette::Text, stripText);
     m_titleBar->applyPalette(stripPal);
 
-    // What drops out of the strip is an ordinary menu, in the ordinary window
-    // colours: only the bar itself wears the desktop's. Submenus with it,
-    // since a platform theme hands each menu a palette of its own and that
-    // outranks the application's -- so one left out would open in the
-    // desktop's colours rather than the scheme's.
+    // The menus that drop out of the strip use the ordinary window colours;
+    // only the bar itself uses the desktop colour. Submenus are set too,
+    // since a platform theme gives each menu its own palette, and one left
+    // out would open in the desktop colour instead of the scheme's.
     const std::function<void(QMenu *)> paletteMenu = [&](QMenu *menu) {
         menu->setPalette(pal);
         for (QAction *action : menu->actions()) {
@@ -1373,9 +1336,9 @@ void MainWindow::applyThemeColours(const Theme &theme) {
         if (QMenu *menu = action->menu()) paletteMenu(menu);
     }
 
-    // The desktop's own icons for the three that act on the machine, in the
-    // menu's ink. Suspend has no icon of its own in the usual sets, so the
-    // moon a desktop uses for night stands in for it.
+    // Themed icons for the three power actions, tinted to the menu text
+    // colour. Suspend has no dedicated icon in most sets, so the night-mode
+    // moon stands in for it.
     const QColor menuInk = theme.buttonText;
     if (m_suspendAction) {
         m_suspendAction->setIcon(tintedIcon({QStringLiteral("system-suspend-symbolic"),
@@ -1406,16 +1369,16 @@ void MainWindow::applyThemeColours(const Theme &theme) {
         icon->setDesktopColor(theme.desktop);
     }
 
-    // A notice paints its own surface, as a dialog does, so it is redressed
-    // rather than repalettised.
+    // A notice paints its own surface, like a dialog, so it is re-themed
+    // rather than given a palette.
     if (m_notices) m_notices->applyTheme();
 }
 
 void MainWindow::editLaunchers() {
     LaunchersDialog dialog(this);
-    // What is on the desktop now, so that the dialog can say which wine
-    // prefixes nothing runs in any more: this screen is only written to its
-    // file when it is saved, and an item added since then is only here.
+    // The items currently on the desktop, so the dialog can tell which wine
+    // prefixes are unused: this screen is only written on save, so an item
+    // added since then exists nowhere else.
     QVector<ProgramItem> open;
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
         if (GroupWindow *gw = qobject_cast<GroupWindow *>(sub->widget())) {
@@ -1424,19 +1387,18 @@ void MainWindow::editLaunchers() {
     }
     dialog.setOpenScreen(currentScreen(), open);
     if (dialog.exec() != QDialog::Accepted) return;
-    // Kept with the rest of the settings and used from the next launch on --
-    // items already on the desktop are unchanged, what they are started with
-    // being worked out each time they are run.
+    // Stored with the rest of the settings and used from the next launch on;
+    // items on the desktop are unchanged, since their command line is built
+    // each time they run.
     setLaunchers(dialog.launchers());
 }
 
 void MainWindow::chooseColors() {
     const QString previous = m_themeName;
     ThemeDialog dialog(m_themeName, this);
-    // Live preview on the real window, like the Control Panel did.
-    // Put on outright rather than moved to: picking down the list of
-    // schemes, each step would smear into the next and the list would feel
-    // slow to answer.
+    // Live preview on the real window, as the Control Panel did. Applied
+    // without animation: arrowing down the list would otherwise blend one
+    // scheme into the next and feel slow.
     connect(&dialog, &ThemeDialog::themePreviewed, this,
             [this](const QString &name) { applyTheme(name); });
 
@@ -1462,14 +1424,13 @@ void MainWindow::refreshDesktopWallpaper() {
 
 void MainWindow::editSettings() {
     const bool previous = m_useDesktopWallpaper;
-    // Read off the session rather than remembered: what says the Program
-    // Manager starts with it is a file there, which something else may have
-    // taken away since.
+    // Read from the session rather than from the settings: the autostart
+    // state is a file in ~/.config/autostart, which something else may have
+    // removed since.
     const bool wasAutostart = autostartEnabled();
     SettingsDialog dialog(m_useDesktopWallpaper, wasAutostart, kioskSettings(), this);
-    // Shown on the real desktop as it is switched, the way the Colors
-    // dialog previews a scheme: a background is to be looked at, not read
-    // about in a checkbox.
+    // Previewed on the real desktop as the checkbox is toggled, the way the
+    // Colors dialog previews a scheme.
     connect(&dialog, &SettingsDialog::desktopWallpaperPreviewed, this, [this](bool use) {
         m_useDesktopWallpaper = use;
         refreshDesktopWallpaper();
@@ -1487,11 +1448,9 @@ void MainWindow::editSettings() {
                             tr("Its entry in ~/.config/autostart could not be written."));
         }
         setKioskSettings(dialog.kiosk());
-        // The strip takes what it carries from them, and so does whether
-        // the window can be brought back out of full screen.
+        // The menu strip's contents depend on the kiosk settings.
         m_titleBar->applyKioskSettings();
-        // Window > Restore is the other way out, and it goes with the rest
-        // while the window is locked.
+        // So does Window > Restore, which is disabled under the lock.
         updateWindowMenu();
     }
     save();
@@ -1509,8 +1468,8 @@ void MainWindow::about() {
 
 void MainWindow::changeEvent(QEvent *event) {
     if (event->type() == QEvent::WindowStateChange) {
-        // A maximized window has no edges of its own to drag, so the band
-        // that offers them goes away along with them.
+        // A maximized window has no draggable edges, so the resize margin is
+        // dropped.
         const int margin = isMaximized() ? 0 : kResizeMargin;
         setContentsMargins(margin, 0, margin, margin);
     }
@@ -1544,7 +1503,7 @@ void MainWindow::createDefaultGroups() {
 void MainWindow::load() {
     const QString path = m_screens.filePath(m_screens.current());
     if (path.isEmpty() || !QFile::exists(path)) {
-        // A screen that has never been saved starts on the stock desktop.
+        // A screen never saved before starts with the default desktop.
         setDarkMode(false);
         applyTheme(builtinThemes().first().name);
         createDefaultGroups();
@@ -1557,16 +1516,15 @@ void MainWindow::load() {
     applyTheme(settings.value("theme", builtinThemes().first().name).toString());
     refreshDesktopWallpaper();
 
-    // XP icon styling used to be one switch for the whole Program Manager.
-    // A desktop saved back then carries no per-item setting, so the switch is
-    // read one last time and handed to the items it used to restyle; saving
-    // the screen again writes them out individually and drops the key.
+    // XP icon styling used to be a single application-wide switch. A desktop
+    // saved then has no per-item setting, so the old key is read once more
+    // and applied to the items it used to affect; the next save writes the
+    // per-item values and drops the key.
     const bool globalXpIcons = settings.value("xpStyleIcons", false).toBool();
 
-    // Where the Program Manager window itself was last left. saveGeometry
-    // carries the screen and the maximized state, not just a rectangle.
-    // Only honoured at startup: moving the window out from under someone
-    // mid-session, just because they switched screen, would be rude.
+    // The main window's own geometry; saveGeometry() also carries the display
+    // and the maximized state. Applied only at startup, so switching screens
+    // mid-session does not move the window.
     const QByteArray windowGeometry = settings.value("windowGeometry").toByteArray();
     if (!windowGeometry.isEmpty() && !isVisible()) restoreGeometry(windowGeometry);
 
@@ -1582,8 +1540,8 @@ void MainWindow::load() {
         bool minimized = settings.value("minimized", false).toBool();
 
         auto *group = new GroupWindow(title);
-        // Kept if the file names one; a desktop written before groups had
-        // identities keeps the one the group was just given.
+        // Ignored when the file holds no id, in which case the group keeps
+        // the one it was just assigned.
         group->setId(id);
         int itemCount = settings.beginReadArray("Items");
         for (int j = 0; j < itemCount; ++j) {
@@ -1624,8 +1582,7 @@ void MainWindow::save() {
         settings.setArrayIndex(idx++);
         settings.setValue("id", gw->id());
         settings.setValue("title", gw->title());
-        // Never the stub a minimized window collapsed to: save the rect it
-        // will actually reopen at.
+        // The restored geometry, not the stub a minimized window collapsed to.
         const QRect geo = m_normalGeometry.value(sub, sub->geometry());
         settings.setValue("x", geo.x());
         settings.setValue("y", geo.y());

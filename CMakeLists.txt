@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The version, in one place and in the plainest form there is: three numbers
-# in a file, which the bump tasks move on and which nothing has to parse out
-# of source code.
+# The version, in one place and in the simplest form: three numbers in a file,
+# which the bump targets increment and which nothing has to parse out of source
+# code.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROGMAN_VERSION)
 string(STRIP "${PROGMAN_VERSION}" PROGMAN_VERSION)
 
 project(pmane-sa VERSION ${PROGMAN_VERSION} LANGUAGES CXX)
 
-# So that bumping it is enough: the next build reconfigures rather than
-# carrying yesterday's number.
+# So that bumping it is enough: the next build reconfigures rather than reusing
+# the previous number.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
@@ -22,18 +22,18 @@ set(CMAKE_AUTOUIC ON)
 include(GNUInstallDirs)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network DBus)
-# Only so an SVG wallpaper can be shown -- GNOME's own themed backgrounds
-# are SVG. Optional: without it everything works but those draw nothing.
+# Needed only to display an SVG wallpaper, GNOME's own themed backgrounds being
+# SVG. Optional: without it everything works except those.
 find_package(Qt6 6.4 QUIET COMPONENTS Svg)
 
-# What build this is. Written at each build rather than at each configure, so
-# that the version on the About box and on the package is the build in front
-# of you; see cmake/GenerateVersion.cmake.
+# The build stamp, written at each build rather than at each configure, so the
+# version shown in the About box and on the package is that of the build in
+# hand; see cmake/GenerateVersion.cmake.
 set(BUILD_VERSION_CPP ${CMAKE_CURRENT_BINARY_DIR}/BuildVersion.cpp)
 set(BUILD_VERSION_TXT ${CMAKE_CURRENT_BINARY_DIR}/BuildVersion.txt)
 set(GENERATE_VERSION ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake)
 
-# Once now, so the file exists before anything is compiled.
+# Run once here, so the file exists before anything is compiled.
 execute_process(COMMAND ${CMAKE_COMMAND} -DVERSION=${PROGMAN_VERSION}
     -DOUT_CPP=${BUILD_VERSION_CPP} -DOUT_TXT=${BUILD_VERSION_TXT} -P ${GENERATE_VERSION})
 
@@ -44,9 +44,8 @@ add_custom_target(build-version ALL
     COMMENT "Stamping the build with the time it was made")
 set_source_files_properties(${BUILD_VERSION_CPP} PROPERTIES GENERATED TRUE)
 
-# Every source but main.cpp, which is the only thing the program has that
-# the screenshot tool below does not: the tool brings its own main so that
-# it can drive the windows rather than hand them to the user.
+# Every source but main.cpp, the one file the screenshot tool below does not
+# use: it provides its own main so it can drive the windows itself.
 set(PMANE_SOURCES
     src/Version.h
     src/MainWindow.cpp
@@ -146,14 +145,14 @@ add_executable(pmane-sa
     ${PMANE_SOURCES}
 )
 
-# So the stamp is written before the sources that carry it are compiled.
+# Ensures the stamp is written before the sources using it are compiled.
 add_dependencies(pmane-sa build-version)
 
 target_link_libraries(pmane-sa PRIVATE Qt6::Widgets Qt6::Network Qt6::DBus)
 
-# The pictures in README.md, taken off the desktop in docs/ -- see
-# tools/Screenshots.cpp. Not part of a normal build: it is wanted when the
-# documentation is being refreshed and never otherwise.
+# The screenshots in README.md, taken from the desktop in docs/; see
+# tools/Screenshots.cpp. Not part of a normal build: it is used only when the
+# documentation is refreshed.
 #
 #   cmake --build build --target screenshots
 #   QT_QPA_PLATFORM=offscreen ./build/screenshots docs
@@ -171,75 +170,76 @@ endif()
 
 install(TARGETS pmane-sa RUNTIME DESTINATION bin)
 
-# So a desktop shell can tell which application a window belongs to, and
-# therefore offer to pin it. The file's name must match the app_id the
-# application sets with setDesktopFileName().
+# Lets a desktop shell tell which application a window belongs to, and so offer
+# to pin it. The file name must match the app_id the application sets with
+# setDesktopFileName().
 install(FILES data/pmane-sa.desktop
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
 
-# What tells the shell to ask this application for search results. The bus
-# name and object path in it are the ones SearchProvider registers.
+# Tells the shell to query this application for search results. The bus name and
+# object path in it are the ones SearchProvider registers.
 install(FILES data/pmane-sa-search-provider.ini
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/gnome-shell/search-providers)
 
-# Every package has to say what it may be done with, in the one place a
-# Debian system looks: /usr/share/doc/<package>/copyright. The same file an
-# install from the source tree lays down, so the two cannot drift apart.
+# Every package has to state its licence where a Debian system looks for it:
+# /usr/share/doc/<package>/copyright. The same file an install from the source
+# tree places, so the two cannot diverge.
 install(FILES debian/copyright
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/${PROJECT_NAME})
 
 # The Debian package: `cmake --build build --target deb`.
 #
-# What goes in it is what install() puts there -- the program, its .desktop
-# file and the search provider's -- which is also what an install from the
-# source tree lays down, so the two cannot drift apart.
+# Its contents are whatever install() places: the program, its .desktop file and
+# the search provider's. That is also what an install from the source tree
+# places, so the two cannot diverge.
 set(CPACK_GENERATOR "DEB")
 set(CPACK_PACKAGE_NAME "pmane-sa")
 set(CPACK_PACKAGE_VENDOR "pmane-sa")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A Windows 3.1 Program Manager for Linux")
-# One string, not three: a list would reach the control file with the
-# semicolons that join it still in place.
+# One string rather than a list: a list would reach the control file with the
+# joining semicolons still in it.
 set(CPACK_PACKAGE_DESCRIPTION
     "A Progman-style desktop for Windows programs run through Wine or Proton, with
 program groups, a wine prefix per program, scaling for programs written for
 smaller screens, and a kiosk mode for a machine that boots straight into it.")
 set(CPACK_PACKAGE_CONTACT "pdulvp <pdulvp@laposte.net>")
-# What a graphical installer shows and what cpack checks is there.
+# What a graphical installer displays, and what cpack checks is present.
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_SECTION "x11")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/pdulvp/pmane-sa")
-# The Qt libraries it was built against, worked out from the binary itself
-# rather than written down and left to go stale.
+# The Qt libraries it was built against, derived from the binary itself rather
+# than listed by hand and left to go stale.
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-# Debug symbols are for the build tree, not for everyone's disk: the binary
-# is twenty megabytes with them and two without.
+# Debug symbols belong in the build tree, not in the package: the binary is
+# twenty megabytes with them and two without.
 set(CPACK_STRIP_FILES TRUE)
-# What it runs things with. None of it is needed to start the Program
-# Manager, so none of it is a dependency: an item is simply told that what
-# runs it is not installed.
-# The icons the strip and the dialogs wear come out of the desktop's icon
-# theme, and a current theme ships them as SVG: without the plugin that
-# reads one, every icon in the application is blank. Not a dependency --
-# it runs without them -- but close to one.
+# The programs it runs items with. None is needed to start the Program Manager,
+# so none is a dependency: an item simply reports that what runs it is not
+# installed.
+#
+# The icons in the strip and the dialogs come from the desktop's icon theme, and
+# a current theme ships them as SVG, so without the plugin that reads SVG every
+# icon in the application is blank. Not a dependency, since it runs without
+# them, but close to one.
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "wine, qt6-svg-plugins")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "gamescope, steam, dosbox, scummvm, retroarch")
-# Told that an application arrived or went; see debian/postinst.
+# Notified when an application is installed or removed; see debian/postinst.
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/debian/postrm")
-# <name>_<version>_<arch>.deb, the version being read at packing time.
+# <name>_<version>_<arch>.deb, the version being read at packaging time.
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_BUILD_VERSION_FILE "${BUILD_VERSION_TXT}")
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CPackOptions.cmake")
-# The version is the project's; the build stamp goes on behind a `~`, so that
-# two packages of 1.2.1 built on different days are told apart and both are
-# taken for what they are: builds on the way to 1.2.1, which installs over
-# them. See cmake/CPackOptions.cmake.
+# The version is the project's, with the build stamp appended behind a `~`, so
+# two packages of 1.2.1 built on different days are distinguishable and both
+# sort before 1.2.1 itself, which installs over them. See
+# cmake/CPackOptions.cmake.
 set(CPACK_PACKAGE_VERSION "${PROGMAN_VERSION}")
 include(CPack)
 
-# One step from a working tree to a package.
+# From a working tree to a package in one step.
 add_custom_target(deb
     COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1
         ${CMAKE_CPACK_COMMAND} -G DEB --config ${CMAKE_CURRENT_BINARY_DIR}/CPackConfig.cmake
@@ -248,27 +248,26 @@ add_custom_target(deb
     COMMENT "Building the Debian package")
 
 # ---------------------------------------------------------------------------
-# The package of a version, in one step:
+# The package for a release, in one step:
 #
 #     cmake --build build --target release
 #
-# The same deb the target above makes, named by the version alone --
-# pmane-sa_1.2.1_amd64.deb. An ordinary build keeps its stamp, behind a `~`
-# that sorts it before the version it is heading for; see
-# cmake/CPackOptions.cmake.
+# The same deb the target above produces, named by the version alone:
+# pmane-sa_1.2.1_amd64.deb. An ordinary build keeps its stamp behind a `~`,
+# which sorts it before the version it leads to; see cmake/CPackOptions.cmake.
 #
-# The missing stamp belongs to the target and not to the tree: there is no
-# configuration option to leave switched on without noticing, and so no day
-# on which two different 1.2.1 come out of here.
+# Omitting the stamp is a property of this target rather than of the tree: there
+# is no configuration option that can be left enabled by mistake, and so no way
+# to produce two different 1.2.1 packages.
 add_custom_target(release
-    # 1. The version, with no stamp. PROGMAN_KEEP_VERSION then keeps the
-    #    build-version target quiet: without it the build that follows would
-    #    write it again, timestamped.
+    # 1. The version, with no stamp. PROGMAN_KEEP_VERSION then disables the
+    #    build-version target: without it the following build would rewrite the
+    #    stamp with a timestamp.
     COMMAND ${CMAKE_COMMAND} -DVERSION=${PROGMAN_VERSION} -DRELEASE=ON
         -DOUT_CPP=${BUILD_VERSION_CPP} -DOUT_TXT=${BUILD_VERSION_TXT}
         -P ${GENERATE_VERSION}
 
-    # 2. The binary, then the package, by the targets that make them already.
+    # 2. The binary, then the package, using the existing targets.
     COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1
         ${CMAKE_COMMAND} --build ${CMAKE_CURRENT_BINARY_DIR} --target pmane-sa
     COMMAND ${CMAKE_COMMAND} -E env PROGMAN_KEEP_VERSION=1

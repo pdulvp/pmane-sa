@@ -4,16 +4,16 @@
 #include <QVector>
 #include <QWidget>
 
-// A minimized Program Group, drawn as an icon on the Program Manager
-// desktop rather than as a stub title bar, the way Progman did it. The
-// icon previews the group's contents as a miniature window of program
-// icons. Double-clicking restores the group.
+// A minimized Program Group, drawn as an icon on the Program Manager desktop
+// rather than as a stub title bar, as Progman did. The icon previews the
+// group's contents as a miniature window of program icons. Double-clicking
+// restores the group.
 class MinimizedGroupIcon : public QWidget {
     Q_OBJECT
 public:
     static constexpr int kCellWidth = 92;
     static constexpr int kCellHeight = 78;
-    // A 3x2 grid, as many as read clearly at this size.
+    // A 3x2 grid, as many as stay legible at this size.
     static constexpr int kPreviewColumns = 3;
     static constexpr int kPreviewRows = 2;
     static constexpr int kMaxPreviewIcons = kPreviewColumns * kPreviewRows;
@@ -29,9 +29,8 @@ public:
 signals:
     void restoreRequested();
     void clicked();
-    // Right-clicked. A minimized group is still a group, so what can be done
-    // to it is what its caption offers while it is open -- which is the
-    // Program Manager's to put up, not this icon's.
+    // Right-clicked. A minimized group offers the same commands as its caption
+    // does when open, and the Program Manager builds that menu, not this icon.
     void contextMenuRequested(const QPoint &globalPos);
 
 protected:

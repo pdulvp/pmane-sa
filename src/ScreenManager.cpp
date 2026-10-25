@@ -10,13 +10,13 @@
 namespace {
 
 const char *kIndexFile = "screens.ini";
-// The same index under the name it had while screens were called profiles.
+// The same index under the name it had when screens were called profiles.
 const char *kLegacyIndexFile = "profiles.ini";
 const char *kLegacyFile = "groups.ini";
 const char *kDefaultName = "Default";
 
-// Screen names are free text, so the file they are stored in is a slug of
-// the name rather than the name itself.
+// Screen names are free text, so the file is named after a slug of the name
+// rather than the name itself.
 QString slug(const QString &name) {
     static const QRegularExpression unsafe(QStringLiteral("[^a-z0-9]+"));
     QString s = name.toLower().replace(unsafe, QStringLiteral("-"));
@@ -91,10 +91,9 @@ QString ScreenManager::uniqueFileName(const QString &name) const {
 }
 
 void ScreenManager::loadIndex() {
-    // The index written when these were profiles is read the once, and saved
-    // back out as screens.ini the next time anything changes. The desktops
-    // themselves are the per-screen .ini files, which are not touched: the
-    // old index is left where it is rather than deleted.
+    // The index written when these were profiles is read once and saved back as
+    // screens.ini the next time anything changes. The per-screen .ini files are
+    // untouched, and the old index is left in place rather than deleted.
     const bool legacy = !QFile::exists(indexPath()) && QFile::exists(legacyIndexPath());
     if (!legacy && !QFile::exists(indexPath())) return;
 
@@ -131,8 +130,8 @@ void ScreenManager::saveIndex() const {
 void ScreenManager::seedFirstScreen() {
     Entry entry;
     entry.name = QLatin1String(kDefaultName);
-    // A desktop saved before there were screens becomes the default screen,
-    // read straight out of the file it is already in.
+    // A desktop saved before screens existed becomes the default screen, read
+    // from the file it is already in.
     entry.file = QFile::exists(configDir() + QLatin1Char('/') + QLatin1String(kLegacyFile))
                      ? QLatin1String(kLegacyFile)
                      : uniqueFileName(entry.name);
@@ -156,8 +155,8 @@ bool ScreenManager::duplicate(const QString &source, const QString &name) {
     if (from < 0 || trimmed.isEmpty() || indexOf(trimmed) >= 0) return false;
 
     const QString file = uniqueFileName(trimmed);
-    // A screen that was never saved has no file yet; the copy then simply
-    // starts out empty as well.
+    // A screen that was never saved has no file yet, in which case the copy
+    // starts out empty too.
     const QString sourcePath = configDir() + QLatin1Char('/') + m_entries[from].file;
     if (QFile::exists(sourcePath) &&
         !QFile::copy(sourcePath, configDir() + QLatin1Char('/') + file)) {
@@ -173,14 +172,14 @@ bool ScreenManager::rename(const QString &from, const QString &to) {
     const QString trimmed = to.trimmed();
     const int i = indexOf(from);
     if (i < 0 || trimmed.isEmpty()) return false;
-    // Renaming to a different spelling of the same name is allowed; to
-    // somebody else's name is not.
+    // Renaming to a different spelling of the same name is allowed; to another
+    // screen's name is not.
     const int clash = indexOf(trimmed);
     if (clash >= 0 && clash != i) return false;
 
     if (m_current.compare(from, Qt::CaseInsensitive) == 0) m_current = trimmed;
     m_entries[i].name = trimmed;
-    // The file keeps its old slug: renaming it would buy nothing and risks
+    // The file keeps its old slug: renaming it would gain nothing and risks
     // losing the desktop if the move fails.
     saveIndex();
     return true;

@@ -12,13 +12,13 @@
 
 namespace {
 
-// How often to look for the window while waiting for it. A wine program
-// takes a moment to put one up, and longer the first time a prefix is used.
+// How often to poll for the window. A wine program takes a moment to open one,
+// and longer the first time a prefix is used.
 constexpr int kPollMs = 250;
 
-// Once a window has been seen, how much longer to watch it. A window is
-// created before it is sized, so the first sighting is often smaller than
-// what the program settles on.
+// Once a window has been seen, how much longer to watch it. A window is created
+// before it is sized, so the first sighting is often smaller than the size the
+// program settles on.
 constexpr int kSettleMs = 1500;
 
 } // namespace
@@ -33,8 +33,8 @@ QVector<WindowScaleOption> windowScaleOptions(bool wineDpi) {
     QVector<WindowScaleOption> options{{100, WindowScaleMode::Gamescope}};
     for (int percent : steps) options.append({percent, WindowScaleMode::Gamescope});
 
-    // After the scales that always work: these depend on the program
-    // honouring the DPI it is told about.
+    // Listed after the scales that always work, these depending on the program
+    // honouring the DPI it is given.
     if (wineDpi) {
         for (int percent : steps) options.append({percent, WindowScaleMode::WineDpi});
     }
@@ -45,15 +45,15 @@ QString windowScaleLabel(int percent) {
     if (percent % 100 == 0) {
         return QCoreApplication::translate("WindowScale", "%1x").arg(percent / 100);
     }
-    // One decimal, and no trailing zero: 1.5x rather than 1.50x.
+    // One decimal place and no trailing zero: 1.5x rather than 1.50x.
     return QCoreApplication::translate("WindowScale", "%1x")
         .arg(QString::number(percent / 100.0, 'g', 2));
 }
 
 QString windowScaleLabel(const WindowScaleOption &option) {
     if (option.mode == WindowScaleMode::Gamescope) return windowScaleLabel(option.percent);
-    // Named by the DPI it sets, which is the number that means something:
-    // 144 is what Windows calls 150%.
+    // Labelled by the DPI it sets, which is the meaningful number: 144 is what
+    // Windows calls 150%.
     return QCoreApplication::translate("WindowScale", "%1 (wine DPI %2)")
         .arg(windowScaleLabel(option.percent))
         .arg(wineLogPixels(option.percent));
@@ -84,9 +84,9 @@ int prefixLogPixels(const QString &prefixDir) {
     QFile registry(prefixDir + QStringLiteral("/user.reg"));
     if (!registry.open(QIODevice::ReadOnly | QIODevice::Text)) return 0;
 
-    // Sections are [Control Panel\\Desktop] and the like, one key per line.
-    // The value is wanted from that section alone: LogPixels appears under
-    // others too, meaning something else there.
+    // Sections look like [Control Panel\\Desktop], one key per line. Only that
+    // section is read: LogPixels appears under others too, meaning something
+    // else.
     static const QRegularExpression value(
         QStringLiteral("^\"LogPixels\"=dword:([0-9a-fA-F]+)"));
     bool inDesktop = false;
@@ -105,10 +105,10 @@ int prefixLogPixels(const QString &prefixDir) {
 }
 
 bool prefixExists(const QString &prefixDir) {
-    // drive_c is there as soon as the prefix is built. The registry files are
-    // not: wine keeps the registry in the running wineserver and writes it
-    // out only when that exits, so user.reg is no test of whether a prefix
-    // exists -- only of whether one has been flushed.
+    // drive_c exists as soon as the prefix is created. The registry files do
+    // not: wine keeps the registry in the running wineserver and writes it out
+    // only when that exits, so user.reg tests whether the registry has been
+    // flushed, not whether the prefix exists.
     return QFileInfo(prefixDir + QStringLiteral("/drive_c")).isDir();
 }
 
@@ -122,24 +122,23 @@ void initialisePrefix(const QString &wineCommand, const QString &prefixDir) {
     env.insert(QStringLiteral("WINEPREFIX"), prefixDir);
     boot.setProcessEnvironment(env);
     boot.start();
-    // Building a prefix from nothing is slow -- it unpacks a Windows
-    // installation -- and there is no use measuring before it is done.
+    // Creating a prefix from scratch is slow, unpacking a Windows installation,
+    // and there is no point measuring before it finishes.
     if (boot.waitForStarted(10000)) boot.waitForFinished(300000);
 
-    // And then the server is stopped, which is what writes the registry out:
-    // until it does, there is nothing on disk to read the prefix's DPI from.
+    // The server is then stopped, which writes the registry out: until it does,
+    // there is nothing on disk to read the prefix's DPI from.
     stopWineserver(wineCommand, prefixDir);
 }
 
 void setPrefixDpi(const QString &wineCommand, const QString &prefixDir, int logPixels) {
     const int recorded = prefixLogPixels(prefixDir);
     if (recorded == logPixels) return;
-    // Nothing recorded means the default, so there is nothing to put back.
+    // Nothing recorded means the default, so there is nothing to reset.
     if (logPixels == kDefaultLogPixels && recorded == 0) return;
 
-    // Best effort: a program still runs, at the wrong size, if the registry
-    // will not take it, and failing over a font size would be the wrong
-    // trade.
+    // Best effort: if the registry write fails the program still runs, at the
+    // wrong size, which is better than refusing to start it.
     QProcess reg;
     reg.setProgram(wineCommand);
     reg.setArguments(wineLogPixelsRegistryArgs(logPixels));
@@ -149,14 +148,14 @@ void setPrefixDpi(const QString &wineCommand, const QString &prefixDir, int logP
     reg.start();
     if (reg.waitForStarted(5000)) reg.waitForFinished(60000);
 
-    // The server started to do the writing read the old value as it came up
-    // and would hand it to the program next started, so it is stopped again.
+    // The server started to perform the write read the old value as it came up
+    // and would pass it to the next program started, so it is stopped again.
     stopWineserver(wineCommand, prefixDir);
 }
 
 void stopWineserver(const QString &wineCommand, const QString &prefixDir) {
-    // Beside the wine that will be used, so that a wine kept in a directory
-    // of its own stops its own server rather than the system one's.
+    // Run from the same wine that will be used, so a wine installed in its own
+    // directory stops its own server rather than the system one.
     QString server;
     if (wineCommand.contains(QLatin1Char('/'))) {
         const QString beside =
@@ -183,7 +182,7 @@ QSize scaledSize(const QSize &native, int percent) {
 }
 
 QStringList availableShaders() {
-    // Where gamescope looks, in the order it says it looks.
+    // The directories gamescope searches, in its documented order.
     const QStringList dirs = {
         QStringLiteral("/usr/share/gamescope/reshade/Shaders"),
         QDir::homePath() + QStringLiteral("/.local/share/gamescope/reshade/Shaders"),
@@ -193,7 +192,7 @@ QStringList availableShaders() {
     for (const QString &dir : dirs) {
         for (const QFileInfo &file :
              QDir(dir).entryInfoList({QStringLiteral("*.fx")}, QDir::Files, QDir::Name)) {
-            // Named to gamescope by the file, without the extension.
+            // gamescope names an effect by its file name without the extension.
             const QString name = file.completeBaseName();
             if (!names.contains(name)) names.append(name);
         }
@@ -204,8 +203,8 @@ QStringList availableShaders() {
 
 QStringList gamescopeCommand(const QSize &native, int percent, const QString &shader,
                              const QString &program, const QStringList &args) {
-    // A shader is reason enough to go through gamescope even at its own
-    // size: a CRT effect at 1x is a thing someone may well want.
+    // A shader alone is reason to use gamescope even unscaled: a CRT effect at
+    // 1x is a reasonable thing to ask for.
     if (percent <= 100 && shader.isEmpty()) return {};
     if (!native.isValid() || native.isEmpty()) return {};
     if (!gamescopeAvailable()) return {};
@@ -213,8 +212,8 @@ QStringList gamescopeCommand(const QSize &native, int percent, const QString &sh
     const QSize out = scaledSize(native, percent);
 
     // A whole multiple can repeat each pixel exactly; a fraction cannot, and
-    // asking for integer scaling there would quietly drop back to 1x and
-    // leave the window in a border.
+    // asking for integer scaling there would silently fall back to 1x and leave
+    // the window inside a border.
     const bool whole = percent % 100 == 0;
 
     return QStringList{
@@ -237,8 +236,8 @@ bool isWin16Executable(const QString &exePath) {
     if (!file.open(QIODevice::ReadOnly)) return false;
 
     // A DOS stub, then an offset at 0x3c to the real header, whose first two
-    // bytes say which kind it is: "PE" for 32-bit and up, "NE" for 16-bit.
-    // Only the handful of bytes that answer the question are read.
+    // bytes give its kind: "PE" for 32-bit and above, "NE" for 16-bit. Only
+    // those few bytes are read.
     const QByteArray stub = file.read(0x40);
     if (stub.size() < 0x40 || stub[0] != 'M' || stub[1] != 'Z') return false;
 
@@ -250,8 +249,8 @@ bool isWin16Executable(const QString &exePath) {
 }
 
 QString wineWindowClass(const QString &exePath) {
-    // A 16-bit program does not run as itself: wine starts winevdm, which
-    // loads the program, and the windows belong to winevdm.
+    // A 16-bit program does not run as itself: wine starts winevdm, which loads
+    // the program, so the windows belong to winevdm.
     if (isWin16Executable(exePath)) return QStringLiteral("winevdm.exe");
     return QFileInfo(exePath).fileName();
 }
@@ -278,11 +277,11 @@ bool parseWindowLine(const QString &line, WindowLine *out) {
     return true;
 }
 
-// Wine's own furniture, which is not the program: the desktop it keeps, the
-// dialogs it puts up while building a prefix, the services behind it. One of
-// these can be most of a screen wide, so it must never be mistaken for the
-// program being measured. winevdm is deliberately not here -- a 16-bit
-// program's windows really do belong to it.
+// Wine's own windows rather than the program's: the desktop it keeps, the
+// dialogs it opens while creating a prefix, and its background services. One of
+// these can be nearly a screen wide, so it must never be mistaken for the
+// program being measured. winevdm is deliberately absent: a 16-bit program's
+// windows really do belong to it.
 bool isWineInfrastructure(const WindowLine &window) {
     static const QStringList classes = {
         QStringLiteral("explorer.exe"), QStringLiteral("rundll32.exe"),
@@ -296,15 +295,15 @@ bool isWineInfrastructure(const WindowLine &window) {
     return false;
 }
 
-// The frames a reparenting window manager puts round other people's windows.
-// Their size is the decoration, not the program.
+// The frames a reparenting window manager puts around other windows. Their size
+// is the decoration, not the program.
 bool isWindowManagerFrame(const WindowLine &window) {
     return window.windowClass.contains(QLatin1String("mutter"), Qt::CaseInsensitive) ||
            window.windowClass.contains(QLatin1String("frames"), Qt::CaseInsensitive);
 }
 
-// Anything smaller than this is a helper rather than a window being drawn in:
-// wine keeps a couple of two-pixel ones per program.
+// Anything smaller than this is a helper window rather than one being drawn in:
+// wine keeps a couple of two-pixel windows per program.
 constexpr int kMinimumInteresting = 16;
 
 QList<WindowLine> currentWindows() {
@@ -333,16 +332,14 @@ QStringList windowSnapshot() {
 }
 
 QSize measureNewWindow(const QStringList &before, const QString &classHint, int timeoutMs) {
-    // A window is not its final size the moment it appears: it is created,
-    // then sized, then laid out, and catching it too early gives whatever it
-    // measured on the way. So the first sighting starts a short settling
-    // period rather than being the answer, and the largest size seen during
-    // it is what the program asked for.
+    // A window is not its final size when it first appears: it is created, then
+    // sized, then laid out, so reading it too early gives an intermediate size.
+    // The first sighting therefore starts a short settling period, and the
+    // largest size seen during it is taken as the program's.
     //
-    // Only a window of the program's own class settles the question. Anything
-    // else that happens to appear while we are waiting -- a video player
-    // rebuilding its output window, a notification -- is kept only against
-    // the possibility that the class never shows up at all.
+    // Only a window of the program's own class is conclusive. Anything else
+    // that appears meanwhile, such as a video player rebuilding its output
+    // window or a notification, is kept only in case the class never appears.
     QSize best;
     QSize fallback;
     QElapsedTimer timer;
@@ -365,9 +362,9 @@ QSize measureNewWindow(const QStringList &before, const QString &classHint, int 
                 window.windowClass.compare(classHint, Qt::CaseInsensitive) == 0) {
                 if (area(window.size) > area(matching)) matching = window.size;
             }
-            // The fallback is for a program whose class we guessed wrongly,
-            // not for wine's own windows: one of those would otherwise win
-            // on size alone.
+            // The fallback covers a program whose class was guessed wrongly,
+            // not wine's own windows, one of which would otherwise win on size
+            // alone.
             if (!isWineInfrastructure(window) && area(window.size) > area(anyNew)) {
                 anyNew = window.size;
             }
@@ -381,8 +378,8 @@ QSize measureNewWindow(const QStringList &before, const QString &classHint, int 
                 best = matching;
             }
             if (firstSeen < 0) firstSeen = timer.elapsed();
-            // Long enough for a window to finish being put together, short
-            // enough not to be a wait anyone notices.
+            // Long enough for a window to finish being constructed, short
+            // enough not to be a noticeable wait.
             if (timer.elapsed() - firstSeen >= kSettleMs) return best;
         }
 
@@ -390,7 +387,7 @@ QSize measureNewWindow(const QStringList &before, const QString &classHint, int 
         QProcess::execute(QStringLiteral("sleep"), {QString::number(kPollMs / 1000.0)});
     } while (timer.elapsed() < timeoutMs);
 
-    // Nothing of the program's class ever appeared: whatever did is a better
-    // guess than nothing, but only because there is nothing better.
+    // No window of the program's class ever appeared, so whatever did appear is
+    // used as the best available guess.
     return best.isEmpty() ? fallback : best;
 }

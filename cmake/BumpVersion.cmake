@@ -1,10 +1,10 @@
-# Moves the version on by one, in whichever of its three parts is asked for:
+# Increments the version in whichever of its three parts is named:
 #
 #   cmake -DFILE=VERSION -DPART=major|minor|patch -P cmake/BumpVersion.cmake
 #
-# Raising a part sets the ones under it back to zero, which is what makes
-# 1.1.9 followed by a minor bump read 1.2.0 rather than 1.2.9. The build
-# stamp beside it is untouched: that one says when, this one says what.
+# Incrementing a part resets the parts below it to zero, so a minor bump of
+# 1.1.9 gives 1.2.0 rather than 1.2.9. The build stamp is untouched: it records
+# when a build was made, this records which version it is.
 
 if(NOT DEFINED FILE OR NOT DEFINED PART)
     message(FATAL_ERROR "BumpVersion.cmake wants -DFILE=<path> and -DPART=major|minor|patch")

@@ -5,98 +5,94 @@
 #include <QStringList>
 #include <QVector>
 
-// One program that can act as a launcher: a wine on this machine, a Proton
-// build, a DOSBox, the ScummVM sitting outside the PATH. An item picks one of
-// these, and nothing about it is a command line: the arguments a launcher
-// needs belong to the launcher and are not anyone's to edit.
+// One program that can act as a launcher: an installed wine, a Proton build,
+// DOSBox, a ScummVM outside the PATH. An item picks one of these. It holds no
+// command line: the arguments a launcher needs belong to the launcher and are
+// not editable.
 struct LauncherRunner {
     QString id;      // unique within its launcher, and what an item stores
-    QString name;    // what the dialogs call it: "GE-Proton10-33"
+    QString name;    // shown in the dialogs, e.g. "GE-Proton10-33"
     QString command; // a name on the PATH, an absolute path, or an alias
 
-    // Start it from an interactive shell, so an alias or a shell function is
-    // found. Off runs the program directly.
+    // Start it through an interactive shell, so an alias or shell function is
+    // found. Otherwise the program is run directly.
     bool useShell = false;
 
-    // Set on a runner that is a Steam Proton build, by the id of its
-    // directory under compatibilitytools.d. Such a runner is not simply a
-    // program to run: it wants a wine prefix of its own and the environment
-    // that points at it, so `command` is not what starts it.
+    // Set for a Steam Proton build, to the id of its directory under
+    // compatibilitytools.d. Such a runner needs a wine prefix of its own and
+    // the environment pointing at it, so `command` is not what starts it.
     QString compatToolId;
     bool isCompatTool() const { return !compatToolId.isEmpty(); }
 
-    // Read off the machine rather than set up here -- every wine and every
-    // Proton build is -- and so neither saved nor edited: they come and go as
-    // things are installed.
+    // Detected on the machine rather than configured here, as every wine and
+    // Proton build is. Neither saved nor editable, since they appear and
+    // disappear with what is installed.
     bool discovered = false;
 };
 
-// What a kind of file is opened with: which file types it claims, the
-// programs that can open them, and whatever the family as a whole knows.
+// A family of launchers: the file types it claims, the programs that can open
+// them, and the settings shared by the whole family.
 struct Launcher {
     QString id;
     QString name;
     QString description;
 
-    // The file types this launcher claims, without their dots, lower case.
-    // More than one launcher may claim the same type -- wine and Proton both
-    // take .exe -- and an item then picks between them.
+    // The file types this launcher claims, lower case and without the dot.
+    // Several launchers may claim the same type, wine and Proton both taking
+    // .exe, in which case an item picks between them.
     QStringList extensions;
 
-    // What follows a runner's command, split the way a shell would split it.
-    // Hardcoded: how a launcher is handed a file is the launcher's business,
-    // not a line for anyone to maintain. The placeholders filled in on the
-    // way past are:
+    // What follows a runner's command, split as a shell would split it.
+    // Hardcoded rather than configurable: how a launcher is handed a file is
+    // its own business. The placeholders are:
     //   {file}   the item's own path
     //   {dir}    the folder the item sits in
     //   {core}   the emulator core chosen for the file
     //   {appid}  the Steam app id the file's manifest names
     //
-    // A placeholder with nothing to put in it takes its argument out of the
-    // line, and the flag in front of it with it: "-L {core} {file}" is just
-    // the file when no core is known, and needs no second spelling.
+    // A placeholder with no value removes its argument from the line, along
+    // with the flag in front of it: "-L {core} {file}" becomes just the file
+    // when no core is known, so no second form is needed.
     QString arguments;
 
-    // What this family is asked for, which differs by family.
+    // What this family needs to be configured with, which differs by family.
     bool usesPrefixes = false;   // wine and Proton, which keep a prefix per program
-    // Whether its programs can be scaled: a Windows program draws the window
-    // it was written for, which on a modern screen may be very small. An
-    // emulator does its own scaling and wants none of this.
+    // Whether its programs can be scaled. A Windows program draws the window
+    // size it was written for, which can be very small on a modern screen; an
+    // emulator does its own scaling and needs none of this.
     bool usesWindowScale = false;
-    // Whether wine's own scaling is available through it: wine reads
-    // WINE_DPI_SCALE and the prefix's DPI, where a Proton build handles
-    // scaling its own way and should not be told otherwise.
+    // Whether wine's own scaling is available. Wine reads WINE_DPI_SCALE and
+    // the prefix DPI; a Proton build scales its own way and must not be given
+    // these.
     bool usesDpiScale = false;
     bool usesCores = false;      // an emulator that has to be told the core
-    // Whether an item run by it can be given arguments of its own. A wine or
-    // a Proton build hands them to the Windows program it starts, which is
-    // the one place they mean anything: an emulator, DOSBox and Steam are
-    // each handed a file or an id and have nowhere to put them.
+    // Whether an item run by it can have arguments of its own. Wine and Proton
+    // pass them to the Windows program they start, which is the only place
+    // they mean anything; an emulator, DOSBox and Steam are each given a file
+    // or an id and have nowhere to put them.
     bool usesArguments = false;
-    // Steam: the game is Steam's to find, so what this launcher is set up
-    // with is where Steam keeps its libraries rather than any program.
+    // Steam finds the game itself, so this launcher is configured with the
+    // library locations rather than with a program.
     bool usesSteamLibraries = false;
 
-    // Where the prefixes its runners build are kept -- one to a program,
-    // holding its C: drive, its registry and its saved games. Empty means
-    // this application's own data directory.
+    // Where the prefixes its runners create are kept, one per program, each
+    // holding its C: drive, registry and saved games. Empty means this
+    // application's own data directory.
     QString prefixesDir;
 
-    // Prefixes set up by hand, by name, kept in that same folder. An item
-    // names one of these when several programs are to share a bottle -- a
-    // game and its editor, or a program and the runtime it was installed
-    // alongside. The per-application prefix every item gets otherwise is not
-    // in here: it is not named, and is nobody's to remove.
+    // Named prefixes created by hand, kept in that same folder. An item names
+    // one of these when several programs have to share a prefix, such as a
+    // game and its editor. The per-item prefix every other item gets is not
+    // listed here: it has no name and is not removable from the dialog.
     QStringList prefixes;
 
-    // Emulator cores by file type: which core plays a .nes, which a .gba.
-    // `coresDir` empty means: work it out from where the program lives.
+    // Emulator cores by file type: which core plays a .nes, which a .gba. An
+    // empty `coresDir` means it is derived from the program's location.
     QString coresDir;
     QVector<QPair<QString, QString>> cores;
 
-    // Steam: library folders added by hand, for one Steam does not list
-    // itself. The ones it does list are found each session and are not in
-    // here.
+    // Steam library folders added by hand, for libraries Steam does not list
+    // itself. The ones it lists are detected each session and not stored here.
     QStringList libraryFolders;
 
     // The programs that can act as this launcher.
@@ -104,59 +100,59 @@ struct Launcher {
 
     bool handles(const QString &path) const;
     const LauncherRunner *runner(const QString &runnerId) const;
-    // The one an item gets when it has not asked for another: the first.
+    // The runner an item gets when it names none: the first one.
     const LauncherRunner *defaultRunner() const;
 };
 
-// Every launcher as last saved, with anything missing filled in from the
+// Every launcher as last saved, with missing fields filled in from the
 // defaults and the installed wines and Proton builds added. Read once and
-// kept for the session.
+// cached for the session.
 const QVector<Launcher> &launchers();
-// Replaces the lot and writes them to the settings.
+// Replaces all of them and writes them to the settings.
 void setLaunchers(const QVector<Launcher> &launchers);
-// What the launchers are before anything is edited.
+// The launchers as they are before any editing.
 QVector<Launcher> defaultLaunchers();
 
 const Launcher *launcherById(const QString &id);
-// Every launcher that claims this file's extension, in the order they are
-// listed -- so wine comes before Proton for a .exe.
+// Every launcher claiming this file's extension, in list order, so wine comes
+// before Proton for a .exe.
 QVector<const Launcher *> launchersForPath(const QString &path);
 
-// How an item names what runs it: the launcher and the runner, so that both
-// are readable in a saved desktop and neither is ambiguous.
+// The id an item stores for what runs it, naming both the launcher and the
+// runner so that a saved desktop is readable and unambiguous.
 QString launcherId(const Launcher &launcher, const LauncherRunner &runner);
 
-// One entry in the "Run with" list on an item: what to store, and what to
+// One entry in an item's "Run with" list: the id to store and the label to
 // show.
 struct LauncherChoice {
     QString id;
     QString label;
-    // Whether what it names keeps a wine prefix of its own.
+    // Whether the runner it names keeps a wine prefix of its own.
     bool usesPrefixes = false;
-    // The prefixes set up by hand on the launcher behind it, for an item to
-    // pick one of instead of its own.
+    // The named prefixes of the launcher behind it, which an item can pick
+    // instead of its own.
     QStringList prefixes;
-    // Whether an item run by it can be scaled up, and whether wine's own
-    // scaling is one of the ways.
+    // Whether an item run by it can be scaled, and whether wine's own scaling
+    // is one of the available methods.
     bool usesWindowScale = false;
     bool usesDpiScale = false;
-    // Whether arguments of the item's own reach the program it starts.
+    // Whether the item's own arguments reach the program it starts.
     bool usesArguments = false;
 };
-// Everything that can open this file: every runner of every launcher that
-// claims it, so an item can be pointed at one of them.
+// Everything that can open this file: every runner of every launcher claiming
+// it, so an item can be pointed at one of them.
 QVector<LauncherChoice> launchersFor(const QString &path);
 
-// What an item asked for by id, or what its file leads to when it asked for
-// nothing (or for something no longer there): the first runner of the first
-// launcher claiming the type. `launcher` comes back null when nothing claims
-// the file at all.
+// Resolves the launcher and runner an item named by id. When it named none,
+// or named one that no longer exists, falls back to the first runner of the
+// first launcher claiming the file type. `launcher` is left null when nothing
+// claims the file.
 void launcherForItem(const QString &path, const QString &launcherId, const Launcher **launcher,
                      const LauncherRunner **runner);
 
 // What it takes to start `path`: a program and its arguments, with the
-// placeholders filled in, the shell wrapped round it if the runner needs one,
-// and the item's own arguments on the end.
+// placeholders filled in, wrapped in a shell if the runner needs one, and the
+// item's own arguments appended.
 struct LauncherCommand {
     QString program;
     QStringList args;

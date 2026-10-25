@@ -22,21 +22,21 @@ namespace {
 // The path of the .desktop file behind a row.
 constexpr int kCommandRole = Qt::UserRole;
 
-// How far up the folders an entry sits in this will look for something to
-// tell it apart from another of the same name.
+// How many folder levels above an entry to search for something that
+// distinguishes it from another of the same name.
 constexpr int kMaxDisambiguationDepth = 3;
 
-// Wine's start menu keeps a "Manual" and an "Uninstall" inside every game's
-// own folder, so names alone would leave the list with a column of rows all
-// reading the same thing. Where names collide, the nearest folder that does
-// tell the entries apart is added to them.
+// Wine's start menu puts a "Manual" and an "Uninstall" inside every game's
+// folder, so names alone would leave the list full of identical rows. Where
+// names collide, the nearest folder that distinguishes the entries is appended
+// to them.
 void disambiguateNames(QVector<ProgramItem> &applications) {
     QHash<QString, QVector<int>> byName;
     for (int i = 0; i < applications.size(); ++i) {
         byName[applications[i].name].append(i);
     }
 
-    // The folder an entry sits in, `depth` levels up.
+    // The folder containing an entry, `depth` levels up.
     const auto folderName = [&applications](int index, int depth) {
         QDir dir(QFileInfo(applications[index].command).absolutePath());
         for (int up = 1; up < depth; ++up) dir.cdUp();
@@ -49,8 +49,8 @@ void disambiguateNames(QVector<ProgramItem> &applications) {
         for (int depth = 1; depth <= kMaxDisambiguationDepth; ++depth) {
             QHash<QString, int> seen;
             for (int index : clash) seen[folderName(index, depth)]++;
-            // Go further up until one folder name settles the whole set; two
-            // entries still sharing one would be no better off than before.
+            // Keep going up until one folder name distinguishes the whole set;
+            // two entries still sharing one would be no better off.
             if (seen.size() != clash.size() && depth < kMaxDisambiguationDepth) continue;
 
             for (int index : clash) {
@@ -67,8 +67,8 @@ void disambiguateNames(QVector<ProgramItem> &applications) {
 ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Insert Application"));
 
-    // The banner, the coloured surfaces and the field styling the dialogs
-    // share; what is left here is the list and what narrows it.
+    // The banner, coloured surfaces and field styling shared by the dialogs;
+    // what follows is the list and its filter.
     const DialogChrome chrome = applyDialogChrome(this, tr("Insert Application"));
 
     m_filterEdit = new QLineEdit(this);
@@ -89,8 +89,8 @@ ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(pare
     m_list->setUniformItemSizes(true);
     m_list->setFrameShape(QFrame::NoFrame); // the style sheet draws the edge
 
-    // More than one can be taken at a time, which is not what a list of
-    // applications usually offers: worth saying once, quietly.
+    // Several applications can be selected at once, which such a list does not
+    // usually allow, so the dialog says so.
     auto *hint = new QLabel(tr("Pick as many as you like: they all go into the group."), this);
     markHintLabel(hint);
     hint->setWordWrap(true);
@@ -107,8 +107,8 @@ ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(pare
     chrome.fields->addWidget(hint);
     chrome.footer->addWidget(buttons);
 
-    // Each application is worked out exactly the way a dropped file would be,
-    // so the name and icon on show here are the ones the item will wear.
+    // Each application is resolved exactly as a dropped file would be, so the
+    // name and icon shown here are the ones the item will have.
     QVector<ProgramItem> applications;
     const QStringList paths = installedDesktopEntries();
     applications.reserve(paths.size());
@@ -140,7 +140,7 @@ ApplicationPickerDialog::ApplicationPickerDialog(QWidget *parent) : QDialog(pare
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     // Typing goes to the filter wherever the focus is, so the list can be
-    // narrowed without reaching for the mouse first.
+    // narrowed without using the mouse first.
     m_filterEdit->setFocus();
     resize(520, 520);
 }
@@ -152,8 +152,8 @@ void ApplicationPickerDialog::applyFilter(const QString &text) {
         const bool matches =
             needle.isEmpty() || row->text().contains(needle, Qt::CaseInsensitive) ||
             row->data(kCommandRole).toString().contains(needle, Qt::CaseInsensitive);
-        // A row that is filtered away takes its selection with it, so Insert
-        // never adds something the list is not showing.
+        // A filtered-out row loses its selection, so Insert never adds
+        // something the list is not showing.
         if (!matches && row->isSelected()) row->setSelected(false);
         row->setHidden(!matches);
     }
@@ -164,8 +164,8 @@ QVector<ProgramItem> ApplicationPickerDialog::chosenItems() const {
     for (QListWidgetItem *row : m_list->selectedItems()) {
         ProgramItem item;
         item.command = row->data(kCommandRole).toString();
-        // The name the row was picked by, so whatever told two "Manual"
-        // entries apart here still tells them apart on the desktop.
+        // The name the row was selected by, so whatever distinguished two
+        // "Manual" entries here still distinguishes them on the desktop.
         item.name = row->text();
         items.append(item);
     }

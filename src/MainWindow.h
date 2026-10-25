@@ -24,26 +24,25 @@ class MinimizedGroupIcon;
 class NotificationArea;
 class TitleBar;
 
-// The main "Program Manager" window: an MDI desktop holding Program
-// Group windows, with progman.ini-style persistence.
+// The main "Program Manager" window: an MDI desktop holding Program Group
+// windows, with progman.ini-style persistence.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    // startupScreen, when given and known, overrides the screen that was
-    // open last.
+    // startupScreen, when given and known, overrides the screen last in use.
     explicit MainWindow(const QString &startupScreen = QString(), QWidget *parent = nullptr);
     ~MainWindow() override;
 
 public slots:
-    // Loads a screen by name, saving whatever is on the desktop first. Also how
-    // a second launch with --profile reaches the running instance.
+    // Loads a screen by name, saving the current desktop first. Also the entry
+    // point a second launch with --profile uses on the running instance.
     void switchToScreen(const QString &name);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
-    // The window draws its own frame, so the band along its edges is where
-    // a resize starts and what the pointer reports.
+    // The window draws its own frame, so these handle resizing from the
+    // margin along its edges and the matching cursor shape.
     void changeEvent(QEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -51,37 +50,35 @@ protected:
 private slots:
     void newGroup();
     void newItem();
-    // Adds one of the applications installed on the machine to the active
-    // group, picked from a list of them.
+    // Adds an installed application to the active group, picked from a list.
     void insertApplication();
     void insertSteamGame();
-    // The group named, or the active one. A minimized group is hidden, and
-    // a hidden window cannot be made the active one to be deleted by that.
+    // Deletes the group given, or the active one. The argument is needed
+    // because a minimized group is hidden, and a hidden window cannot be made
+    // active.
     void deleteGroup(QMdiSubWindow *sub = nullptr);
-    // Takes a group off the desktop, whatever state it is in: its window,
-    // the icon it is minimized to, and what was remembered about where it
-    // sat. What is done with its items is the caller's business.
+    // Removes a group from the desktop whatever state it is in: its window,
+    // its minimized icon, and its recorded geometry. The caller decides what
+    // happens to its items.
     void removeGroupWindow(QMdiSubWindow *sub);
     // Renames the active group, or the one whose caption was double clicked.
     void renameGroup(QMdiSubWindow *sub = nullptr);
-    // Sends a whole group to another screen: off this desktop, and into that
-    // screen's file, which is not open to be moved about in.
+    // Moves a group to another screen: off this desktop and into that
+    // screen's file, which is not loaded.
     void moveGroupToScreen(QMdiSubWindow *sub, const QString &screen);
-    // What a right click on a group's caption offers: what can be done to
-    // the group, the window's own system menu being Qt's and reachable from
-    // the box at the left of the caption.
+    // The menu shown on a right click on a group's caption. The window's own
+    // system menu is Qt's, reachable from the box at the left of the caption.
     void showGroupCaptionMenu(QMdiSubWindow *sub, const QPoint &where);
-    // Fills a menu with the screens this group could go to -- every screen
-    // but the one it is on. Filled as the menu opens rather than when it is
-    // built: screens are made, renamed and deleted while the desktop stands.
+    // Fills a menu with every screen but the one the group is on. Filled as
+    // the menu opens, since screens are added, renamed and deleted while the
+    // desktop is running.
     void fillMoveToScreenMenu(QMenu *menu, QMdiSubWindow *sub);
     void updateWindowMenu();
     void onSubWindowActivated(QMdiSubWindow *active);
     void chooseColors();
-    // The desktop's own switches, the wallpaper among them.
+    // The desktop's own settings, the wallpaper among them.
     void editSettings();
-    // What each kind of file is started with: the programs and the file types
-    // they take.
+    // The launcher programs and the file types each one handles.
     void editLaunchers();
     void about();
     void newScreen();
@@ -92,22 +89,21 @@ private slots:
 private:
     void buildMenus();
     // Asks systemd to suspend, restart or shut the machine down, after
-    // asking the user whether that is really what they meant. `verb` is the
-    // systemctl one; the desktop is saved first for the two that end the
-    // session.
+    // confirming with the user. `verb` is the systemctl verb; the desktop is
+    // saved first for the two that end the session.
     void requestSystemState(const QString &verb, const QString &question, bool endsSession);
     void rebuildScreenMenu();
     void updateWindowTitle();
     GroupWindow *activeGroup() const;
 
 public:
-    // Brings an item into view and selects it: the screen it is on, the
-    // group holding it, raised and selected. What the desktop's own search
-    // does when one of this application's results is clicked.
+    // Brings an item into view and selects it, switching screens and raising
+    // its group as needed. Called when one of this application's results is
+    // clicked in the desktop search.
     bool revealItem(const QString &screen, int groupIndex, int itemIndex,
                     const QString &itemName);
-    // The groups on show now, in the order they were built: what the search
-    // offers, and what revealItem() counts through.
+    // The groups currently on the desktop, in creation order: what the search
+    // offers and what revealItem() indexes into.
     QVector<GroupWindow *> groups() const;
     QString currentScreen() const;
 
@@ -120,46 +116,44 @@ private:
     // Asks for a screen name, rejecting blanks and names already in use.
     QString askScreenName(const QString &windowTitle, const QString &initial);
     void createDefaultGroups();
-    // `moved` eases from the colours on screen to the new ones. Wanted when
-    // the whole desktop changes at once -- the dark switch -- and not while
-    // picking through schemes in the Colors dialog, where each step would
-    // smear into the next and the list would feel slow.
+    // `moved` animates from the colours on screen to the new ones. Used when
+    // the whole desktop changes at once, such as the dark mode toggle, but not
+    // while arrowing through the Colors dialog, where each step would blend
+    // into the next and feel slow.
     void applyTheme(const QString &themeName, bool moved = false);
-    // Puts these colours on: every palette in the application, and the
-    // surfaces the dialogs paint themselves. One frame of a move, or the
-    // whole of a change that is not moved to.
+    // Applies these colours to every palette in the application and to the
+    // surfaces the dialogs paint themselves. Called per frame of an animated
+    // change, or once for an immediate one.
     void applyThemeColours(const Theme &theme);
 
-    // Follows the desktop between light and dark, so the Program Manager
-    // is not the one window still bright when everything else has dimmed.
+    // Follows the desktop between light and dark, so this window does not
+    // stay bright when the rest of the session has gone dark.
     void followDesktopScheme(DesktopScheme scheme);
     DesktopColorSchemeWatch *m_schemeWatch = nullptr;
 
-    // Reads the desktop's wallpaper, or clears it, according to the
-    // setting. Called whenever either end could have changed: the switch,
-    // the scheme -- light and dark can carry different pictures -- and the
-    // desktop's own background being swapped.
+    // Reads the desktop's wallpaper, or clears it, according to the setting.
+    // Called whenever anything it depends on could have changed: the setting,
+    // the light/dark scheme, which can have different pictures, and the
+    // desktop background itself.
     void refreshDesktopWallpaper();
     GnomeWallpaper *m_wallpaperWatch = nullptr;
     bool m_useDesktopWallpaper = false;
 
     QVariantAnimation *m_themeFade = nullptr;
-    // The colours actually on screen. currentTheme() says what the desktop
-    // is set to, which changes the moment dark mode is flipped -- this says
-    // what it still looks like, which is where a move has to start from.
+    // The colours actually on screen. currentTheme() gives the configured
+    // theme, which changes as soon as dark mode is switched; this holds what
+    // is still displayed, which is where an animation starts from.
     Theme m_wornTheme;
 
 
 
     QPalette captionPalette(const QPalette &base) const;
-    // While a group is resized, holds the edge being dragged to the sides of
-    // the groups around it. Called for each step of the resize; does nothing
-    // outside one.
+    // Snaps the edge being dragged to the sides of the neighbouring groups.
+    // Called at each step of a resize; does nothing outside one.
     void snapWhileResizing(QMdiSubWindow *sub,
                            int reach = AlignmentGuides::kSnapDistance);
-    // The same while a group is being carried: the lines are its
-    // neighbours' sides, and the whole window is shifted onto them rather
-    // than any one edge being held.
+    // The same while a group is being moved: the whole window is shifted onto
+    // a neighbour's edge rather than one edge being held to it.
     void snapWhileMoving(QMdiSubWindow *sub, int reach = AlignmentGuides::kSnapDistance);
 
     void minimizeToIcon(QMdiSubWindow *sub);
@@ -169,19 +163,19 @@ private:
     void clearGroupSelections();
 
     DesktopArea *m_mdiArea;
-    // Where a launch that went wrong is said, in the corner of the desktop.
+    // Where a failed launch is reported, in the corner of the desktop.
     NotificationArea *m_notices;
     QMenu *m_windowMenu;
-    // Kept so their icons can be recoloured when the scheme changes: a menu
-    // is drawn on the scheme's button colour, and a one-colour icon has to
-    // be given ink that reads against it.
+    // Kept so their icons can be recoloured when the scheme changes: menus
+    // are drawn on the scheme's button colour, and a monochrome icon has to
+    // be tinted to stay legible on it.
     QAction *m_suspendAction = nullptr;
     QAction *m_restartAction = nullptr;
     QAction *m_shutdownAction = nullptr;
 
-    // Where the group windows were: one entry per group, in the order the
-    // desktop holds them. Small enough -- a rectangle and a flag each --
-    // that keeping a long run of them costs nothing worth counting.
+    // The position of every group window, one entry per group in desktop
+    // order. A rectangle and a flag each, so keeping a long history of them
+    // is cheap.
     struct LayoutSnapshot {
         QVector<QRect> geometry;
         QVector<bool> minimized;
@@ -191,10 +185,9 @@ private:
         bool operator!=(const LayoutSnapshot &other) const { return !(*this == other); }
     };
 
-    // Something done to the desktop that can be done again or taken back.
-    // Deleting is the reason this is more than the arrangements it started
-    // as: an item or a whole group went on one answer to one question, and
-    // nothing short of setting it up again brought it back.
+    // One undoable change to the desktop. Deletions are the reason this holds
+    // more than arrangements: an item or a whole group goes on a single
+    // confirmation click, and nothing but undo brings it back.
     struct Edit {
         enum Kind {
             Arrangement, // the group windows moved or resized
@@ -203,20 +196,20 @@ private:
         };
         Kind kind = Arrangement;
 
-        // Arrangement: where everything was, and where it went.
+        // Arrangement: the positions before and after.
         LayoutSnapshot before;
         LayoutSnapshot after;
 
-        // Which group it happened to. By what the group is rather than where
-        // it sits: the desktop gets rearranged between doing a thing and
-        // taking it back, and a group restored comes back at the end.
+        // The group affected, identified by id rather than position: the
+        // desktop is rearranged between an edit and its undo, and a restored
+        // group comes back at the end of the order.
         QString group;
 
-        // ItemDeleted: the item, and where in its group it sat.
+        // ItemDeleted: the item and its position in the group.
         int itemIndex = -1;
         ProgramItem item;
 
-        // GroupDeleted: the whole of it, since there is nothing else left.
+        // GroupDeleted: everything needed to recreate the group.
         QString title;
         QVector<ProgramItem> items;
         QRect geometry;
@@ -225,55 +218,53 @@ private:
 
     LayoutSnapshot currentLayout() const;
     void applyLayout(const LayoutSnapshot &layout);
-    // Called as a move or a resize settles. One entry per gesture, not one
-    // per step of it, which is what the pause is for.
+    // Called once a move or resize has settled, so one drag is one entry
+    // rather than one per step.
     void recordLayoutChange();
     void record(const Edit &edit);
     void undoEdit();
     void redoEdit();
-    // Does one, either way round: undoing a deletion puts it back, redoing
-    // it takes it away again.
+    // Applies one edit in either direction: undoing a deletion restores it,
+    // redoing it removes it again.
     void applyEdit(const Edit &edit, bool undoing);
     void updateEditActions();
-    // The group with this identity, or null when it is not on the desktop
-    // any more.
+    // The group with this id, or null when it is no longer on the desktop.
     GroupWindow *groupById(const QString &id) const;
-    // A group added or taken away makes the remembered arrangements
-    // meaningless -- they are a list of windows by position -- but says
-    // nothing about the deletions remembered beside them, which carry what
-    // they need.
+    // Adding or removing a group invalidates the recorded arrangements, which
+    // are lists of windows by position. The recorded deletions are kept,
+    // since each one carries everything it needs.
     void forgetArrangements();
-    // A different desktop entirely: nothing remembered applies to it.
+    // Drops the whole history, for when the desktop is replaced outright.
     void forgetEdits();
 
     QVector<Edit> m_undo;
     QVector<Edit> m_redo;
     LayoutSnapshot m_layoutNow;
     QTimer *m_layoutSettle = nullptr;
-    // Set while an arrangement is being put back, so putting it back is not
-    // itself remembered as a change.
+    // Set while an arrangement is being restored, so the restore is not itself
+    // recorded as a change.
     bool m_applyingLayout = false;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
 
     QMenu *m_screenMenu;
-    // Keeps the one radio button beside the open screen exclusive.
+    // Makes the per-screen radio buttons mutually exclusive.
     QActionGroup *m_screenGroup;
     QAction *m_saveOnExitAction;
     // The menu bar, the window title and the caption buttons in one strip.
     TitleBar *m_titleBar;
-    // The alignment lines shown while a group is resized, and the group
-    // being resized with the size it was when the drag began -- what says
-    // which of its edges are the ones being dragged.
+    // The alignment guides shown while a group is dragged, plus the group
+    // being dragged and its geometry when the drag began, from which the
+    // edges being moved are deduced.
     AlignmentGuides *m_guides;
     QMdiSubWindow *m_resizingSub = nullptr;
     QRect m_resizeStartGeometry;
-    // Set while a snap is being applied, so the geometry we set ourselves
-    // does not come back round as another step of the resize.
+    // Set while a snap is being applied, so the geometry we set does not come
+    // back as another step of the resize.
     bool m_snapping = false;
     QString m_themeName;
     ScreenManager m_screens;
-    // Answers the desktop's own search, where there is one listening.
+    // Answers the desktop search, when one is listening on the bus.
     SearchProvider *m_searchProvider = nullptr;
 
     // Groups shown as desktop icons instead of stub title bars, in the order
@@ -281,8 +272,8 @@ private:
     QHash<QMdiSubWindow *, MinimizedGroupIcon *> m_minimizedIcons;
     QList<QMdiSubWindow *> m_minimizedOrder;
 
-    // Each group's geometry while open. Qt collapses a minimized window to
-    // its stub and normalGeometry() does not survive hiding it, so the real
-    // rect has to be remembered as the window is moved and resized.
+    // Each group's geometry while open. Qt collapses a minimized window to its
+    // stub and normalGeometry() does not survive hiding it, so the real
+    // rectangle is recorded as the window is moved and resized.
     QHash<QMdiSubWindow *, QRect> m_normalGeometry;
 };

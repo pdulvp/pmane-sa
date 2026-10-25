@@ -10,26 +10,25 @@
 
 namespace {
 
-// The file's name is ours to choose, but matching the application's own
-// .desktop file keeps a session from listing the Program Manager twice under
-// two names.
+// The file name is arbitrary, but matching the application's own .desktop file
+// stops a session listing the Program Manager twice under two names.
 const char *kFileName = "pmane-sa.desktop";
 
 QString autostartDir() {
-    // ~/.config/autostart, wherever this session keeps its config.
+    // ~/.config/autostart, wherever this session keeps its configuration.
     return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
            QStringLiteral("/autostart");
 }
 
 QString autostartPath() { return autostartDir() + QLatin1Char('/') + QLatin1String(kFileName); }
 
-// The binary that is actually running, rather than a name on the PATH: this
-// may be an installed copy or one being worked on in a build directory, and
-// the one that wrote the file is the one meant to start.
+// The binary actually running rather than a name on the PATH: this may be an
+// installed copy or one in a build directory, and the one that wrote the file
+// is the one meant to start.
 QString execLine() {
     const QString binary = QCoreApplication::applicationFilePath();
-    // A path with a space in it is a command line with two words in it
-    // unless it is quoted, which the desktop entry spec spells this way.
+    // A path containing a space parses as two arguments unless quoted, which
+    // the desktop entry specification spells this way.
     if (!binary.contains(QLatin1Char(' '))) return binary;
     return QLatin1Char('"') + binary + QLatin1Char('"');
 }
@@ -40,8 +39,8 @@ bool autostartEnabled() {
     const QString path = autostartPath();
     if (!QFileInfo::exists(path)) return false;
 
-    // A session's tweak tool turns an entry off by leaving the file in place
-    // and writing one of these into it rather than by deleting it.
+    // A session tweak tool disables an entry by leaving the file in place and
+    // writing one of these keys into it rather than deleting it.
     QSettings entry(path, QSettings::IniFormat);
     entry.beginGroup(QStringLiteral("Desktop Entry"));
     if (entry.value(QStringLiteral("Hidden")).toString().compare(
@@ -66,9 +65,9 @@ bool setAutostartEnabled(bool enabled) {
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return false;
 
-    // Written out by hand rather than through QSettings: a desktop entry is
-    // not an ini file -- its group name has a space in it and its values are
-    // never quoted -- and the handful of lines are plainer this way.
+    // Written directly rather than through QSettings: a desktop entry is not an
+    // ini file, its group name containing a space and its values never being
+    // quoted, and these few lines are clearer this way.
     QTextStream out(&file);
     out << "[Desktop Entry]\n";
     out << "Type=Application\n";
@@ -80,7 +79,7 @@ bool setAutostartEnabled(bool enabled) {
     out << "Exec=" << execLine() << "\n";
     out << "Icon=user-desktop\n";
     out << "Terminal=false\n";
-    // What a GNOME session reads to mean "yes, this one too".
+    // The key a GNOME session reads to enable the entry.
     out << "X-GNOME-Autostart-enabled=true\n";
     out.flush();
     file.close();

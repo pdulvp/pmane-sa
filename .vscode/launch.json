@@ -1,10 +1,10 @@
 {
-    // Everything there is to do with this project, in the Run and Debug list
-    // so that it is one dropdown and F5 rather than two menus.
+    // Everything that can be run for this project, collected in the Run and
+    // Debug list so it is one dropdown and F5 rather than two menus.
     //
-    // The first two start the program under gdb. The rest are commands run
-    // in a terminal: "node-terminal" is the way VS Code's own launcher runs
-    // one, and nothing about them is JavaScript -- it is the shell.
+    // The first two start the program under gdb. The rest run commands in a
+    // terminal: "node-terminal" is how VS Code's launcher runs one, and the
+    // commands are shell, not JavaScript.
     "version": "0.2.0",
     "configurations": [
         {
@@ -27,8 +27,7 @@
             "preLaunchTask": "Build"
         },
         {
-            // A screen of its own, so that trying something out is not done
-            // on the desktop being used.
+            // A separate screen, so testing does not touch the desktop in use.
             "name": "Program Manager (on a named screen)",
             "type": "cppdbg",
             "request": "launch",
@@ -56,8 +55,8 @@
             "command": "cmake -S . -B build && cmake --build build --target deb && ls -la build/*.deb"
         },
         {
-            // Raising one part sets the ones under it back to zero. The next
-            // build picks the new number up by itself.
+            // Incrementing one part resets the parts below it to zero. The next
+            // build picks up the new number.
             "name": "Bump major",
             "type": "node-terminal",
             "request": "launch",

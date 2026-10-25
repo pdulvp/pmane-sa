@@ -13,10 +13,10 @@ class IconListWidget : public QListWidget {
 public:
     explicit IconListWidget(QWidget *parent = nullptr);
 
-    // What each row carries, so a drag can be serialized without reaching
-    // back into the owning group: where the item is, and the item. Field by
-    // field it was, until a field added to a ProgramItem and forgotten here
-    // went quietly missing from every item dragged between groups.
+    // What each row carries, so a drag can be serialized without reaching back
+    // into the owning group: the item's index and the item itself. It used to
+    // be serialized field by field, until a field added to ProgramItem and not
+    // added here went missing from every item dragged between groups.
     enum DataRole {
         IndexRole = Qt::UserRole,
         ItemRole,
@@ -26,23 +26,21 @@ public:
     // the rows have been repopulated.
     void updateGridSize();
 
-    // Shows that an item has been started: its icon swells and fades away
-    // where it sits. Double clicking a game is otherwise answered by
-    // nothing at all -- a program can take several seconds to put up a
-    // window, and in the meantime there is no telling whether the click
-    // was taken.
+    // Shows that an item has been started: its icon expands and fades in place.
+    // Without it, double clicking a game gives no feedback at all, a program
+    // taking several seconds to open a window.
     void flashItem(int row);
 
 signals:
     void filesDropped(const QStringList &paths);
     void programItemsDropped(const QVector<ProgramItem> &items, int row);
     void programItemsMovedOut(const QVector<int> &indices);
-    // A drag that started and ended in this same group: move the rows rather
-    // than copying them across.
+    // A drag that started and ended in the same group: the rows are moved
+    // rather than copied.
     void programItemsReordered(const QVector<int> &sourceRows, int row);
-    // Delete pressed with an icon picked out, carrying the same item index
-    // the context menu works with. The group asks before acting on it, so
-    // the key never loses an item outright.
+    // Delete pressed with an icon selected, carrying the same item index the
+    // context menu uses. The group asks for confirmation, so the key never
+    // deletes an item outright.
     void deleteRequested(int index);
 
 protected:

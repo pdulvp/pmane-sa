@@ -3,9 +3,9 @@
 #include <QString>
 #include <QVector>
 
-// A Steam "compatibility tool" -- a Proton build dropped into Steam's
-// compatibilitytools.d -- that can run a Windows executable in place of
-// the system wine.
+// A Steam "compatibility tool": a Proton build installed in Steam's
+// compatibilitytools.d, which can run a Windows executable in place of the
+// system wine.
 struct CompatTool {
     QString id;          // the install directory's name, stored with the item
     QString displayName; // what the tool's own manifest calls it
@@ -13,60 +13,59 @@ struct CompatTool {
     QString steamPath;   // the Steam install it was found under
 };
 
-// Every tool installed under a Steam compatibilitytools.d, ordered by
-// display name. Scanned once per session.
+// Every tool installed under a Steam compatibilitytools.d, ordered by display
+// name. Scanned once per session.
 const QVector<CompatTool> &installedCompatTools();
 
-// The tool with this id, or nullptr if it is not installed (any more).
+// The tool with this id, or nullptr when it is no longer installed.
 const CompatTool *compatToolById(const QString &id);
 
 // The folder a launcher keeps its prefixes in: the one it names, or this
-// application's own data directory when it names none.
+// application's data directory when it names none.
 QString prefixesFolder(const QString &baseDir);
 
-// Where one executable's Proton prefix lives, under `baseDir` -- the folder
-// the launcher profile keeps its prefixes in, or this application's own data
-// directory when that is empty. A prefix per executable, so two games cannot
-// tread on each other's bottle.
+// Where one executable's Proton prefix lives, under `baseDir`: the folder the
+// launcher profile keeps its prefixes in, or this application's data directory
+// when that is empty. One prefix per executable, so two games cannot interfere
+// with each other.
 QString protonPrefixFor(const QString &exePath, const QString &baseDir = QString());
 
-// What the file that marks a prefix as one of ours says: the program it was
-// built for, and -- once an item has claimed it -- which item. Either may be
-// empty, a prefix built before the markers carried an item having only the
-// program in it.
+// The contents of the file marking a prefix as created by this application: the
+// program it was created for and, once an item has claimed it, which item.
+// Either may be empty, a prefix created before the markers recorded an item
+// holding only the program.
 struct PrefixOwner {
     QString program;
     QString itemId;
 };
 PrefixOwner prefixOwner(const QString &prefixPath);
 
-// The prefix one item actually runs in: the one it names, kept under the same
-// folder beside the per-application ones, or its own per-application prefix
-// when it names none. A named prefix is shared on purpose -- a game and its
-// editor, a program and the runtime installed with it -- so it carries none
-// of the per-program marker the automatic ones do.
-// `itemId` is what tells two icons for the same executable apart: each gets
-// a prefix of its own, so one can be the demo and the other the full game.
-// Empty asks for the prefix the executable alone would have had, which is
-// what a desktop written before items had identities wants.
+// The prefix an item actually runs in: the one it names, kept in the same
+// folder as the per-application ones, or its own per-application prefix when it
+// names none. A named prefix is shared deliberately, by a game and its editor
+// or a program and the runtime installed with it, so it carries none of the
+// per-program marker the automatic ones do.
+//
+// `itemId` is what distinguishes two icons for the same executable: each gets a
+// prefix of its own, so one can be the demo and the other the full game. Empty
+// asks for the prefix the executable alone would have had, which is what a
+// desktop written before items had ids needs.
 QString itemPrefixFor(const QString &exePath, const QString &baseDir,
                       const QString &prefixName, const QString &itemId = QString());
 
-// The same path, worked out and not built: itemPrefixFor() creates the folder
-// for a program that has none yet, which is right at launch and wrong when
-// all that is wanted is to know where an item would run -- counting up what
-// is still in use must not conjure the prefixes it is counting.
+// The same path, computed but not created: itemPrefixFor() creates the folder
+// for a program that has none yet, which is right at launch but wrong when only
+// the location is wanted, since counting prefixes in use must not create them.
 QString itemPrefixPath(const QString &exePath, const QString &baseDir,
                        const QString &prefixName, const QString &itemId = QString());
 
-// What a named prefix is called on disk: the name as typed, with whatever
-// cannot be a folder name taken out of it. Empty when nothing is left.
+// The folder name of a named prefix: the name as typed, with anything invalid
+// in a folder name removed. Empty when nothing is left.
 QString prefixFolderName(const QString &prefixName);
 
 // One wine installed on the machine: the system wine on the PATH, or a build
-// dropped under /opt or kept by Lutris. Wine runs a Windows program directly,
-// where a Proton build wraps it in Steam's runtime, so the two are listed
-// apart.
+// under /opt or kept by Lutris. Wine runs a Windows program directly, whereas a
+// Proton build wraps it in Steam's runtime, so the two are listed separately.
 struct WineBuild {
     QString id;          // stable across sessions, and stored with the item
     QString displayName; // "Wine (system)", "wine-9.0-staging"
@@ -74,5 +73,5 @@ struct WineBuild {
 };
 
 // Every wine found on this machine, the system one first. Scanned once per
-// session, like the Proton builds beside it.
+// session, like the Proton builds.
 const QVector<WineBuild> &installedWineBuilds();

@@ -30,15 +30,15 @@
 #include <QVBoxLayout>
 
 namespace {
-// The size the group windows show their icons at.
+// The size the group windows draw their icons at.
 constexpr int kPreviewSize = 32;
 } // namespace
 
 ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Program Item Properties"));
 
-    // The banner, the coloured surfaces and the field styling the dialogs
-    // share; what is left here is this dialog's own form.
+    // The banner, coloured surfaces and field styling shared by the dialogs;
+    // what follows is this dialog's own form.
     const DialogChrome chrome = applyDialogChrome(this, tr("Properties"));
 
     m_nameEdit = new QLineEdit(this);
@@ -58,7 +58,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     commandRow->addWidget(commandBrowse);
 
     // The icon in a well of its own, so it reads as the thing being chosen
-    // rather than as a picture dropped beside a button.
+    // rather than as decoration beside a button.
     m_iconPreview = new QLabel(this);
     m_iconPreview->setObjectName(QStringLiteral("iconWell"));
     m_iconPreview->setFixedSize(kPreviewSize + 14, kPreviewSize + 14);
@@ -77,8 +77,8 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     iconRow->addStretch();
 
     m_form = new QFormLayout;
-    // Labels down the right of their column and fields down the left of
-    // theirs, so the two make a single line each rather than a ragged pair.
+    // Labels right-aligned and fields left-aligned, so each row reads as one
+    // line rather than a ragged pair.
     m_form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -89,10 +89,9 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->addRow(tr("Program arguments:"), m_argsEdit);
     m_form->addRow(tr("Run with:"), m_launcherCombo);
 
-    // Which wine prefix it runs in. A program gets one of its own unless it
-    // is pointed at one of the launcher's named prefixes, which is how two
-    // programs come to share a C: drive -- a game and its editor, or a
-    // program and the runtime it was installed with.
+    // Which wine prefix it runs in. A program gets one of its own unless it is
+    // pointed at one of the launcher's named prefixes, which is how two
+    // programs share a C: drive, such as a game and its editor.
     m_prefixCombo = new QComboBox(this);
     m_prefixCombo->setToolTip(
         tr("The wine prefix this item runs in: one of its own, or one of the prefixes set "
@@ -101,13 +100,12 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     connect(m_prefixCombo, &QComboBox::currentIndexChanged, this,
             [this](int) { m_prefixName = m_prefixCombo->currentData().toString(); });
 
-    // How big to run it. A program written for a 640x480 screen is a postage
-    // stamp on a modern one, and nothing in wine will scale it: the program
-    // is run inside gamescope instead, which draws it at its own size and
-    // scales what comes out.
+    // How large to run it. A program written for a 640x480 screen is tiny on a
+    // modern one, and wine cannot scale it, so the program is run inside
+    // gamescope, which draws it at its own size and scales the output.
     m_scaleCombo = new QComboBox(this);
-    // Filled in by updateScaleRow(), which knows whether what the item is
-    // run with can do wine's own scaling.
+    // Filled in by updateScaleRow(), which knows whether the item's launcher
+    // supports wine's own scaling.
 
     m_measureButton = new QPushButton(tr("Measure"), this);
     m_measureButton->setAutoDefault(false);
@@ -118,9 +116,8 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_nativeSizeLabel = new QLabel(this);
     markHintLabel(m_nativeSizeLabel);
 
-    // Whatever ReShade effects are installed, which on a stock machine is
-    // none: gamescope looks for them under its own directories and Debian
-    // ships nothing there.
+    // The installed ReShade effects, of which a stock machine has none:
+    // gamescope looks for them in its own directories and Debian ships none.
     m_shaderCombo = new QComboBox(this);
     m_shaderCombo->setToolTip(
         tr("A ReShade effect to run it through. Only gamescope can apply one, so choosing "
@@ -154,7 +151,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     m_form->addRow(tr("Icon:"), iconRow);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    // OK is what the form is filled in for.
+    // OK is the default action of the form.
     if (QPushButton *ok = buttons->button(QDialogButtonBox::Ok)) {
         markDefaultButton(ok);
         ok->setDefault(true);
@@ -164,15 +161,15 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     chrome.fields->addStretch();
     chrome.footer->addWidget(buttons);
 
-    // textEdited, not textChanged: filling the field in from the file picked
-    // is not someone naming the item.
+    // textEdited, not textChanged: filling the field in from the chosen file is
+    // not the user naming the item.
     connect(m_nameEdit, &QLineEdit::textEdited, this, [this] { m_nameEdited = true; });
 
     connect(m_commandEdit, &QLineEdit::textChanged, this,
             &ItemPropertiesDialog::updateLauncherVisibility);
-    // Only the scale row follows the choice. Going through
+    // Only the dependent rows are updated. Calling
     // updateLauncherVisibility() here would refill the list, and a list that
-    // reacts to its own refilling never stops.
+    // reacts to its own refilling would loop.
     connect(m_launcherCombo, &QComboBox::currentIndexChanged, this, [this](int) {
         updateArgumentsRow();
         updatePrefixRow();
@@ -207,10 +204,10 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
 }
 
 void ItemPropertiesDialog::refreshIconPreview() {
-    // The icon the item will actually end up with, worked out on a copy: the
-    // one picked by hand if there is one, otherwise whatever the command it
-    // now names leads to. Never stored back on m_item, so an icon nobody
-    // chose stays a preview and is derived again for real on OK.
+    // The icon the item will end up with, resolved on a copy: the one picked by
+    // hand if there is one, otherwise the one derived from the command as now
+    // typed. Never written back to m_item, so an unchosen icon stays a preview
+    // and is derived again on OK.
     ProgramItem probe = m_item;
     probe.command = m_commandEdit->text().trimmed();
     if (!probe.command.isEmpty()) completeProgramItem(probe);
@@ -230,8 +227,8 @@ void ItemPropertiesDialog::changeIcon() {
     if (dlg.exec() != QDialog::Accepted) return;
 
     if (dlg.isReset()) {
-        // Back to whatever the item would find on its own, worked out again
-        // once the dialog is closed.
+        // Back to the derived icon, which is resolved again once the dialog
+        // closes.
         m_item.iconIndex = -1;
         m_item.iconSource.clear();
         m_item.icon = QIcon();
@@ -248,16 +245,16 @@ void ItemPropertiesDialog::changeIcon() {
 
 void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
     m_launcherCombo->clear();
-    // Every launcher profile that takes this kind of file. There is always at
-    // least one, since a launcher keeps the profile it shipped with.
+    // Every launcher profile that accepts this kind of file. There is always at
+    // least one, since a launcher keeps its shipped profile.
     const QVector<LauncherChoice> choices = launchersFor(m_commandEdit->text().trimmed());
     for (const LauncherChoice &choice : choices) {
         m_launcherCombo->addItem(choice.label, choice.id);
     }
 
     if (selected.isEmpty()) {
-        // Nothing chosen yet: the one its launcher leads with, which is what
-        // would have started it anyway.
+        // Nothing chosen yet: the launcher's default, which is what would have
+        // started it anyway.
         m_launcherCombo->setCurrentIndex(0);
         return;
     }
@@ -267,16 +264,16 @@ void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
         m_launcherCombo->setCurrentIndex(index);
         return;
     }
-    // The profile this item was set up with has since been deleted, or the
-    // command now points at a file it does not take. Offered anyway, so that
-    // saving the dialog does not quietly repoint the item.
+    // The profile the item was set up with has since been deleted, or the
+    // command now points at a file it does not accept. Listed anyway, so saving
+    // the dialog does not silently repoint the item.
     m_launcherCombo->addItem(tr("%1 (no longer set up)").arg(selected), selected);
     m_launcherCombo->setCurrentIndex(m_launcherCombo->count() - 1);
 }
 
 void ItemPropertiesDialog::updateArgumentsRow() {
     const QString command = m_commandEdit->text().trimmed();
-    // A .desktop file is nobody's launcher to claim -- gio follows it -- but
+    // A .desktop file is claimed by no launcher, gio following it instead, but
     // the application it describes does take arguments.
     bool usesArguments = isDesktopEntry(command);
     const QString selected = m_launcherCombo->currentData().toString();
@@ -289,16 +286,16 @@ void ItemPropertiesDialog::updateArgumentsRow() {
 
     if (usesArguments == m_argumentsRowShown) return;
     m_argumentsRowShown = usesArguments;
-    // Whatever was typed stays in the field: an item moved from wine to
-    // something else and back has its arguments again.
+    // The text stays in the field, so an item moved from wine to something else
+    // and back keeps its arguments.
     m_form->setRowVisible(m_argsEdit, usesArguments);
     resize(width(), sizeHint().height());
 }
 
 void ItemPropertiesDialog::updatePrefixRow() {
-    // Only the launchers that keep prefixes have anything to say here, and
-    // the named ones are the launcher's own: the list follows what has just
-    // been picked, the way the scaling list does.
+    // Only the launchers that use prefixes show this row, and the named
+    // prefixes belong to the launcher, so the list follows the current
+    // selection, as the scaling list does.
     bool usesPrefixes = false;
     QStringList prefixes;
     const QString selected = m_launcherCombo->currentData().toString();
@@ -313,16 +310,16 @@ void ItemPropertiesDialog::updatePrefixRow() {
     {
         const QSignalBlocker blocker(m_prefixCombo);
         m_prefixCombo->clear();
-        // Nothing named is not nothing: it is the prefix the program gets of
-        // its own, which is what nearly every item wants.
+        // An empty value means the per-program prefix, which is what nearly
+        // every item uses.
         m_prefixCombo->addItem(tr("Default (per application)"), QString());
         for (const QString &name : prefixes) m_prefixCombo->addItem(name, name);
 
         const int found = m_prefixCombo->findData(m_prefixName);
         if (found < 0 && !m_prefixName.isEmpty()) {
-            // Named by the item but since removed from the launcher. Offered
-            // anyway, so that opening the dialog does not quietly move the
-            // program out of the bottle its saved games are in.
+            // Named by the item but since removed from the launcher. Listed
+            // anyway, so opening the dialog does not silently move the program
+            // out of the prefix holding its saved games.
             m_prefixCombo->addItem(tr("%1 (no longer set up)").arg(m_prefixName), m_prefixName);
             m_prefixCombo->setCurrentIndex(m_prefixCombo->count() - 1);
         } else {
@@ -337,9 +334,9 @@ void ItemPropertiesDialog::updatePrefixRow() {
 }
 
 void ItemPropertiesDialog::updateScaleRow() {
-    // Scaling belongs to the launchers that run Windows programs, and wine's
-    // own scaling only to wine, so both the row and the list it offers follow
-    // what has just been picked.
+    // Scaling applies only to the launchers that run Windows programs, and
+    // wine's own scaling only to wine, so both the row and its list follow the
+    // current selection.
     bool scalable = false;
     bool wineDpi = false;
     const QString selected = m_launcherCombo->currentData().toString();
@@ -351,8 +348,9 @@ void ItemPropertiesDialog::updateScaleRow() {
         }
     }
 
-    // Rebuilt rather than filtered, and the choice put back where it still
-    // exists: moving a wine item to Proton has to drop wine's own scaling.
+    // Rebuilt rather than filtered, with the previous choice restored when it
+    // still exists: moving a wine item to Proton has to drop wine's own
+    // scaling.
     const QSignalBlocker blocker(m_scaleCombo);
     m_scaleCombo->clear();
     int selectedIndex = 0;
@@ -367,8 +365,8 @@ void ItemPropertiesDialog::updateScaleRow() {
     m_scaleCombo->setCurrentIndex(selectedIndex);
     refreshNativeSizeLabel();
 
-    // Read each time, so an effect dropped in since the dialog opened is
-    // offered without restarting anything.
+    // Re-read each time, so an effect installed since the dialog opened is
+    // listed without a restart.
     {
         const QSignalBlocker shaderBlocker(m_shaderCombo);
         m_shaderCombo->clear();
@@ -376,18 +374,18 @@ void ItemPropertiesDialog::updateScaleRow() {
         for (const QString &name : availableShaders()) m_shaderCombo->addItem(name, name);
         const int found = m_shaderCombo->findData(m_shaderName);
         if (found < 0 && !m_shaderName.isEmpty()) {
-            // Named by the item but no longer installed: said so rather than
-            // silently dropped.
+            // Named by the item but no longer installed: labelled as such
+            // rather than silently dropped.
             m_shaderCombo->addItem(tr("%1 (not installed)").arg(m_shaderName), m_shaderName);
             m_shaderCombo->setCurrentIndex(m_shaderCombo->count() - 1);
         } else {
             m_shaderCombo->setCurrentIndex(qMax(found, 0));
         }
-        // Nothing to pick from, and nothing to apply one with.
+        // Disabled when no effect is installed.
         m_shaderCombo->setEnabled(m_shaderCombo->count() > 1);
     }
-    // A shader is gamescope's to apply, so the row goes with wine's own
-    // scaling being off.
+    // Only gamescope can apply a shader, so the row is hidden when wine's own
+    // scaling is in use.
     m_form->setRowVisible(m_shaderCombo,
                           scalable && m_scaleMode == WindowScaleMode::Gamescope);
 
@@ -410,17 +408,17 @@ void ItemPropertiesDialog::measureWindow() {
         return;
     }
 
-    // Started here rather than through launchProgramItem(), for two reasons:
-    // it must run outside gamescope -- inside one it has an X server of its
-    // own, where its window cannot be seen -- and it has to be ours to close
-    // again once it has been measured.
+    // Started here rather than through launchProgramItem(), for two reasons: it
+    // must run outside gamescope, which gives it an X server of its own where
+    // its window cannot be seen, and it has to be closable from here once it
+    // has been measured.
     const LauncherCommand call = launcherCommandFor(*launcher, *runner, command, {});
 
-    // In the prefix it will be run in, and at the size it will be run at.
-    // Without the first it would be measured in whatever wine's default
-    // prefix happens to be set to; without the second, a program left scaled
-    // by wine's own DPI would measure as the bigger window it is drawing,
-    // and that figure would then be handed to gamescope as its own size.
+    // Measured in the prefix it will run in, and at the size it will run at.
+    // Otherwise it would be measured in whatever wine's default prefix is set
+    // to, and a program still scaled by wine's DPI would measure as the larger
+    // window it draws, which would then be passed to gamescope as its native
+    // size.
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     if (launcher->usesPrefixes) {
         const QString prefix =
@@ -431,11 +429,11 @@ void ItemPropertiesDialog::measureWindow() {
         }
         env.insert(QStringLiteral("WINEPREFIX"), prefix);
 
-        // A prefix that does not exist yet is built by the first program
-        // started in it, and wine puts up windows of its own while doing so
-        // -- one of them most of a screen wide. Built here instead, and
-        // waited for, so that none of that is still on screen to be measured
-        // instead of the program.
+        // A prefix that does not exist yet is created by the first program
+        // started in it, and wine opens windows of its own while doing so, one
+        // of them nearly a screen wide. It is created and waited for here
+        // instead, so none of those windows is still on screen to be measured
+        // in place of the program's.
         if (!prefixExists(prefix)) {
             m_measureButton->setEnabled(false);
             m_nativeSizeLabel->setText(tr("Setting up its wine prefix, the first time only..."));
@@ -450,8 +448,8 @@ void ItemPropertiesDialog::measureWindow() {
         }
     }
 
-    // What is already on the display, so that whatever the program puts up
-    // can be told apart from it.
+    // The windows already on the display, so the program's own can be told
+    // apart from them.
     const QStringList before = windowSnapshot();
 
     QProcess program;
@@ -467,8 +465,7 @@ void ItemPropertiesDialog::measureWindow() {
 
     m_measureButton->setEnabled(false);
     m_nativeSizeLabel->setText(tr("Waiting for its window..."));
-    // So the message is on screen while the program is starting up, the wait
-    // itself being a blocking one.
+    // Paint the message before the blocking wait below.
     QCoreApplication::processEvents();
 
     const QSize measured = measureNewWindow(before, wineWindowClass(command), 30000);
@@ -479,8 +476,8 @@ void ItemPropertiesDialog::measureWindow() {
     m_measureButton->setEnabled(true);
     if (measured.isValid() && !measured.isEmpty()) {
         m_nativeSize = measured;
-        // Something was learned, so offer to use it: at its own size there
-        // would have been nothing to measure for.
+        // A size was measured, so offer to use it: there would be no reason to
+        // measure an unscaled item.
         if (m_scaleCombo->currentData().toInt() == 100) m_scaleCombo->setCurrentIndex(1);
     }
     refreshNativeSizeLabel();
@@ -494,9 +491,9 @@ void ItemPropertiesDialog::refreshNativeSizeLabel() {
     const bool measured = m_nativeSize.isValid() && !m_nativeSize.isEmpty();
     const bool wineDpi = m_scaleCombo->currentData(kScaleModeRole).toInt() == 1;
 
-    // Wine is simply told to draw bigger, so there is nothing to measure --
-    // and nothing fixed about the result, which is the point: a window the
-    // program lets you resize stays resizable.
+    // Wine's scaling just tells the program to draw larger, so there is nothing
+    // to measure and no fixed result, which is the point: a resizable window
+    // stays resizable.
     m_measureButton->setEnabled(!wineDpi);
     if (wineDpi) {
         m_nativeSizeLabel->setText(tr(""));
@@ -516,7 +513,8 @@ void ItemPropertiesDialog::refreshNativeSizeLabel() {
         m_nativeSizeLabel->setText(
             tr("%1x%2").arg(m_nativeSize.width()).arg(m_nativeSize.height()));
     }
-    // Nothing to scale without gamescope, so say so rather than offering it.
+    // Without gamescope nothing can be scaled, so the row says so rather than
+    // offering a choice.
     if (!gamescopeAvailable()) {
         m_scaleCombo->setEnabled(false);
         m_nativeSizeLabel->setText(tr("Scaling needs gamescope, which is not installed"));
@@ -524,18 +522,17 @@ void ItemPropertiesDialog::refreshNativeSizeLabel() {
 }
 
 void ItemPropertiesDialog::updateLauncherVisibility() {
-    // The row is there whenever some launcher takes this kind of file, so
-    // that what starts an item is readable even where there is only the one
-    // profile to start it with.
+    // The row is shown whenever a launcher accepts this kind of file, so what
+    // starts an item is visible even when there is only one profile for it.
     const QString chosen = m_launcherCombo->currentData().toString();
     const bool show = !launchersFor(m_commandEdit->text().trimmed()).isEmpty() ||
                       !chosen.isEmpty();
 
     // The list follows the command, which may now name a different kind of
-    // file altogether.
+    // file.
     populateLaunchers(chosen);
 
-    // Read after the list was refilled, which may have moved the selection.
+    // Updated after the list was refilled, which may have moved the selection.
     updateArgumentsRow();
     updatePrefixRow();
     updateScaleRow();
@@ -543,16 +540,16 @@ void ItemPropertiesDialog::updateLauncherVisibility() {
     if (show == m_launcherRowShown) return;
     m_launcherRowShown = show;
     m_form->setRowVisible(m_launcherCombo, show);
-    // The dialog is a row shorter or taller now.
+    // The dialog is one row shorter or taller now.
     resize(width(), sizeHint().height());
 }
 
 ProgramItem ItemPropertiesDialog::item() const {
-    // Everything the dialog does not show -- the icon and the file it came
-    // from -- is carried over from the item being edited.
+    // The fields the dialog does not show, the icon and its source file, are
+    // carried over from the item being edited.
     ProgramItem it = m_item;
     it.name = m_nameEdit->text().trimmed();
-    // Emptied out, it goes back to being ours to work out.
+    // Cleared, the name reverts to being derived.
     it.customName = !it.name.isEmpty() && (m_item.customName || m_nameEdited);
     it.command = m_commandEdit->text().trimmed();
     it.arguments = m_argsEdit->text().trimmed();
@@ -580,8 +577,8 @@ void ItemPropertiesDialog::browseCommand() {
     QFileInfo info(path);
     if (m_nameEdit->text().isEmpty()) m_nameEdit->setText(info.completeBaseName());
 
-    // The item now points somewhere else, so it wears that file's icon --
-    // unless one was picked by hand, which outlives a change of command.
+    // The item points at another file, so it takes that file's icon, unless an
+    // icon was picked by hand, which survives a change of command.
     if (m_item.iconIndex < 0) {
         m_item.icon = QIcon();
         m_item.iconSource.clear();

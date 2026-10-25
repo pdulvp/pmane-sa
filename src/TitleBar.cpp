@@ -27,33 +27,33 @@
 
 namespace {
 
-// Caption buttons are square and a little taller than the menu text, the
-// way a window manager would have drawn them.
+// Caption buttons are square and slightly taller than the menu text, as a
+// window manager would draw them.
 constexpr int kButtonWidth = 34;
 constexpr int kButtonHeight = 24;
 // Keeps the title clear of the menus and the clock on either side.
 constexpr int kTitleMargin = 12;
-// Room around the clock, so it belongs to neither the title nor the buttons.
+// Space around the clock, so it reads as separate from the title and the
+// buttons.
 constexpr int kClockMargin = 10;
 
-// The volume slider: long enough to aim with, short enough to leave the
-// title the middle of the strip.
+// The volume slider: long enough to be usable, short enough to leave the title
+// the middle of the strip.
 constexpr int kVolumeWidth = 135;
 constexpr int kVolumeMargin = 6;
 
 
 
-// The short time format has no seconds in it, but the minute still has to
-// turn over promptly, and the system clock can be set while we watch.
+// The short time format has no seconds, but the minute still has to change
+// promptly, and the system clock can be set at any time.
 constexpr int kClockInterval = 1000;
 
-// A slider that goes where it is clicked. Left alone, a click on the groove
-// nudges the handle one page towards the pointer, which is right for a
-// scrollbar and wrong for a volume: the pointer is already on the loudness
-// that was wanted.
+// A slider that jumps to where it is clicked. By default a click on the groove
+// moves the handle one page towards the pointer, which suits a scrollbar but
+// not a volume control, where the pointer is already on the wanted level.
 //
-// Said through the style rather than by catching the click, so the handle,
-// the drag that follows and the keyboard all keep working as they are.
+// Done through the style rather than by intercepting the click, so the handle,
+// the drag that follows and the keyboard keep working unchanged.
 class ClickToSetSlider : public QProxyStyle {
 public:
     int styleHint(StyleHint hint, const QStyleOption *option, const QWidget *widget,
@@ -79,18 +79,17 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // Only as wide as the menus themselves: the rest of the strip is this
     // widget's own surface, which is what makes it draggable.
     m_menuBar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
-    // The strip is one colour throughout. A menu bar paints a panel of its
-    // own, which most styles shade a little darker than the window behind
-    // it, and that left a faint band behind the menus; without the panel the
-    // menus sit straight on this widget's background.
+    // The strip is one colour throughout. A menu bar paints its own panel,
+    // which most styles shade slightly darker than the window behind it,
+    // leaving a faint band behind the menus; without the panel the menus sit
+    // directly on this widget's background.
     m_menuBar->setStyleSheet(QStringLiteral("QMenuBar { background: transparent; }"));
 
-    // Beside the volume: the two things about the machine the strip offers
-    // to change.
+    // Beside the volume: the two machine settings the strip can change.
     m_darkButton = captionButton(this, QStyle::SP_DialogResetButton);
     m_darkButton->setToolTip(tr("Dark colours"));
 
-    // Only where there is a mixer to talk to.
+    // Only when a mixer is available.
     if (systemVolumeAvailable()) {
         m_volumeButton = captionButton(this, QStyle::SP_MediaVolume);
         m_volumeButton->setToolTip(tr("Mute"));
@@ -98,12 +97,12 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         m_volumeSlider = new QSlider(Qt::Horizontal, this);
         m_volumeSlider->setRange(0, 100);
         m_volumeSlider->setFixedWidth(kVolumeWidth);
-        // The strip is dragged from, so a slider on it must not be
-        // something the keyboard wanders into.
+        // The strip is used for dragging the window, so the slider is kept out
+        // of the tab order.
         m_volumeSlider->setFocusPolicy(Qt::NoFocus);
         m_volumeSlider->setToolTip(tr("Output volume"));
-        // Parented to the slider so it lives as long as it does; the proxy
-        // takes the application style as its base without owning it.
+        // Parented to the slider so their lifetimes match; the proxy uses the
+        // application style as its base without owning it.
         auto *clickToSet = new ClickToSetSlider;
         clickToSet->setParent(m_volumeSlider);
         m_volumeSlider->setStyle(clickToSet);
@@ -115,17 +114,16 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         refreshVolume();
     }
 
-    // Beside the date, since both are things to glance at rather than
-    // applications to open.
+    // Beside the date, both being quick references rather than applications.
     m_calculatorButton = captionButton(this, QStyle::SP_FileDialogDetailedView);
     m_calculatorButton->setToolTip(tr("Calculator"));
 
     m_clock = new QLabel(this);
     m_clock->setContentsMargins(kClockMargin, 0, kClockMargin, 0);
     m_clock->setAlignment(Qt::AlignCenter);
-    // Clicking the date opens the month under it, the way the desktop's own
-    // clock does. The strip is dragged from, so the clock has to say that it
-    // is something to click.
+    // Clicking the date opens the month below it, as the desktop's own clock
+    // does. Since the strip is used for dragging, the clock needs a pointing
+    // cursor to show that it is clickable.
     m_clock->setCursor(Qt::PointingHandCursor);
     m_clock->setToolTip(tr("Show the month"));
     m_clock->installEventFilter(this);
@@ -135,13 +133,13 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     connect(clockTimer, &QTimer::timeout, this, &TitleBar::updateClock);
     clockTimer->start(kClockInterval);
 
-    // Only where there is a shell to hand the search to: a button that
-    // could do nothing would be worse than no button.
+    // Only when there is a shell to hand the search to; a button that could do
+    // nothing would be worse than none.
     if (desktopSearchAvailable()) {
         m_searchButton = captionButton(this, QStyle::SP_FileDialogContentsView);
         m_searchButton->setToolTip(tr("Search the desktop"));
-        // The icon itself is set in applyPalette(), which is where the ink
-        // the strip is readable in is known.
+        // The icon is set in applyPalette(), which is where the strip's text
+        // colour is known.
     }
 
     m_minimizeButton = captionButton(this, QStyle::SP_TitleBarMinButton);
@@ -154,8 +152,8 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    // Before the menus, the way a file manager puts its search at the start
-    // of the bar rather than among the window's own buttons.
+    // Before the menus, as a file manager puts its search at the start of the
+    // bar rather than among the window buttons.
     if (m_searchButton) layout->addWidget(m_searchButton);
     layout->addWidget(m_menuBar);
     layout->addStretch();
@@ -185,15 +183,15 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     });
 
     connect(m_darkButton, &QToolButton::clicked, this, [this] {
-        // Said rather than done: the scheme is the window's to apply, and
-        // every palette in the application goes with it.
+        // Reported rather than applied: the window applies the scheme, which
+        // affects every palette in the application.
         emit darkModeToggled(!darkMode());
     });
 
     if (m_volumeSlider) {
-        // While a slider is being dragged the mixer is told as it moves, so
-        // what is heard follows the hand. The watch is held off meanwhile:
-        // reading back mid-drag would fight whoever is dragging.
+        // The mixer is set as the slider moves, so the volume follows the drag.
+        // The watch is suppressed meanwhile, since reading back mid-drag would
+        // fight the drag.
         connect(m_volumeSlider, &QSlider::sliderPressed, this,
                 [this] { m_movingVolume = true; });
         connect(m_volumeSlider, &QSlider::sliderReleased, this, [this] {
@@ -202,10 +200,9 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         });
         connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int value) {
             setSystemVolume(value / 100.0);
-            // Unmuting is what moving the slider means, mute being a way of
-            // saying "not now" rather than "zero". Told outright rather than
-            // asked first: asking would mean waiting, and setting it unmuted
-            // when it already is costs nothing.
+            // Moving the slider implies unmuting, mute meaning "not now" rather
+            // than "zero". Set unconditionally rather than queried first, since
+            // querying would block and setting it again is harmless.
             if (value > 0) setSystemVolumeMuted(false);
             updateVolumeIcon(value, false);
         });
@@ -222,9 +219,9 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     connect(m_closeButton, &QToolButton::clicked, this, [this] { window()->close(); });
 
     setMouseTracking(true);
-    // A plain widget paints no background of its own, and the window behind
-    // it would show through in the ordinary window colour: the strip carries
-    // a colour of its own, so it has to fill.
+    // A plain widget paints no background, so the window behind it would show
+    // through in the ordinary window colour; the strip has a colour of its own
+    // and therefore has to fill.
     setAutoFillBackground(true);
 
     applyKioskSettings();
@@ -240,15 +237,15 @@ void TitleBar::applyKioskSettings() {
     }
     if (m_calculatorButton) {
         m_calculatorButton->setVisible(kiosk.showCalculator);
-        // Taken off the screen with the button that opens it: it hangs off
-        // that button, and there would be nothing to put it under.
+        // Hidden with the button that opens it, being positioned relative to
+        // that button.
         if (!kiosk.showCalculator && m_calculator) m_calculator->hide();
     }
     m_clock->setVisible(kiosk.showCalendar);
     if (!kiosk.showCalendar && m_calendar) m_calendar->hide();
 
-    // The buttons follow it too: whether the window can be brought back out
-    // of full screen is the whole of what the lock means.
+    // The buttons follow too: the lock is precisely about whether the window
+    // can leave full screen.
     updateMaximizeButton();
 }
 
@@ -256,8 +253,8 @@ void TitleBar::applyPalette(const QPalette &palette) {
     setPalette(palette);
     m_menuBar->setPalette(palette);
     m_clock->setPalette(palette);
-    // The strip's own ink, which is black or white depending on how dark the
-    // desktop colour is: the icons on it have to be drawn in the same.
+    // The strip's text colour, black or white according to how dark the desktop
+    // colour is; its icons are tinted to match.
     const QColor ink = palette.color(QPalette::WindowText);
     if (m_searchButton) {
         m_searchButton->setPalette(palette);
@@ -281,8 +278,8 @@ void TitleBar::applyPalette(const QPalette &palette) {
     if (m_volumeButton) {
         m_volumeButton->setPalette(palette);
         m_volumeSlider->setPalette(palette);
-        // Repainted in the new colours, the glyph being drawn by the style
-        // against the palette it had when it was made.
+        // Repainted in the new colours, the glyph having been drawn by the
+        // style against the palette in force when it was created.
         updateVolumeIcon(m_volumeSlider->value(), m_volumeMuted);
     }
     for (QToolButton *button : {m_minimizeButton, m_maximizeButton, m_closeButton}) {
@@ -312,8 +309,8 @@ void TitleBar::paintEvent(QPaintEvent *event) {
     const QString shown = fontMetrics().elidedText(title, Qt::ElideRight, area.width());
     const int shownWidth = fontMetrics().horizontalAdvance(shown);
 
-    // Centred on the window, the way a caption sits, as long as it clears
-    // the menus and the buttons; centred in the room left over when not.
+    // Centred on the window, as a caption is, as long as it clears the menus
+    // and the buttons; otherwise centred in the space left.
     const int centred = (width() - shownWidth) / 2;
     if (centred >= area.left() && centred + shownWidth <= area.right()) {
         area = QRect(centred, 0, shownWidth, height());
@@ -326,14 +323,13 @@ void TitleBar::paintEvent(QPaintEvent *event) {
 }
 
 QRect TitleBar::titleArea() const {
-    // After the menus, which are the rightmost thing on the left: the
-    // search button sits before them rather than between them and the title.
+    // After the menus, which are the rightmost item on the left; the search
+    // button sits before them rather than between them and the title.
     const int left = m_menuBar->geometry().right() + kTitleMargin;
 
-    // Up to whatever the right-hand end actually begins with. Asking one
-    // named widget would be asking a widget that may not be on the strip at
-    // all: the kiosk settings take them off it one by one, and a hidden
-    // widget keeps the geometry it last had.
+    // Up to whichever widget actually starts the right-hand end. Using one
+    // named widget would be unreliable: the kiosk settings remove them one by
+    // one, and a hidden widget keeps its last geometry.
     int right = width();
     for (const QWidget *widget : {static_cast<const QWidget *>(m_darkButton),
                                   static_cast<const QWidget *>(m_volumeButton),
@@ -351,13 +347,12 @@ QRect TitleBar::titleArea() const {
 void TitleBar::refreshVolume() {
     if (!m_volumeSlider) return;
 
-    // Asked without waiting: the answer comes back when it comes back, and
-    // nothing here stops meanwhile.
+    // Queried asynchronously: the answer arrives later and nothing here blocks.
     readSystemVolume(this, [this](double volume, bool muted) {
         if (!m_volumeSlider || m_movingVolume) return;
         m_volumeMuted = muted;
-        // Set without telling the mixer again: this is the mixer talking to
-        // us, not us to it.
+        // Set without writing back to the mixer: this update came from the
+        // mixer.
         const QSignalBlocker blocker(m_volumeSlider);
         m_volumeSlider->setValue(qRound(volume * 100.0));
         updateVolumeIcon(m_volumeSlider->value(), muted);
@@ -367,8 +362,8 @@ void TitleBar::refreshVolume() {
 void TitleBar::updateDarkIcon() {
     if (!m_darkButton) return;
 
-    // The moon to go dark, the sun to come back: what the button will do,
-    // not what is on now.
+    // The moon to switch to dark and the sun to switch back: the icon shows
+    // what the button will do, not the current state.
     const QColor ink = palette().color(QPalette::WindowText);
     const QStringList names =
         darkMode() ? QStringList{QStringLiteral("weather-clear-symbolic"),
@@ -383,8 +378,8 @@ void TitleBar::updateDarkIcon() {
 void TitleBar::updateVolumeIcon(int value, bool muted) {
     if (!m_volumeButton) return;
 
-    // How loud it is, at a glance, in the desktop's own speaker icons:
-    // muted, then quiet, middling and loud.
+    // The level shown with the desktop's own speaker icons: muted, low, medium
+    // and high.
     QString name = QStringLiteral("audio-volume-high");
     if (muted || value == 0) {
         name = QStringLiteral("audio-volume-muted");
@@ -399,8 +394,8 @@ void TitleBar::updateVolumeIcon(int value, bool muted) {
     if (!icon.isNull()) {
         m_volumeButton->setIcon(icon);
     } else {
-        // Nothing installed under those names: the style's own, which at
-        // least says speaker.
+        // None of those icon names is installed, so fall back to the style's own
+        // speaker icon.
         m_volumeButton->setIcon(style()->standardIcon(
             muted || value == 0 ? QStyle::SP_MediaVolumeMuted : QStyle::SP_MediaVolume,
             nullptr, this));
@@ -411,9 +406,8 @@ void TitleBar::updateVolumeIcon(int value, bool muted) {
 void TitleBar::updateClock() {
     const QLocale locale = QLocale::system();
     const QDateTime now = QDateTime::currentDateTime();
-    // Whatever this system's idea of a short time and a short date is; the
-    // label ignores a text it is already showing, so the minutes in between
-    // cost nothing.
+    // The system's short time and date formats. The label ignores text it is
+    // already showing, so the updates in between cost nothing.
     m_clock->setText(QStringLiteral("%1   %2")
                          .arg(locale.toString(now.time(), QLocale::ShortFormat),
                               locale.toString(now.date(), QLocale::ShortFormat)));
@@ -426,17 +420,17 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
         return;
     }
 
-    // The window's own top edge runs along the top of this strip.
+    // The window's top edge runs along the top of this strip.
     const Qt::Edges edges = windowEdgesAt(window(), event->globalPosition().toPoint());
     if (edges && startWindowResize(window(), edges)) {
         event->accept();
         return;
     }
 
-    // Anywhere else on the bare strip drags the window, which the window
-    // manager carries out so that snapping and the pointer grab behave --
-    // unless the window fills the screen, which is not something to be
-    // dragged out of by accident.
+    // Anywhere else on the bare strip drags the window. The window manager
+    // performs the drag, so snapping and the pointer grab behave correctly. A
+    // maximized window is not draggable, to avoid leaving full screen by
+    // accident.
     if (windowCanBeMoved(window())) {
         if (QWindow *handle = window()->windowHandle()) {
             if (handle->startSystemMove()) {
@@ -449,11 +443,10 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
 }
 
 void TitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
-    // Locked, a double click maximizes the window but never brings it back
-    // out again: with the window filling the screen the caption is a long
-    // strip of nothing to click on, and a stray double click there should
-    // not shrink it. Unlocked, it does what a caption usually does and
-    // toggles both ways.
+    // Under a kiosk lock a double click maximizes the window but never
+    // restores it: with the window filling the screen the caption is a long
+    // empty strip, and a stray double click there should not shrink it.
+    // Unlocked, it toggles both ways as a caption normally does.
     const bool canShrink = !windowFillsScreen(window()) || !kioskSettings().locked;
     if (event->button() == Qt::LeftButton && canShrink) {
         toggleMaximized();
@@ -486,11 +479,11 @@ void TitleBar::updateMaximizeButton() {
         this));
     m_maximizeButton->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
 
-    // Locked full screen, the window carries no caption buttons at all:
-    // there is nothing to drag it by up there either, so the strip is left
-    // to the menus, the title and the clock. Unlocked -- Options > Settings,
-    // Kiosk -- it is a window like any other and keeps its buttons wherever
-    // it is, so there is a way back from full screen.
+    // Locked full screen: the window has no caption buttons and cannot be
+    // dragged from the strip, which is left to the menus, the title and the
+    // clock. Unlocked, under Options > Settings, Kiosk, it behaves like any
+    // other window and keeps its buttons, so there is a way back from full
+    // screen.
     const bool showButtons = !windowFillsScreen(window()) || !kioskSettings().locked;
     m_minimizeButton->setVisible(showButtons);
     m_maximizeButton->setVisible(showButtons);
@@ -498,9 +491,9 @@ void TitleBar::updateMaximizeButton() {
 }
 
 bool TitleBar::eventFilter(QObject *watched, QEvent *event) {
-    // Clicking the clock drops the month out of it. Built on the first
-    // click rather than with the strip: most windows never ask for it, and
-    // it talks to the calendar service when it does.
+    // Clicking the clock opens the month below it. Built on first click rather
+    // than with the strip, since most sessions never open it and building it
+    // queries the calendar service.
     if (watched == m_clock && event->type() == QEvent::MouseButtonPress) {
         if (!m_calendar) m_calendar = new CalendarPane(this);
         if (m_calendar->isVisible()) {

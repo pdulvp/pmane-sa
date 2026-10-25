@@ -15,12 +15,12 @@
 
 namespace {
 
-// Big enough for the classic 32x32 artwork to be shown untouched, with room
-// around it for the selection frame.
+// Big enough to show classic 32x32 artwork unscaled, with room around it for
+// the selection frame.
 constexpr int kCellIconSize = 32;
 constexpr int kCellSize = 48;
 
-// The index stored on each cell, which is the file's own numbering and not
+// The index stored on each cell, which is the file's own numbering rather than
 // the row: an icon that fails to decode leaves a gap in the listing.
 constexpr int kIconIndexRole = Qt::UserRole;
 
@@ -29,8 +29,8 @@ constexpr int kIconIndexRole = Qt::UserRole;
 IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Change Icon"));
 
-    // The banner, the coloured surfaces and the field styling the dialogs
-    // share; what is left here is the file and what it holds.
+    // The banner, coloured surfaces and field styling shared by the dialogs;
+    // what follows is the file field and the icon listing.
     const DialogChrome chrome = applyDialogChrome(this, tr("Change Icon"));
 
     m_pathEdit = new QLineEdit(this);
@@ -64,7 +64,7 @@ IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
 
     auto *listLabel = new QLabel(tr("Icons in this file:"), this);
 
-    // What came of reading the file, under the listing it describes.
+    // The result of reading the file, below the listing it describes.
     m_status = new QLabel(this);
     markHintLabel(m_status);
     m_status->setWordWrap(true);
@@ -111,8 +111,8 @@ void IconPickerDialog::setSource(const QString &path, int index) {
             return;
         }
     }
-    // The item wears whichever icon the file leads with: that is the one the
-    // listing opens on, so OK without a choice changes nothing.
+    // The item uses the file's first icon, which is the one the listing opens
+    // on, so pressing OK without choosing changes nothing.
     if (m_list->count() > 0) m_list->setCurrentRow(0);
 }
 
@@ -124,8 +124,8 @@ void IconPickerDialog::reload() {
 
     for (const PeIconExtractor::IconInfo &info : m_icons) {
         auto *cell = new QListWidgetItem(info.icon, QString(), m_list);
-        // Every cell the same size, so a selection is a square around the
-        // icon rather than whatever room that one icon happened to take.
+        // Uniform cells, so the selection is a square around the icon rather
+        // than the size that particular icon needed.
         cell->setSizeHint(QSize(kCellSize, kCellSize));
         cell->setData(kIconIndexRole, info.index);
         cell->setToolTip(info.bitCount > 0

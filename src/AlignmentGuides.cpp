@@ -8,8 +8,8 @@
 
 namespace {
 
-// The line nearest `position` among `guides`, or -1 when the nearest is
-// further off than `within`.
+// The line nearest `position` among `guides`, or -1 when the nearest is further
+// away than `within`.
 int nearestGuide(const QVector<int> &guides, int position, int within) {
     int best = -1;
     int bestDistance = within + 1;
@@ -27,8 +27,8 @@ void addOnce(QVector<int> &values, int value) {
     if (value >= 0 && !values.contains(value)) values.append(value);
 }
 
-// Every line within `within` of `position`, so that an edge coming to rest
-// between two neighbours' sides sees both of them and not just the nearer.
+// Every line within `within` of `position`, so an edge resting between two
+// neighbours' sides shows both rather than only the nearer.
 void addGuidesWithin(QVector<int> &values, const QVector<int> &guides, int position,
                      int within) {
     for (int guide : guides) {
@@ -39,8 +39,8 @@ void addGuidesWithin(QVector<int> &values, const QVector<int> &guides, int posit
 } // namespace
 
 AlignmentGuides::AlignmentGuides(QWidget *parent) : QWidget(parent) {
-    // A pane over the whole desktop: it must not stand between the groups
-    // and the pointer, and it has nothing of its own to fill.
+    // An overlay across the whole desktop: it must not intercept pointer events
+    // meant for the groups, and it has no background of its own.
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setFocusPolicy(Qt::NoFocus);
     hide();
@@ -61,10 +61,9 @@ QRect AlignmentGuides::applyMove(const QRect &rect, int reach) {
     QVector<int> heldXs;
     QVector<int> heldYs;
 
-    // Both sides of each axis are offered: a group being carried lines up
-    // with its neighbour whether it is its left side meeting their left or
-    // its right side meeting their left. The nearer of the two wins, so the
-    // one the hand is closer to is the one that takes.
+    // Both sides of each axis are considered: a group being moved can align
+    // either its left or its right side to a neighbour's. The nearer of the two
+    // wins.
     const auto shift = [&](int near, int far, const QVector<int> &guides,
                            QVector<int> &shown, QVector<int> &heldOn) {
         addGuidesWithin(shown, guides, near, kShowDistance);
@@ -84,8 +83,8 @@ QRect AlignmentGuides::applyMove(const QRect &rect, int reach) {
         return byFar;
     };
 
-    // A rectangle's right() is its last pixel, so the line its right side
-    // sits on is one past it -- the same convention the resize uses.
+    // A rectangle's right() is its last pixel, so the line its right side sits
+    // on is one past it, which is the convention the resize path uses.
     const int dx = shift(rect.left(), rect.right() + 1, m_xs, shownXs, heldXs);
     const int dy = shift(rect.top(), rect.bottom() + 1, m_ys, shownYs, heldYs);
 
@@ -106,7 +105,7 @@ QRect AlignmentGuides::applyMove(const QRect &rect, int reach) {
         show();
     }
 
-    // Carried, never resized: the size is whatever it was.
+    // A move, never a resize: the size is unchanged.
     return rect.translated(dx, dy);
 }
 
@@ -118,10 +117,10 @@ QRect AlignmentGuides::apply(const QRect &rect, Qt::Edges edges, const QSize &mi
     QVector<int> heldXs;
     QVector<int> heldYs;
 
-    // Each side is held on its own: a corner drag meets a vertical line and
-    // a horizontal one independently, and either may find nothing. A right or
-    // bottom edge lines up with the line, so it sits one pixel inside it: a
-    // rectangle's right() is its last pixel, not the one after.
+    // Each side snaps independently: a corner drag meets a vertical and a
+    // horizontal line separately, and either may find none. A right or bottom
+    // edge aligns to the line and so sits one pixel inside it, a rectangle's
+    // right() being its last pixel rather than the one after.
     if (edges & Qt::LeftEdge) {
         addGuidesWithin(shownXs, m_xs, rect.left(), kShowDistance);
         const int guide = nearestGuide(m_xs, rect.left(), reach);
@@ -168,7 +167,7 @@ QRect AlignmentGuides::apply(const QRect &rect, Qt::Edges edges, const QSize &mi
         hide();
     } else if (parentWidget()) {
         setGeometry(parentWidget()->rect());
-        // The group windows are siblings, and this belongs in front of them.
+        // The group windows are siblings, and this has to draw in front of them.
         raise();
         show();
     }
@@ -189,16 +188,16 @@ void AlignmentGuides::paintEvent(QPaintEvent *event) {
     Q_UNUSED(event);
     QPainter painter(this);
 
-    // The theme's selection colour: the one colour in a scheme that is meant
-    // to stand out against both the desktop and a window interior.
+    // The theme's selection colour, the one colour in a scheme meant to stand
+    // out against both the desktop and a window interior.
     const QColor base = palette().color(QPalette::Highlight);
     QColor near = base;
     near.setAlpha(kNearAlpha);
     QColor holding = base;
     holding.setAlpha(kHeldAlpha);
 
-    // A band centred on the line, so what the edge is held to is the middle
-    // of what is drawn rather than one side of it.
+    // A band centred on the line, so the position an edge snaps to is the middle
+    // of what is drawn rather than one of its sides.
     const qreal half = kLineWidth / 2.0;
     for (int x : m_shownXs) {
         painter.fillRect(QRectF(x - half, 0, kLineWidth, height()),

@@ -10,8 +10,8 @@
 #include <QVBoxLayout>
 
 namespace {
-// Wide enough for a name with some room to spare, and no wider: there is one
-// field on it.
+// Wide enough for a name with a little room to spare, and no wider: the dialog
+// has one field.
 constexpr int kPromptWidth = 440;
 } // namespace
 
@@ -44,7 +44,7 @@ QString askForText(QWidget *parent, const QString &title, const QString &banner,
 
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    // Return finishes the dialog, the way it does in the one it replaces.
+    // Return accepts the dialog, as it did in the one this replaces.
     QObject::connect(edit, &QLineEdit::returnPressed, &dialog, &QDialog::accept);
 
     dialog.resize(kPromptWidth, dialog.sizeHint().height());

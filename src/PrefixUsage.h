@@ -5,53 +5,52 @@
 
 #include "ProgramItem.h"
 
-// What is in a launcher's prefixes folder and whether anything still wants
-// it. A prefix is a Windows install -- saved games and all -- so nothing is
-// thrown away on a guess: a prefix is only called unused when no item on any
-// screen leads to it.
+// What is in a launcher's prefixes folder and whether anything still uses it. A
+// prefix is a Windows installation, saved games included, so nothing is
+// discarded on a guess: a prefix is only reported unused when no item on any
+// screen points at it.
 struct PrefixUse {
-    // The name an item stores for a named prefix; the folder's own name for
-    // one built for a program.
+    // The name an item stores for a named prefix; the folder's own name for one
+    // created for a program.
     QString name;
     QString path;
 
     enum Kind {
-        Named,          // set up by hand on the launcher, for items to share
-        PerApplication, // built for the one program its marker names
-        Foreign,        // a folder in there that this application did not make
+        Named,          // created by hand on the launcher, for items to share
+        PerApplication, // created for the one program its marker names
+        Foreign,        // a folder this application did not create
     };
     Kind kind = Named;
 
-    // What a per-application prefix was built for, as its marker records it.
-    // Empty when the marker is missing, which is how a prefix made before the
-    // markers existed reads.
+    // The program a per-application prefix was created for, as its marker
+    // records. Empty when the marker is missing, as for a prefix created before
+    // the markers existed.
     QString program;
 
-    // The programs that run in it: one entry per item on any screen that
-    // leads here, as the path that item names. Counting them says whether a
-    // prefix is still wanted; listing them says what for.
+    // The programs that run in it: one entry per item on any screen pointing
+    // here, as the path that item names. The count says whether the prefix is
+    // still in use; the list says what for.
     QStringList programs;
     bool onDisk = false;
 
     int items() const { return int(programs.size()); }
 };
 
-// The desktop as it stands rather than as it was last written: a screen is
-// saved when it is closed, so an item added a moment ago is on screen and not
-// yet in its file. Counting it as absent would mark the prefix it just had
-// built as unused.
+// The current desktop rather than the last saved one: a screen is only saved
+// when it is closed, so a newly added item is on screen but not yet in its
+// file. Treating it as absent would mark the prefix it just created as unused.
 struct OpenScreen {
     QString name;
     QVector<ProgramItem> items;
 };
 
-// Everything in `baseDir`, with the items pointing at it counted: the named
-// prefixes first, in the order `names` gives them -- whether or not they have
-// been built yet -- then whatever else the folder holds.
+// Everything in `baseDir`, with the items pointing at each one counted: the
+// named prefixes first, in the order `names` gives, whether or not they exist
+// yet, then whatever else the folder holds.
 QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
                               const OpenScreen &open);
 
-// What a folder holds, in bytes. Walks the whole tree, so it is asked for
-// rather than worked out up front: a prefix is a Windows installation and
-// there may be twenty of them.
+// The size of a folder in bytes. It walks the whole tree, so it is called on
+// request rather than up front: a prefix is a Windows installation and there
+// may be twenty of them.
 qint64 folderSize(const QString &path);

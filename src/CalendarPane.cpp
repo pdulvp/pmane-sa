@@ -15,17 +15,17 @@
 
 namespace {
 
-// Six rows of seven covers any month however it falls.
+// Six rows of seven covers any month whatever weekday it starts on.
 constexpr int kRows = 6;
 constexpr int kColumns = 7;
 
-// The strip down the left that the dialogs all wear, and the band across
-// the top that stands in for a title bar.
+// The strip down the left that all the dialogs have, and the band across the
+// top that stands in for a title bar.
 constexpr int kBannerWidth = 36;
 constexpr int kHeaderHeight = 32;
 
-// The month itself: a little roomier than it needs to be, a calendar being
-// something to glance at rather than to squint at.
+// The month grid, laid out a little more loosely than strictly necessary so it
+// stays easy to read.
 constexpr int kContentWidth = 350;
 constexpr int kPaneWidth = kBannerWidth + kContentWidth;
 constexpr int kWeekdayHeight = 20;
@@ -38,7 +38,7 @@ constexpr int kBarGap = 2;
 constexpr int kMaxLanes = 3;
 constexpr int kDayNumberHeight = 14;
 
-// `weight` of `over`, the rest of `under`.
+// Mixes `weight` of `over` into `under`.
 QColor blend(const QColor &under, const QColor &over, qreal weight) {
     const qreal keep = 1.0 - weight;
     return QColor(qRound(under.red() * keep + over.red() * weight),
@@ -46,8 +46,8 @@ QColor blend(const QColor &under, const QColor &over, qreal weight) {
                   qRound(under.blue() * keep + over.blue() * weight));
 }
 
-// The last day an event covers. An all-day event ends at midnight on the
-// day after the last one it is on.
+// The last day an event covers. An all-day event ends at midnight on the day
+// after the last one it covers.
 QDate lastDay(const CalendarEvent &event) {
     return event.allDay ? event.end.date().addDays(-1) : event.end.date();
 }
@@ -76,8 +76,8 @@ CalendarPane::CalendarPane(QWidget *parent) : QWidget(parent, Qt::Popup) {
     heading.setBold(true);
     m_heading->setFont(heading);
 
-    // The band behind them is the caption colour, so what is on it has to
-    // be the caption's ink rather than the window's.
+    // The band behind them is the caption colour, so the text on it uses the
+    // caption text colour rather than the window's.
     const Theme &theme = currentTheme();
     QPalette onCaption = palette();
     onCaption.setColor(QPalette::WindowText, theme.titleActiveText);
@@ -94,8 +94,8 @@ CalendarPane::CalendarPane(QWidget *parent) : QWidget(parent, Qt::Popup) {
     header->addWidget(m_heading, 1);
     header->addWidget(m_next);
 
-    // The header sits in the band at the very top, right of the banner; the
-    // grid is painted below it rather than laid out.
+    // The header sits in the band at the top, right of the banner; the grid
+    // below it is painted rather than laid out.
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(kBannerWidth, 0, 0, kMargin);
     layout->setSpacing(0);
@@ -119,14 +119,14 @@ CalendarPane::CalendarPane(QWidget *parent) : QWidget(parent, Qt::Popup) {
 void CalendarPane::showMonth(const QDate &anyDayInMonth) {
     m_month = QDate(anyDayInMonth.year(), anyDayInMonth.month(), 1);
 
-    // Back to the start of the week the month begins in, so the grid starts
-    // on the weekday this locale starts weeks on.
+    // Back to the start of the week containing the first of the month, so the
+    // grid starts on this locale's first weekday.
     const int firstWeekday = QLocale().firstDayOfWeek();
     int back = m_month.dayOfWeek() - firstWeekday;
     if (back < 0) back += 7;
     m_first = m_month.addDays(-back);
 
-    // Everything the grid can show, which is a little more than the month.
+    // Everything the grid can show, which is slightly more than the month.
     m_events->setRange(m_first, m_first.addDays(kRows * kColumns - 1));
     refreshHeading();
     update();
@@ -139,7 +139,7 @@ void CalendarPane::refreshHeading() {
 void CalendarPane::popUpAt(QWidget *anchor) {
     showMonth(QDate::currentDate());
 
-    // Under the thing that opened it, and kept on the screen it is on.
+    // Below the widget that opened it, kept within that screen.
     QPoint where = anchor->mapToGlobal(QPoint(0, anchor->height()));
     where.setX(where.x() + anchor->width() - width());
     const QRect screen = anchor->screen()->availableGeometry();
@@ -171,12 +171,12 @@ void CalendarPane::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    // The month sits on the colour a group window's interior wears, so it
-    // reads as something to look into rather than as another panel.
+    // The month sits on the colour of a group window's interior, so it reads as
+    // a content area rather than another panel.
     painter.fillRect(rect(), theme.windowBg);
 
-    // The strip down the left, as every dialog has: the caption colour with
-    // what it is written up it.
+    // The strip down the left, as every dialog has: the caption colour with the
+    // pane's name written up it.
     const QRect banner(0, 0, kBannerWidth, height());
     painter.fillRect(banner, theme.titleActive);
 
@@ -198,14 +198,14 @@ void CalendarPane::paintEvent(QPaintEvent *) {
                      Qt::AlignCenter, tr("Calendar"));
     painter.restore();
 
-    // The band the month is named in, in the colour a title bar wears.
+    // The band holding the month name, in the title bar colour.
     painter.fillRect(QRect(kBannerWidth, 0, width() - kBannerWidth, kHeaderHeight),
                      theme.titleActive);
 
     painter.setPen(blend(theme.windowBg, theme.windowText, 0.35));
     painter.drawRect(rect().adjusted(0, 0, -1, -1));
 
-    // The days of the week, in this locale's order and its own short names.
+    // The days of the week, in this locale's order and short names.
     QFont small = font();
     small.setPointSizeF(qMax(7.0, font().pointSizeF() - 1.5));
     painter.setFont(small);
@@ -219,8 +219,8 @@ void CalendarPane::paintEvent(QPaintEvent *) {
 
     const QDate today = QDate::currentDate();
     for (int row = 0; row < kRows; ++row) {
-        // The bars for this week, each on a lane of its own where they
-        // overlap, so one does not sit on top of another.
+        // The bars for this week, each in its own lane where they overlap, so
+        // none is drawn over another.
         const QDate weekStart = dateAt(row, 0);
         const QDate weekEnd = dateAt(row, kColumns - 1);
 
@@ -229,8 +229,8 @@ void CalendarPane::paintEvent(QPaintEvent *) {
             if (lastDay(event) < weekStart || event.start.date() > weekEnd) continue;
             inWeek.append(event);
         }
-        // Longest first, so a week-long bar takes the top lane and the short
-        // ones arrange themselves underneath it.
+        // Longest first, so a week-long bar takes the top lane and the shorter
+        // ones fall below it.
         std::sort(inWeek.begin(), inWeek.end(),
                   [](const CalendarEvent &a, const CalendarEvent &b) {
                       const qint64 da = a.start.date().daysTo(lastDay(a));
@@ -259,8 +259,7 @@ void CalendarPane::paintEvent(QPaintEvent *) {
             const QRect bar(start.left() + 2, y, end.right() - start.left() - 3, kBarHeight);
 
             painter.fillRect(bar, theme.titleActive);
-            // The name on the bar where there is room for any of it, which
-            // is what makes a long event worth drawing as a bar at all.
+            // The event name is drawn on the bar wherever there is room for it.
             if (bar.width() > 40) {
                 painter.setPen(theme.titleActiveText);
                 QFont tiny = small;
@@ -274,7 +273,7 @@ void CalendarPane::paintEvent(QPaintEvent *) {
             }
         }
 
-        // The day numbers over the top, so a bar never hides one.
+        // The day numbers are drawn last, so a bar never hides one.
         for (int column = 0; column < kColumns; ++column) {
             const QDate date = dateAt(row, column);
             const QRect cell = cellRect(row, column);
@@ -286,8 +285,8 @@ void CalendarPane::paintEvent(QPaintEvent *) {
                                  theme.highlight);
                 painter.setPen(theme.highlightText);
             } else if (date.month() != m_month.month()) {
-                // The days either side of the month, faint: there to show
-                // the shape of the weeks, not to be read.
+                // The days either side of the month are drawn faintly: they
+                // show the shape of the weeks rather than being read.
                 painter.setPen(blend(theme.windowBg, theme.windowText, 0.3));
             } else {
                 painter.setPen(theme.windowText);

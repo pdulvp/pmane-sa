@@ -7,13 +7,12 @@
 class QCheckBox;
 class QToolButton;
 
-// "Settings" dialog: the switches that say how the desktop behaves, as
-// against the Colors dialog's say in how it looks.
+// "Settings" dialog: the options governing how the desktop behaves, as opposed
+// to the Colors dialog, which governs how it looks.
 //
-// Laid out as sections rather than as a column of checkboxes: what the
-// strip along the top carries is a handful of things to have or not have,
-// and a row of tiles showing each one is a quicker read than their names in
-// a list.
+// Laid out in sections rather than as a column of checkboxes: what the strip
+// along the top shows is a handful of optional items, and a row of tiles reads
+// more quickly than their names in a list.
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
@@ -21,25 +20,25 @@ public:
                    QWidget *parent = nullptr);
 
     bool useDesktopWallpaper() const;
-    // Whether the session should start the Program Manager. Not a setting of
-    // ours -- see Autostart.h -- so it is applied rather than saved.
+    // Whether the session should start the Program Manager. Not one of this
+    // application's settings, see Autostart.h, so it is applied rather than
+    // saved.
     bool autostart() const;
     KioskSettings kiosk() const;
 
 signals:
-    // Switched while the dialog is still open, so the desktop behind shows
-    // what is being chosen.
+    // Emitted while the dialog is open, so the desktop behind shows the choice
+    // being made.
     void desktopWallpaperPreviewed(bool use);
 
 private:
-    // A heading with a rule under it, which is what makes a section a
-    // section.
+    // A heading with a rule under it, which is what delimits a section.
     QWidget *sectionHeading(const QString &text);
-    // One switch on a line of its own: its name, and the switch at the far
-    // end of the row where every other row's switch is.
+    // One option on a row of its own: its name, with the checkbox at the right
+    // end, aligned with the others.
     QCheckBox *switchRow(const QString &text, bool on);
-    // One of the things the strip can carry: an icon with its name under
-    // it, pressed in when it is on.
+    // One of the optional strip items: an icon with its name below it, shown
+    // pressed when enabled.
     QToolButton *tile(const QStringList &iconNames, const QString &text, bool on);
 
     QCheckBox *m_wallpaper;

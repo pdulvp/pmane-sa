@@ -10,8 +10,8 @@
 namespace {
 
 // One pixel taller than the 32px layout box: the artwork keeps its full 32px
-// and the spare pixel is where the shadow goes, rather than the shadow eating
-// into the art.
+// and the spare pixel holds the shadow, instead of the shadow eating into the
+// artwork.
 constexpr int kCanvas = 33;
 constexpr qreal kRecedeX = 0.13;   // how far the right edge pulls in
 constexpr qreal kRecedeY = 0.10;   // and how much it shortens
@@ -20,15 +20,14 @@ constexpr int kShadowDy = 1;
 constexpr int kShadowBlur = 1;
 constexpr int kShadowAlpha = 140;
 
-// The tilt is built at this multiple of the final size and resampled down
-// once at the very end. Warping artwork that is already only ~30px wide
-// smears it; doing the work large and downsampling once keeps the edges
-// crisp.
+// The tilt is built at this multiple of the final size and resampled down once
+// at the end. Warping artwork only ~30px wide smears it; working large and
+// downsampling once keeps the edges crisp.
 constexpr int kSupersample = 4;
 
 // Full size, flush with the top of the canvas, so a styled icon's artwork
-// matches an un-styled 32px one exactly and only the shadow occupies the
-// extra pixel below it.
+// matches an unstyled 32px one exactly and only the shadow uses the extra pixel
+// below it.
 constexpr int kArt = 32;
 
 // Separable box blur over the alpha channel only; the shadow is flat black,
@@ -83,20 +82,19 @@ QIcon xpStyleIcon(const QIcon &source) {
     QImage art = source.pixmap(nativeSize).toImage();
     if (art.isNull()) return source;
 
-    // Nearest-neighbour on the way up: it preserves the hard pixel edges of
-    // the original artwork instead of pre-blurring them. The single smooth
-    // downscale at the end is what does the antialiasing. Artwork bigger than
-    // the working size is coming down rather than up, though -- a 256px icon
-    // the user asked to style -- and nearest-neighbour would drop every other
-    // pixel of it.
+    // Nearest-neighbour when scaling up: it preserves the hard pixel edges of
+    // the original artwork instead of pre-blurring them, and the single smooth
+    // downscale at the end does the antialiasing. Artwork larger than the
+    // working size, such as a 256px icon, is being scaled down instead, where
+    // nearest-neighbour would drop every other pixel.
     const int working = kArt * kSupersample;
     art = art.convertToFormat(QImage::Format_ARGB32)
               .scaled(working, working, Qt::KeepAspectRatio,
                       art.width() > working ? Qt::SmoothTransformation
                                             : Qt::FastTransformation);
 
-    // Pull the right-hand edge in and shorten it: the eye reads the result
-    // as a square tipped away from the viewer.
+    // Pull the right-hand edge in and shorten it, which reads as a square
+    // tilted away from the viewer.
     const qreal w = art.width();
     const qreal h = art.height();
     const qreal dx = w * kRecedeX;
@@ -137,7 +135,7 @@ QIcon xpStyleIcon(const QIcon &source) {
         painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
         const int x = (canvas.width() - warped.width()) / 2;
-        const int y = 0; // flush with the top, matching un-styled icons
+        const int y = 0; // flush with the top, matching unstyled icons
         painter.drawImage(x - margin + kShadowDx * kSupersample,
                           y - margin + kShadowDy * kSupersample, shadow);
         painter.drawImage(x, y, warped);

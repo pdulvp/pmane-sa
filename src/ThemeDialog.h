@@ -6,8 +6,8 @@
 
 class QComboBox;
 
-// Paints a miniature Program Manager window in a given scheme, the way
-// the Windows 3.1 Color applet previewed its colours.
+// Paints a miniature Program Manager window in a given scheme, as the Windows
+// 3.1 Color applet previewed its colours.
 class ThemePreview : public QWidget {
     Q_OBJECT
 public:

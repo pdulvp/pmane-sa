@@ -4,8 +4,8 @@
 
 namespace {
 
-// Kept with the application rather than with a screen: which machine this
-// is does not change when the desktop on show does.
+// Stored with the application rather than per screen: these settings describe
+// the machine, which does not change when the desktop shown does.
 const char *kGroup = "kiosk";
 
 KioskSettings *loaded() {

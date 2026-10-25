@@ -92,8 +92,8 @@ DosBoxUi readDosBoxUi(const QString &confPath) {
     return ui;
 }
 
-// The icon the desktop's theme gives a file of this kind -- for documents,
-// which carry no artwork of their own to extract.
+// The icon the desktop theme gives a file of this kind, used for documents,
+// which carry no artwork of their own.
 QIcon mimeIcon(const QString &path) {
     const QMimeType mime = QMimeDatabase().mimeTypeForFile(path);
     for (const QString &name : {mime.iconName(), mime.genericIconName()}) {
@@ -104,8 +104,7 @@ QIcon mimeIcon(const QString &path) {
     return {};
 }
 
-// One of the icons a file holds -- `index` of them, or whichever the file
-// leads with for -1.
+// One of the icons a file holds: the one at `index`, or the first for -1.
 QIcon loadIconFile(const QString &path, int index, bool *legacy) {
     if (legacy) *legacy = false;
 
@@ -119,8 +118,8 @@ QIcon loadIconFile(const QString &path, int index, bool *legacy) {
         return icon;
     }
 
-    // Neither an executable nor an .ico: a plain image file, as a dosbox
-    // [ui] icon is free to name.
+    // Neither an executable nor an .ico: a plain image file, which a dosbox
+    // [ui] icon may name.
     QImage image(path);
     return image.isNull() ? QIcon() : QIcon(QPixmap::fromImage(image));
 }
@@ -134,10 +133,10 @@ QIcon desktopEntryIcon(const QString &icon, bool *legacy) {
     return QIcon::fromTheme(icon);
 }
 
-// Whether a name is one of ours to improve on, as opposed to one the user
-// chose. An item that says the name was typed is taken at its word; for the
-// rest -- a file dropped on a group, an item saved before the flag existed --
-// the file name we would have defaulted to is the tell.
+// Whether a name was derived here, and so may be improved on, rather than
+// chosen by the user. The customName flag is trusted when set; otherwise, as
+// for a file dropped on a group or an item saved before the flag existed, the
+// test is whether the name matches the default derived from the file name.
 bool nameIsOurs(const ProgramItem &item) {
     if (item.customName) return false;
     return item.name.isEmpty() || item.name == QFileInfo(item.command).completeBaseName();
@@ -146,15 +145,14 @@ bool nameIsOurs(const ProgramItem &item) {
 } // namespace
 
 void completeProgramItem(ProgramItem &it) {
-    // Every item on the desktop comes through here once, which makes this
-    // the place an item gets its identity. An item read from a desktop
-    // written before identities existed is given one now, and keeps it from
-    // the next save on.
+    // Every item on the desktop passes through here once, so this is where an
+    // item gets its id. An item from a desktop saved before ids existed is
+    // given one now and keeps it from the next save on.
     if (it.id.isEmpty()) it.id = newId();
 
-    // An icon picked by hand in the properties dialog outranks anything we
-    // would go looking for. If the file it came from is gone, the item falls
-    // back to the usual discovery below rather than to no icon at all.
+    // An icon picked in the properties dialog takes precedence over anything
+    // found here. If its file is gone, the item falls back to the discovery
+    // below rather than to no icon at all.
     if (it.icon.isNull() && it.iconIndex >= 0) {
         it.icon = loadIconFile(iconSourceFile(it), it.iconIndex, &it.legacyIcon);
     }
@@ -167,25 +165,25 @@ void completeProgramItem(ProgramItem &it) {
         if (it.icon.isNull() && !ui.iconPath.isEmpty()) {
             const QString resolved = QFileInfo(it.command).absoluteDir().filePath(ui.iconPath);
             it.icon = loadIconFile(resolved, -1, &it.legacyIcon);
-            // Remembered so the properties dialog can offer the rest of the
-            // icons that file holds, the conf naming only the file.
+            // Stored so the properties dialog can offer the other icons in that
+            // file, the conf naming only the file.
             if (!it.icon.isNull()) it.iconSource = resolved;
         }
     } else if (isSteamManifest(it.command)) {
-        // The manifest names the game and Steam has cached its icon; the
-        // file name ("appmanifest_19680.acf") is no use as a label.
+        // The manifest names the game and Steam has cached its icon; the file
+        // name ("appmanifest_19680.acf") is useless as a label.
         const SteamGame game = readSteamManifest(it.command);
         if (!game.name.isEmpty() && nameIsOurs(it)) it.name = game.name;
         if (it.icon.isNull() && !game.iconPath.isEmpty()) {
             it.icon = QIcon(game.iconPath);
-            // Remembered so the properties dialog opens its icon listing on
-            // the artwork Steam cached rather than on the manifest.
+            // Stored so the properties dialog opens its icon listing on the
+            // artwork Steam cached rather than on the manifest.
             if (!it.icon.isNull()) it.iconSource = game.iconPath;
         }
     } else if (isScummVmGame(it.command)) {
-        // Prefer the title the .trs names itself, falling back to the folder
-        // holding it ("The Dig", not "DIG"). Never override a name the user
-        // typed in the properties dialog.
+        // Prefer the title the .trs declares, falling back to the name of the
+        // folder holding it ("The Dig", not "DIG"). Never overrides a name the
+        // user typed in the properties dialog.
         if (nameIsOurs(it)) {
             const QString banner = readTrsBannerTitle(it.command);
             it.name = banner.isEmpty() ? QFileInfo(it.command).absoluteDir().dirName() : banner;
@@ -193,25 +191,25 @@ void completeProgramItem(ProgramItem &it) {
     } else if (isDesktopEntry(it.command)) {
         const DesktopEntry entry = readDesktopEntry(it.command);
         // The launcher names the application and points at its artwork; the
-        // file name ("org.kde.okular") is no use as a label.
+        // file name ("org.kde.okular") is useless as a label.
         if (!entry.name.isEmpty() && nameIsOurs(it)) it.name = entry.name;
         if (it.icon.isNull()) it.icon = desktopEntryIcon(entry.icon, &it.legacyIcon);
     } else if (isFolder(it.command)) {
-        // The folder's own name, whatever it looks like: a drop would have
-        // handed us "photos" for a folder called "photos.2024".
+        // The folder's own name: the default derivation would give "photos" for
+        // a folder called "photos.2024".
         if (nameIsOurs(it)) it.name = QDir(it.command).dirName();
         if (it.icon.isNull()) it.icon = QIcon::fromTheme(QStringLiteral("folder"));
     } else if (isDocument(it.command)) {
-        // Nothing to extract from a document, and nothing legacy to restyle:
-        // it wears the icon the desktop gives its file type.
+        // A document holds no artwork to extract, so it takes the icon the
+        // desktop gives its file type.
         if (it.icon.isNull()) it.icon = mimeIcon(it.command);
     } else if (it.icon.isNull()) {
         it.icon = loadIconFile(it.command, -1, &it.legacyIcon);
         if (!it.icon.isNull()) it.iconSource = it.command;
     }
 
-    // Whatever the item is, the launcher that plays it may have an icon of
-    // its own in the desktop's theme.
+    // Failing that, the launcher that runs it may have an icon in the desktop
+    // theme.
     if (it.icon.isNull() && isDosBoxConfig(it.command)) {
         it.icon = QIcon::fromTheme(QStringLiteral("dosbox"));
     }
@@ -241,18 +239,18 @@ void completeProgramItem(ProgramItem &it) {
 
 QString workingDirFor(const ProgramItem &item) {
     // A .desktop file lives in /usr/share/applications, which is no place to
-    // start an application from: wherever its Path line asks for, and home
-    // when it asks for nothing.
+    // start an application from: use its Path line, or the home directory when
+    // it has none.
     if (isDesktopEntry(item.command)) {
         const QString path = readDesktopEntry(item.command).path;
         return path.isEmpty() ? QDir::homePath() : path;
     }
-    // Steam starts the game from wherever it installed it; a directory
-    // beside the manifest would mean nothing.
+    // Steam starts the game from wherever it installed it; the manifest's own
+    // directory is irrelevant.
     if (isSteamManifest(item.command)) return {};
     if (isFolder(item.command)) return item.command;
-    // Everything else runs from the folder it sits in, which is what a
-    // Windows program expects of its own install.
+    // Everything else runs from the folder it sits in, which is what a Windows
+    // program expects of its own install.
     return QFileInfo(item.command).absolutePath();
 }
 

@@ -12,8 +12,8 @@ namespace {
 
 const char *kSchema = "org.gnome.desktop.background";
 
-// Light and dark desktops can carry different pictures, and GNOME keeps
-// them in two keys.
+// Light and dark desktops can have different pictures, which GNOME keeps in two
+// separate keys.
 const char *kKey = "picture-uri";
 const char *kDarkKey = "picture-uri-dark";
 
@@ -21,7 +21,7 @@ QString gsettingsGet(const QString &key) {
     QProcess process;
     process.start(QStringLiteral("gsettings"),
                   {QStringLiteral("get"), QLatin1String(kSchema), key});
-    // A setting read is a local lookup; anything slower than this means
+    // Reading a setting is a local lookup; anything slower than this means
     // there is nothing to wait for.
     if (!process.waitForFinished(2000) || process.exitCode() != 0) return QString();
 
@@ -36,17 +36,17 @@ QString gsettingsGet(const QString &key) {
     return value;
 }
 
-// A themed wallpaper is an XML file listing one picture per screen size,
-// so the file the setting names is not always the file to show. Pulls out
-// the sizes it offers and picks the nearest to the screen.
+// A themed wallpaper is an XML file listing one picture per screen size, so the
+// file the setting names is not always the file to show. This reads the sizes
+// it offers and picks the nearest to the screen.
 QString pictureFromTheme(const QString &xmlPath, const QSize &preferred) {
     QFile file(xmlPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
 
     QString best;
     double bestDistance = 0;
-    // Takes whichever is closest in shape and size; with no screen size to
-    // go by every candidate ties at zero, so the first one offered wins.
+    // Takes whichever is closest in aspect and size; with no screen size to go
+    // by every candidate scores zero, so the first one listed is used.
     const auto offer = [&](const QString &path, const QSize &offered) {
         if (path.isEmpty()) return;
         double distance = 0;
@@ -60,9 +60,9 @@ QString pictureFromTheme(const QString &xmlPath, const QSize &preferred) {
         }
     };
 
-    // A themed wallpaper nests one <size> per screen size inside <file>;
-    // a plain one writes the path as the text of <file> itself. Both are
-    // read in one pass rather than assuming which kind this is.
+    // A themed wallpaper nests one <size> per screen size inside <file>; a
+    // plain one writes the path as the text of <file> itself. Both are handled
+    // in one pass rather than assuming which kind it is.
     bool inFile = false;
     QXmlStreamReader xml(&file);
     while (!xml.atEnd()) {
@@ -92,9 +92,9 @@ QString pictureFromTheme(const QString &xmlPath, const QSize &preferred) {
 } // namespace
 
 QString GnomeWallpaper::currentPath(bool dark, const QSize &preferred) {
-    // The dark picture only when the desktop is dark, and the ordinary one
-    // when the dark key is unset -- which is how GNOME leaves it unless
-    // someone has chosen a dark wallpaper of their own.
+    // The dark picture only when the desktop is dark, falling back to the
+    // ordinary one when the dark key is unset, which is how GNOME leaves it
+    // unless a dark wallpaper has been chosen.
     QString uri = dark ? gsettingsGet(QLatin1String(kDarkKey)) : QString();
     if (uri.isEmpty()) uri = gsettingsGet(QLatin1String(kKey));
     if (uri.isEmpty()) return QString();
@@ -110,10 +110,10 @@ QString GnomeWallpaper::currentPath(bool dark, const QSize &preferred) {
 }
 
 GnomeWallpaper::GnomeWallpaper(QObject *parent) : QObject(parent) {
-    // gsettings says so on its standard output every time a key in the
-    // schema changes, which is word enough without a GIO dependency. The
-    // whole schema is watched: both picture keys matter, and so does the
-    // theme file one of them may name being swapped for another.
+    // gsettings prints a line on standard output every time a key in the schema
+    // changes, which is enough without a GIO dependency. The whole schema is
+    // watched: both picture keys matter, as does a change to the theme file one
+    // of them may name.
     m_monitor = new QProcess(this);
     connect(m_monitor, &QProcess::readyReadStandardOutput, this, [this] {
         const QByteArray output = m_monitor->readAllStandardOutput();

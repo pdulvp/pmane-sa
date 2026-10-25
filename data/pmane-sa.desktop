@@ -8,7 +8,7 @@ Icon=user-desktop
 Terminal=false
 Categories=System;
 Keywords=program;manager;groups;launcher;
-# Matched against a window's WM_CLASS when running under X11 or XWayland.
-# On Wayland the app_id set by setDesktopFileName() is what matches instead,
-# and it matches this file by its name.
+# Matched against a window's WM_CLASS under X11 or XWayland. On Wayland the
+# app_id set by setDesktopFileName() is matched instead, against this file's
+# name.
 StartupWMClass=pmane-sa

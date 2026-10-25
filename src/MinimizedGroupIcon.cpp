@@ -10,14 +10,14 @@
 namespace {
 
 constexpr int kGlyphWidth = 46;
-// Height drops with the caption so the client area, and therefore the
-// preview icons in it, keep the size they were tuned to.
+// The height shrinks with the caption so the client area, and the preview icons
+// in it, keep their intended size.
 constexpr int kGlyphHeight = 34;
 constexpr int kGlyphTop = 3;
 constexpr int kCaptionHeight = 5;
 
-// A miniature of the group window itself: caption bar in the scheme's title
-// colour, with the group's own program icons laid out inside.
+// A miniature of the group window: a caption bar in the scheme's title colour,
+// with the group's program icons laid out inside.
 void paintGroupGlyph(QPainter &p, const QRect &r, const QPalette &pal,
                      const QVector<QIcon> &preview) {
     const QColor line = pal.buttonText().color();
@@ -86,7 +86,7 @@ void MinimizedGroupIcon::paintEvent(QPaintEvent *) {
     const QRect glyph((width() - kGlyphWidth) / 2, kGlyphTop, kGlyphWidth, kGlyphHeight);
     paintGroupGlyph(p, glyph, palette(), m_preview);
 
-    // The label has to stay readable against whatever colour the desktop is.
+    // The label has to stay legible against whatever colour the desktop is.
     const QColor textColor = readableTextOn(m_desktop);
 
     const QRect labelArea(2, glyph.bottom() + 3, width() - 4, height() - glyph.bottom() - 5);
@@ -105,9 +105,9 @@ void MinimizedGroupIcon::paintEvent(QPaintEvent *) {
 void MinimizedGroupIcon::mousePressEvent(QMouseEvent *event) {
     setSelected(true);
     emit clicked();
-    // Accept it here: letting it propagate would reach the desktop behind us,
-    // which treats a press as a click on bare background and clears this
-    // very selection.
+    // Accepted here: propagating it would reach the desktop behind, which
+    // treats a press as a click on bare background and would clear this
+    // selection.
     event->accept();
 }
 
@@ -117,8 +117,8 @@ void MinimizedGroupIcon::mouseDoubleClickEvent(QMouseEvent *event) {
 }
 
 void MinimizedGroupIcon::contextMenuEvent(QContextMenuEvent *event) {
-    // Selected as well, so that the menu is plainly about this icon and not
-    // about whichever one was last clicked.
+    // Selected as well, so the menu clearly applies to this icon rather than to
+    // the one last clicked.
     setSelected(true);
     emit clicked();
     emit contextMenuRequested(event->globalPos());

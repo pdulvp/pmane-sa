@@ -15,35 +15,33 @@
 
 namespace {
 
-// How long a notice stays. Long enough to read twice, since whoever is
-// reading it has just had something fail and will want to read it again.
+// How long a notice stays on screen: long enough to be read twice.
 constexpr int kLifetimeMs = 9000;
-// Fading in and out rather than appearing: the desktop eases its colours
-// and its windows, and a notice that blinks into existence reads as a fault.
+// Notices fade in and out rather than appearing abruptly, matching the rest of
+// the desktop's animations.
 constexpr int kFadeMs = 180;
 
-// Wide enough for a sentence to break well, narrow enough to stay a corner
+// Wide enough for a sentence to wrap sensibly, narrow enough to stay a corner
 // rather than a panel.
 constexpr int kNoticeWidth = 340;
-// What the notices keep clear of the edges of the desktop.
+// The gap kept between the notices and the edges of the desktop.
 constexpr int kInset = 16;
 constexpr int kGap = 8;
 
-// At most this many at once: the rest of a burst would be a log up the side
-// of the screen.
+// At most this many at once; more would turn the corner into a log.
 constexpr int kMaxNotices = 3;
 
-// The stripe down a notice's left edge, which is the caption colour -- the
-// same thing that marks a dialog as this application's.
+// The stripe down a notice's left edge, in the caption colour, which is what
+// marks a dialog as this application's.
 constexpr int kStripe = 4;
 
 } // namespace
 
 NotificationArea::NotificationArea(QWidget *parent) : QWidget(parent) {
     // Nothing of its own is drawn, so the desktop shows through between the
-    // notices. It is kept snug around them -- see reposition() -- so that
-    // what it covers of the desktop is the notices themselves and little
-    // else: a lid over the corner would swallow clicks meant for a group.
+    // notices. It is kept tight around them, see reposition(), so it covers
+    // little more than the notices themselves: a larger area would swallow
+    // clicks meant for a group.
     setAttribute(Qt::WA_NoSystemBackground);
 
     m_stack = new QVBoxLayout(this);
@@ -60,17 +58,17 @@ bool NotificationArea::eventFilter(QObject *watched, QEvent *event) {
     return QWidget::eventFilter(watched, event);
 }
 
-// Back into the corner, and no taller than there is room for.
+// Moves it back into the corner, no taller than the available space.
 void NotificationArea::updatePosition() {
     QWidget *host = parentWidget();
     if (!host) return;
 
     const int width = kNoticeWidth;
 
-    // Added up here rather than asked of the layout: the detail line wraps,
-    // so a notice's height depends on its width, and a layout asked for a
-    // height it has already worked out once answers with the one it
-    // remembers. The notices are few and the sum is exact.
+    // Summed here rather than taken from the layout: the detail line wraps, so a
+    // notice's height depends on its width, and the layout returns a cached
+    // height instead of recomputing it. The notices are few, so the sum is cheap
+    // and exact.
     int wanted = 0;
     for (QWidget *notice : m_notices) {
         wanted += notice->hasHeightForWidth() ? notice->heightForWidth(width)
@@ -88,8 +86,8 @@ void NotificationArea::post(const QString &title, const QString &detail,
                             const QString &logPath) {
     QWidget *notice = buildNotice(title, detail, logPath);
     m_notices.append(notice);
-    // Added before the stretch would push them up from the corner: they are
-    // hung off the bottom instead, newest nearest it.
+    // Inserted before the stretch, so the notices hang from the bottom with the
+    // newest nearest the corner.
     m_stack->addWidget(notice);
 
     while (m_notices.size() > kMaxNotices) dismiss(m_notices.first());
@@ -97,7 +95,7 @@ void NotificationArea::post(const QString &title, const QString &detail,
     show();
     updatePosition();
 
-    // In rather than on: see kFadeMs.
+    // Faded in rather than shown outright: see kFadeMs.
     auto *fade = new QGraphicsOpacityEffect(notice);
     fade->setOpacity(0);
     notice->setGraphicsEffect(fade);
@@ -114,9 +112,9 @@ QWidget *NotificationArea::buildNotice(const QString &title, const QString &deta
     auto *notice = new QWidget(this);
     notice->setObjectName(QStringLiteral("notice"));
     notice->setFixedWidth(kNoticeWidth);
-    // The detail line wraps, so how tall a notice is depends on how wide it
-    // is. A plain widget does not say so on its own, and a layout that is
-    // not told asks for the height of a single line.
+    // The detail line wraps, so a notice's height depends on its width. A plain
+    // widget does not report that, and without it the layout asks for the
+    // height of a single line.
     QSizePolicy policy = notice->sizePolicy();
     policy.setHeightForWidth(true);
     policy.setVerticalPolicy(QSizePolicy::Minimum);
@@ -133,8 +131,7 @@ QWidget *NotificationArea::buildNotice(const QString &title, const QString &deta
     titleLabel->setWordWrap(true);
     heading->addWidget(titleLabel, 1);
 
-    // Gone when it is read rather than when it times out, for whoever has
-    // seen enough.
+    // Clicking dismisses a notice before its timeout.
     auto *close = new QPushButton(QStringLiteral("×"), notice);
     close->setObjectName(QStringLiteral("noticeClose"));
     close->setFlat(true);
@@ -153,8 +150,7 @@ QWidget *NotificationArea::buildNotice(const QString &title, const QString &deta
     }
 
     if (!logPath.isEmpty()) {
-        // What the program itself said, which is the one thing a launch that
-        // fails leaves behind and the one thing nobody could see before.
+        // The program's own output, which is all a failed launch leaves behind.
         auto *details = new QPushButton(tr("What it printed"), notice);
         details->setObjectName(QStringLiteral("noticeAction"));
         details->setFlat(true);
@@ -178,13 +174,13 @@ QWidget *NotificationArea::buildNotice(const QString &title, const QString &deta
 void NotificationArea::dress(QWidget *notice) {
     const Theme &theme = currentTheme();
 
-    // The dialogs' surface and the dialogs' caption stripe, so a notice
-    // reads as part of the same desktop rather than as the system's own.
+    // The dialogs' surface colour and caption stripe, so a notice reads as part
+    // of this application rather than a system notification.
     const QColor face = theme.buttonFace;
     const QColor ink = theme.buttonText;
     QColor edge = darkMode() ? face.lighter(135) : face.darker(120);
-    // The detail line in the same ink, lightened, the way a dialog's hint
-    // line is: an aside rather than a second heading.
+    // The detail line in the same colour, lightened, like a dialog's hint line:
+    // an aside rather than a second heading.
     const QString aside = QStringLiteral("rgba(%1, %2, %3, 0.67)")
                               .arg(ink.red())
                               .arg(ink.green())
@@ -211,8 +207,8 @@ void NotificationArea::applyTheme() {
 void NotificationArea::dismiss(QWidget *notice) {
     if (!m_notices.removeOne(notice)) return;
 
-    // Out the way it came in. The widget is taken out of the layout first,
-    // so the ones left move up while it is still fading rather than after.
+    // Faded out as it was faded in. The widget leaves the layout first, so the
+    // remaining notices move up while it is still fading.
     m_stack->removeWidget(notice);
     auto *fade = new QGraphicsOpacityEffect(notice);
     notice->setGraphicsEffect(fade);
@@ -223,8 +219,8 @@ void NotificationArea::dismiss(QWidget *notice) {
     out->start(QAbstractAnimation::DeleteWhenStopped);
 
     if (m_notices.isEmpty()) {
-        // Nothing left to show: the area goes rather than sitting there as an
-        // invisible lid over the corner of the desktop.
+        // Nothing left to show, so the area is hidden rather than left as an
+        // invisible overlay on the corner of the desktop.
         QTimer::singleShot(kFadeMs, this, [this] {
             if (m_notices.isEmpty()) hide();
         });

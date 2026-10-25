@@ -12,9 +12,8 @@
 
 namespace {
 
-// Where Steam itself may be installed. Which one it is varies with how it
-// was installed, and on most machines several of these lead to the same
-// place.
+// The places Steam may be installed. Which one applies depends on how it was
+// installed, and on most machines several of these lead to the same place.
 QStringList steamInstallPaths() {
     const QString home = QDir::homePath();
     const QStringList candidates = {
@@ -33,9 +32,9 @@ QStringList steamInstallPaths() {
     return paths;
 }
 
-// Valve's own text format, as far as anything here needs it: a key and a
-// value, both quoted, one to a line. Nesting is not read -- the keys wanted
-// are unique within the files they are read from.
+// Valve's text format, as far as it is needed here: a quoted key and a quoted
+// value, one pair per line. Nesting is ignored, the keys required being unique
+// within the files they are read from.
 QString valueFor(const QString &text, const QString &key) {
     const QRegularExpression entry(
         QStringLiteral("\"%1\"\\s*\"([^\"]*)\"").arg(QRegularExpression::escape(key)),
@@ -65,7 +64,7 @@ QStringList discoveredSteamLibraries() {
             readAll(steam + QStringLiteral("/steamapps/libraryfolders.vdf"));
         if (text.isEmpty()) continue;
 
-        // A "path" per library folder, Steam's own among them.
+        // One "path" entry per library folder, Steam's own included.
         static const QRegularExpression pathEntry(
             QStringLiteral("\"path\"\\s*\"([^\"]*)\""));
         QRegularExpressionMatchIterator matches = pathEntry.globalMatch(text);
@@ -90,7 +89,7 @@ SteamGame readSteamManifest(const QString &path) {
     game.name = valueFor(text, QStringLiteral("name"));
     game.manifest = path;
     if (game.appId.isEmpty()) return SteamGame();
-    // A manifest without a name is still playable; it is only unlabelled.
+    // A manifest without a name is still playable, only unlabelled.
     if (game.name.isEmpty()) game.name = game.appId;
     game.iconPath = steamIconPath(game.appId);
     return game;
@@ -105,8 +104,8 @@ QVector<SteamGame> steamGamesIn(const QStringList &libraries) {
     QStringList seen; // the same library reached by two paths
 
     for (const QString &library : libraries) {
-        // A library folder holds steamapps; being handed the steamapps
-        // directory itself is the easy mistake, so both are taken.
+        // A library folder contains steamapps, but the steamapps directory
+        // itself is often given instead, so both are accepted.
         QString apps = library + QStringLiteral("/steamapps");
         if (!QDir(apps).exists()) apps = library;
 
@@ -129,10 +128,10 @@ QVector<SteamGame> steamGamesIn(const QStringList &libraries) {
 QString steamIconPath(const QString &appId) {
     if (appId.isEmpty()) return {};
 
-    // Steam keeps a folder of artwork per app: banners, hero images, a logo
-    // -- and the icon, which is the one named by its hash rather than by
-    // what it is. That is the small square an icon grid wants; the rest are
-    // the wrong shape entirely.
+    // Steam keeps a folder of artwork per app: banners, hero images, a logo,
+    // and the icon, which is named by its hash rather than by its role. The
+    // icon is the small square an icon grid needs; the rest are the wrong
+    // shape.
     static const QRegularExpression iconFile(QStringLiteral("^[0-9a-f]{40}\\.(jpg|png)$"),
                                              QRegularExpression::CaseInsensitiveOption);
     for (const QString &steam : steamInstallPaths()) {
@@ -142,14 +141,14 @@ QString steamIconPath(const QString &appId) {
         for (const QFileInfo &file : files) {
             if (iconFile.match(file.fileName()).hasMatch()) return file.absoluteFilePath();
         }
-        // Older Steam kept them flat, named by app id.
+        // Older Steam versions kept them flat, named by app id.
         for (const QString &suffix : {QStringLiteral("_icon.jpg"), QStringLiteral("_icon.png")}) {
             const QString flat =
                 steam + QStringLiteral("/appcache/librarycache/") + appId + suffix;
             if (QFile::exists(flat)) return flat;
         }
-        // Nothing square cached: the logo is at least the game's own
-        // artwork, and an icon grid can scale it down.
+        // No square icon cached: the logo is at least the game's own artwork,
+        // and an icon grid can scale it down.
         const QString logo = dir + QStringLiteral("/logo.png");
         if (QFile::exists(logo)) return logo;
     }

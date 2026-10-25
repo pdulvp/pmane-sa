@@ -12,9 +12,9 @@
 
 namespace {
 
-// Steam keeps compatibilitytools.d under its install directory. Which one
-// that is varies with how Steam was installed, and on most machines
-// several of these are symlinks to the same place.
+// Steam keeps compatibilitytools.d under its install directory. Which one that
+// is depends on how Steam was installed, and on most machines several of these
+// are symlinks to the same place.
 QStringList steamInstallPaths() {
     const QString home = QDir::homePath();
     const QStringList candidates = {
@@ -33,9 +33,9 @@ QStringList steamInstallPaths() {
     return paths;
 }
 
-// The name the tool gives itself in compatibilitytool.vdf. The file is
-// Valve's own template, whose comments mention the key in passing, so only
-// a line that opens with the quoted key counts.
+// The name the tool declares in compatibilitytool.vdf. The file is Valve's
+// template, whose comments also mention the key, so only a line beginning with
+// the quoted key is accepted.
 QString readDisplayName(const QString &toolDir) {
     QFile file(toolDir + QStringLiteral("/compatibilitytool.vdf"));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
@@ -50,9 +50,9 @@ QString readDisplayName(const QString &toolDir) {
     return {};
 }
 
-// Where a wine that is not the system one tends to live. Lutris and the
-// distribution packages of several builds both keep them as a directory per
-// version with the binary under bin/.
+// Where a non-system wine is usually installed. Lutris and the distribution
+// packages of several builds both use one directory per version with the binary
+// under bin/.
 QStringList wineSearchRoots() {
     const QString home = QDir::homePath();
     return {
@@ -65,10 +65,10 @@ QStringList wineSearchRoots() {
 
 QVector<WineBuild> scanWineBuilds() {
     QVector<WineBuild> builds;
-    QStringList seen; // the same build is often reachable by several paths
+    QStringList seen; // the same build is often reachable through several paths
 
-    // The one on the PATH first: it is what "wine" means on this machine,
-    // and the one a desktop that has never been configured should get.
+    // The one on the PATH first: it is what "wine" means on this machine, and
+    // what an unconfigured desktop should use.
     const QString system = QStandardPaths::findExecutable(QStringLiteral("wine"));
     if (!system.isEmpty()) {
         builds.append({QStringLiteral("system"),
@@ -80,8 +80,8 @@ QVector<WineBuild> scanWineBuilds() {
         const QStringList entries =
             QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
         for (const QString &entry : entries) {
-            // Either <root>/<build>/bin/wine or <root>/<build>/wine, which is
-            // how the two layouts in the wild differ.
+            // Either <root>/<build>/bin/wine or <root>/<build>/wine, the two
+            // layouts in common use.
             const QString dir = root + QLatin1Char('/') + entry;
             QString binary = dir + QStringLiteral("/bin/wine");
             if (!QFileInfo(binary).isExecutable()) binary = dir + QStringLiteral("/wine");
@@ -106,7 +106,7 @@ QVector<CompatTool> scanCompatTools() {
             const QString dir = toolsDir + QLatin1Char('/') + entry;
             const QString proton = dir + QStringLiteral("/proton");
             // The proton script is what makes a directory a usable tool;
-            // anything else in there is a leftover or a partial download.
+            // without it the directory is a leftover or a partial download.
             if (!QFileInfo(proton).isExecutable()) continue;
 
             CompatTool tool;
@@ -147,52 +147,49 @@ const CompatTool *compatToolById(const QString &id) {
 
 namespace {
 
-// Where a launcher's prefixes live: the folder it names, and this
-// application's own data directory until one does.
+// Where a launcher's prefixes live: the folder it names, or this application's
+// data directory until one is set.
 QString prefixesBase(const QString &baseDir) {
     if (!baseDir.isEmpty()) return baseDir;
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
            QStringLiteral("/prefixes");
 }
 
-// Beside the automatic ones, under whichever folder the launcher keeps them
-// in -- the same place as before, only the name is chosen rather than worked
-// out.
+// Alongside the automatic ones, in whichever folder the launcher uses: the same
+// place, except that the name is chosen rather than derived.
 QString namedPrefixPath(const QString &name, const QString &baseDir) {
     return prefixesBase(baseDir) + QLatin1Char('/') + name;
 }
 
-// The per-item prefix. `build` is what tells the launch path from a question
-// about it: the folder and the marker naming its program are made the first
-// time a program is actually run, and never by something merely asking where
-// it would run.
+// The per-item prefix. `build` distinguishes a launch from a query: the folder
+// and the marker naming its program are created the first time a program is
+// actually run, never by a caller only asking where it would run.
 QString prefixPathFor(const QString &exePath, const QString &baseDir, const QString &itemId,
                       bool build);
 
-// The marker file inside a prefix, which says whose it is.
+// The marker file inside a prefix, which records who owns it.
 const char *kMarkerFile = ".program";
 
-// Whether this item may have that prefix: an empty folder is free, one
-// claimed by this item is its own, and one claimed by another item is not --
-// whatever program either of them runs. A prefix from before the markers
-// carried an item goes to whichever item asks for it first, which is the one
-// that was using it already.
+// Whether this item may use that prefix: an empty folder is free, one claimed
+// by this item is its own, and one claimed by another item is not, whatever
+// program either runs. A prefix from before the markers recorded an item goes
+// to the first item that asks for it, which is the one already using it.
 bool freeFor(const QString &path, const QString &exePath, const QString &itemId) {
     if (!QFileInfo::exists(path)) return true;
     const PrefixOwner owner = prefixOwner(path);
-    // Claimed by an item: its own, and nobody else's.
+    // Claimed by an item: available to that item only.
     if (!owner.itemId.isEmpty()) return owner.itemId == itemId;
-    // Claimed by a program but no item -- made before items had identities.
-    // It goes to whichever item asks for it first, which is the one that has
-    // been running out of it.
+    // Claimed by a program but no item, so created before items had ids. It
+    // goes to the first item that asks for it, which is the one already using
+    // it.
     if (!owner.program.isEmpty()) return owner.program == exePath;
-    // No marker at all: older still, from when a prefix was named and left
-    // at that. Same rule, there being nothing to tell it apart by.
+    // No marker at all: older still, from when a prefix was only named. The
+    // same rule applies, there being nothing else to go by.
     return true;
 }
 
-// Says the prefix is this item's, so that the next item asking for it is
-// given one of its own instead of moving in.
+// Records the prefix as this item's, so the next item asking for it is given
+// one of its own instead.
 void claim(const QString &path, const QString &exePath, const QString &itemId) {
     if (!QDir().mkpath(path)) return;
     QFile marker(path + QLatin1Char('/') + QLatin1String(kMarkerFile));
@@ -211,7 +208,8 @@ QString prefixesFolder(const QString &baseDir) { return prefixesBase(baseDir); }
 
 QString prefixFolderName(const QString &prefixName) {
     QString name = prefixName.trimmed();
-    // A name is typed, not picked: anything a folder cannot hold goes.
+    // The name is typed rather than chosen, so anything invalid in a folder
+    // name is removed.
     name.replace(QRegularExpression(QStringLiteral("[/\\\\:]+")), QStringLiteral("-"));
     while (name.startsWith(QLatin1Char('.'))) name.remove(0, 1);
     return name.trimmed();
@@ -254,22 +252,21 @@ QString prefixPathFor(const QString &exePath, const QString &baseDir, const QStr
                       bool build) {
     const QFileInfo info(exePath);
 
-    // Where they all live: the folder the launcher profile names, and the
-    // application's own data directory until one does.
+    // The folder the launcher profile names, or this application's data
+    // directory until one is set.
     const QString ours = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
                          QStringLiteral("/prefixes");
     const QString base = prefixesBase(baseDir);
 
-    // Two programs of the same name must not share one install, so the path
-    // they were started from settles it.
+    // Two programs with the same name must not share a prefix, so the path they
+    // were started from distinguishes them.
     const QByteArray digest =
         QCryptographicHash::hash(info.absoluteFilePath().toUtf8(), QCryptographicHash::Sha1);
     const QString hash = QString::fromLatin1(digest.toHex().left(8));
 
-    // Prefixes made before these folders were given readable names are still
-    // where they were: a game's saves live in there. A second icon for the
-    // same program does not move in, though -- it was built for the one that
-    // has it.
+    // Prefixes created before these folders had readable names are left where
+    // they are, a game's saves being inside. A second icon for the same program
+    // does not reuse one, which belongs to the item that claimed it.
     const QString legacy =
         ours + QLatin1Char('/') + info.completeBaseName() + QLatin1Char('-') + hash;
     if (QFileInfo::exists(legacy) && freeFor(legacy, info.absoluteFilePath(), itemId)) {
@@ -277,36 +274,35 @@ QString prefixPathFor(const QString &exePath, const QString &baseDir, const QStr
         return legacy;
     }
 
-    // Otherwise a name worth reading in a file manager: the program, under
-    // the folder it was installed in, which is what tells two copies of the
-    // same game apart at a glance.
+    // Otherwise a name that is readable in a file manager: the program, under
+    // the folder it was installed in, which distinguishes two copies of the
+    // same game.
     const QString title = info.dir().dirName();
     QString name = title.isEmpty() || title == info.completeBaseName()
                        ? info.completeBaseName()
                        : title + QStringLiteral(" - ") + info.completeBaseName();
     name.replace(QLatin1Char('/'), QLatin1Char('-'));
 
-    // A marker naming the program the prefix was built for and the item that
-    // claimed it, so that neither another program of the same name nor a
-    // second icon for this one moves into it.
+    // A marker naming the program the prefix was created for and the item that
+    // claimed it, so neither another program of the same name nor a second icon
+    // for this one reuses it.
     const QString path = base + QLatin1Char('/') + name;
     if (freeFor(path, info.absoluteFilePath(), itemId)) {
         if (build) claim(path, info.absoluteFilePath(), itemId);
         return path;
     }
 
-    // Taken. Before minting a new one, the folder a second program of the
-    // same name would have been given back when the path was all there was
-    // to tell them apart: an item that has been running out of that one
-    // keeps it.
+    // Already claimed. Before generating a new name, try the folder a second
+    // program of the same name would have been given when the path was the only
+    // distinguishing feature: an item already using that one keeps it.
     const QString byPath = path + QStringLiteral(" (") + hash + QLatin1Char(')');
     if (QFileInfo::exists(byPath) && freeFor(byPath, info.absoluteFilePath(), itemId)) {
         if (build) claim(byPath, info.absoluteFilePath(), itemId);
         return byPath;
     }
 
-    // A second icon for the same program is told apart by its own identity,
-    // which is the one thing it does not share with the first.
+    // A second icon for the same program is distinguished by its id, which is
+    // the one thing it does not share with the first.
     const QString mine = itemId.isEmpty() ? hash : itemId;
     const QString own = path + QStringLiteral(" (") + mine + QLatin1Char(')');
     if (build && freeFor(own, info.absoluteFilePath(), itemId)) {

@@ -1,12 +1,11 @@
 #!/bin/sh
-# The same index, told that it went.
+# Updates the same index after removal.
 #
-# Nothing here touches anyone's home directory. "Start when you log in"
-# writes ~/.config/autostart/pmane-sa.desktop for the user who asked
-# for it, and a package removing files from users' homes is both outside
-# what it was given and unable to do it for anyone not logged in. An entry
-# left behind names a program that is no longer there, which a session
-# passes over.
+# Nothing here touches any user's home directory. "Start when you log in"
+# writes ~/.config/autostart/pmane-sa.desktop for the user who enabled it, and
+# a package has no business removing files from users' homes, nor any way to do
+# so for a user who is not logged in. An entry left behind names a program that
+# is no longer installed, which a session ignores.
 set -e
 
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then

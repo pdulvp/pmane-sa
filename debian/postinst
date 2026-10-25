@@ -1,7 +1,7 @@
 #!/bin/sh
-# What has to be told that an application arrived. The desktop's own index of
-# .desktop files is the only one: GNOME Shell reads the search provider's
-# file when it starts and keeps no cache of its own.
+# Notifies what needs to know that an application was installed. The desktop's
+# index of .desktop files is the only one: GNOME Shell reads the search
+# provider's file at startup and keeps no cache of its own.
 set -e
 
 if [ "$1" = "configure" ]; then

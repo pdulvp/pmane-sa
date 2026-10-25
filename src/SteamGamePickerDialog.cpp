@@ -57,8 +57,8 @@ SteamGamePickerDialog::SteamGamePickerDialog(QWidget *parent) : QDialog(parent) 
     chrome.fields->addWidget(m_summary);
     chrome.footer->addWidget(buttons);
 
-    // The libraries Steam lists itself, and whichever have been added by
-    // hand in Options > Launchers.
+    // The libraries Steam lists itself, plus any added by hand in
+    // Options > Launchers.
     QStringList libraries = discoveredSteamLibraries();
     if (const Launcher *steam = launcherById(QStringLiteral("steam"))) {
         for (const QString &folder : steam->libraryFolders) {
@@ -66,8 +66,8 @@ SteamGamePickerDialog::SteamGamePickerDialog(QWidget *parent) : QDialog(parent) 
         }
     }
 
-    // Each game is worked out exactly the way a dropped manifest would be,
-    // so the name and icon on show here are the ones the item will wear.
+    // Each game is resolved exactly as a dropped manifest would be, so the name
+    // and icon shown here are the ones the item will have.
     const QVector<SteamGame> games = steamGamesIn(libraries);
     for (const SteamGame &game : games) {
         ProgramItem item;
@@ -100,7 +100,7 @@ SteamGamePickerDialog::SteamGamePickerDialog(QWidget *parent) : QDialog(parent) 
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     // Typing goes to the filter wherever the focus is, so the list can be
-    // narrowed without reaching for the mouse first.
+    // narrowed without using the mouse first.
     m_filterEdit->setFocus();
     resize(520, 520);
 }
@@ -111,8 +111,8 @@ void SteamGamePickerDialog::applyFilter(const QString &text) {
         QListWidgetItem *row = m_list->item(i);
         const bool matches =
             needle.isEmpty() || row->text().contains(needle, Qt::CaseInsensitive);
-        // A row that is filtered away takes its selection with it, so Insert
-        // never adds something the list is not showing.
+        // A filtered-out row loses its selection, so Insert never adds
+        // something the list is not showing.
         if (!matches && row->isSelected()) row->setSelected(false);
         row->setHidden(!matches);
     }

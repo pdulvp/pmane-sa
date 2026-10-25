@@ -14,13 +14,13 @@
 namespace {
 
 // The marker a per-application prefix carries, naming the program it was
-// built for and the item that claimed it. It is what tells one of ours from
-// a folder someone else put in there.
+// created for and the item that claimed it. It is what distinguishes a prefix
+// this application created from any other folder in there.
 const char *kMarkerFile = ".program";
 
-// The fields of a saved item a prefix scan needs: what it runs and where it
-// runs it. The rest of a ProgramItem -- its icon, its scaling -- costs work
-// to read and says nothing about prefixes.
+// The fields of a saved item a prefix scan needs: what it runs and where. The
+// rest of a ProgramItem, its icon and scaling, costs work to read and says
+// nothing about prefixes.
 struct SavedItem {
     QString id;
     QString command;
@@ -28,8 +28,8 @@ struct SavedItem {
     QString prefix;
 };
 
-// Every item on every screen. The screen that is open is taken from what is
-// on it, since its file is only written when it is saved.
+// Every item on every screen. The open screen is taken from what is on it,
+// since its file is only written when it is saved.
 QVector<SavedItem> allItems(const OpenScreen &open) {
     QVector<SavedItem> items;
 
@@ -65,10 +65,10 @@ QVector<SavedItem> allItems(const OpenScreen &open) {
     return items;
 }
 
-// Where every item that runs in a prefix at all would run, counted by path.
-// An item is counted under its own launcher's prefixes folder, which need not
-// be the one being looked at: what makes a folder wanted is that something
-// leads to it, wherever that something is set up.
+// The prefix path of every item that runs in a prefix, counted by path. An item
+// is counted under its own launcher's prefixes folder, which need not be the
+// one being inspected: a folder is in use if anything points at it, wherever
+// that is configured.
 QHash<QString, QStringList> usageByPath(const OpenScreen &open) {
     QHash<QString, QStringList> counts;
     for (const SavedItem &item : allItems(open)) {
@@ -83,12 +83,12 @@ QHash<QString, QStringList> usageByPath(const OpenScreen &open) {
     return counts;
 }
 
-// Whether a folder looks like a wine prefix rather than something else that
-// happens to sit in there: a prefix holds a C: drive and, once anything has
-// run in it, a registry.
+// Whether a folder looks like a wine prefix rather than something else in the
+// same directory: a prefix holds a C: drive and, once anything has run in it, a
+// registry.
 bool looksLikePrefix(const QString &path) {
     const QDir dir(path);
-    return dir.exists(QStringLiteral("pfx")) ||          // Proton keeps one inside
+    return dir.exists(QStringLiteral("pfx")) ||          // Proton nests one inside
            dir.exists(QStringLiteral("drive_c")) ||
            dir.exists(QStringLiteral("system.reg")) ||
            dir.exists(QLatin1String(kMarkerFile));
@@ -100,12 +100,12 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
                               const OpenScreen &open) {
     QVector<PrefixUse> result;
 
-    // Resolved the way a launch resolves it, so that an empty prefixes folder
-    // means this application's own directory here too.
+    // Resolved as a launch resolves it, so an empty prefixes folder means this
+    // application's own directory here too.
     const QString base = QDir::cleanPath(prefixesFolder(baseDir));
     const QHash<QString, QStringList> counts = usageByPath(open);
 
-    QStringList listed; // the paths the named ones took, so they are not listed twice
+    QStringList listed; // the paths the named ones used, so none is listed twice
     for (const QString &name : names) {
         const QString folder = prefixFolderName(name);
         if (folder.isEmpty()) continue;
@@ -116,8 +116,8 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.path = path;
         use.kind = PrefixUse::Named;
         use.programs = counts.value(path);
-        // A prefix set up but not yet run in has nothing on disk, which is
-        // not the same as being unused: an item may well be pointed at it.
+        // A prefix created in the dialog but not yet run in has nothing on
+        // disk, which is not the same as being unused: an item may point at it.
         use.onDisk = QFileInfo::exists(path);
         result.append(use);
         listed << path;
@@ -126,8 +126,8 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
     const QDir dir(base);
     if (!dir.exists()) return result;
 
-    // Whatever else is in there: the per-application prefixes, and anything
-    // that is not one of ours at all.
+    // Whatever else is in the folder: the per-application prefixes, and
+    // anything this application did not create.
     const QStringList folders =
         dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
     for (const QString &folder : folders) {
@@ -140,18 +140,18 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.onDisk = true;
         use.programs = counts.value(path);
         use.program = prefixOwner(path).program;
-        // One of ours if it carries a marker, or if it has no marker but
-        // holds a prefix and something still runs in it -- which is how the
-        // ones built before the markers existed read.
+        // Treated as ours if it carries a marker, or if it has no marker but
+        // holds a prefix something still runs in, which is how the ones created
+        // before the markers existed appear.
         use.kind = (!use.program.isEmpty() || !use.programs.isEmpty() || looksLikePrefix(path))
                        ? PrefixUse::PerApplication
                        : PrefixUse::Foreign;
         result.append(use);
     }
 
-    // The prefixes items lead to that are not there yet -- a program added
-    // but not yet run -- so that a count of what is in use is a count of the
-    // items and not only of the folders already built.
+    // The prefixes items point at that do not exist yet, for a program added
+    // but not yet run, so the usage count covers the items rather than only the
+    // folders already created.
     for (auto it = counts.constBegin(); it != counts.constEnd(); ++it) {
         if (QFileInfo::exists(it.key())) continue;
         if (QFileInfo(it.key()).absolutePath() != base) continue;

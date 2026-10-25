@@ -12,9 +12,9 @@
 
 namespace {
 
-// Name[fr_CA] beats Name[fr] beats Name. The suffix is compared against the
-// locale's own names rather than parsed, which is all the matching the
-// specification's fallback rules need here.
+// Name[fr_CA] takes precedence over Name[fr], which takes precedence over Name.
+// The suffix is compared against the locale's own names rather than parsed,
+// which is enough for the specification's fallback rules here.
 int localeRank(const QString &suffix) {
     if (suffix.isEmpty()) return 0;
     const QLocale locale;
@@ -44,7 +44,7 @@ DesktopEntry readDesktopEntry(const QString &path) {
         if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
 
         if (line.startsWith(QLatin1Char('['))) {
-            // Actions and other groups follow the first one and are not ours.
+            // Actions and other groups follow the first one and are not read.
             inEntryGroup = line == QLatin1String("[Desktop Entry]");
             continue;
         }
@@ -92,9 +92,9 @@ DesktopEntry readDesktopEntry(const QString &path) {
 }
 
 QStringList installedDesktopEntries() {
-    // The desktop-file id is the path below the applications directory with
-    // the separators turned into dashes, and the first directory that has one
-    // owns it -- which is how a user's own copy shadows the system's.
+    // The desktop-file id is the path below the applications directory with the
+    // separators replaced by dashes, and the first directory holding one wins,
+    // which is how a user's own copy shadows the system's.
     QMap<QString, QString> byId;
     const QStringList dirs =
         QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
@@ -112,9 +112,8 @@ QStringList installedDesktopEntries() {
     QStringList paths;
     for (const QString &path : byId) {
         const DesktopEntry entry = readDesktopEntry(path);
-        // Only the applications a menu would show: not the Link and Directory
-        // entries, not the handlers kept out of sight, and nothing that names
-        // no program to run.
+        // Only the applications a menu would show: not Link or Directory
+        // entries, not hidden handlers, and nothing that names no program.
         if (!entry.isValid() || entry.noDisplay) continue;
         if (!entry.type.isEmpty() && entry.type != QLatin1String("Application")) continue;
         paths.append(path);
@@ -127,9 +126,8 @@ QStringList desktopEntryCommand(const DesktopEntry &entry) {
 
     for (int i = parts.size() - 1; i >= 0; --i) {
         const QString &part = parts[i];
-        // %% is an escaped percent sign and stays; a lone field code is the
-        // application's way of asking for a file, url or icon it is not
-        // being given.
+        // %% is an escaped percent sign and is kept; a lone field code asks for
+        // a file, url or icon that is not being provided.
         if (part.size() == 2 && part.startsWith(QLatin1Char('%')) &&
             part != QLatin1String("%%")) {
             parts.removeAt(i);

@@ -5,34 +5,31 @@
 
 class QWidget;
 
-// A window without a frame has to offer its own edges to drag: the window
-// manager is no longer drawing any. These say which edges a point is close
-// enough to, what the pointer should look like there, and hand the resize
-// over to the window manager once one starts.
+// A frameless window has to provide its own resize edges, the window manager
+// drawing none. These report which edges a point is close enough to, the
+// cursor to show there, and hand a started resize over to the window manager.
 
-// How wide the band along each edge is, in pixels.
+// The width of the resize band along each edge, in pixels.
 constexpr int kResizeMargin = 4;
 
-// The edges `globalPos` is within the margin of. Empty away from them, and
-// for a window that cannot be resized where it is -- maximized or full
-// screen.
+// The edges `globalPos` is within the margin of. Empty elsewhere, and for a
+// window that cannot be resized in its current state, maximized or full screen.
 Qt::Edges windowEdgesAt(const QWidget *window, const QPoint &globalPos);
 
-// Whether the window is filling the screen, maximized or full screen. While
-// it is, the caption is not something to be dragged or double clicked out of
-// shape by accident: the caption's own buttons are the way back.
+// Whether the window fills the screen, maximized or full screen. While it does,
+// the caption must not be dragged or double clicked out of that state by
+// accident; the caption buttons are the way back.
 bool windowFillsScreen(const QWidget *window);
 
-// Whether a drag on the window's own caption should move it. A window filling
-// the screen is not moved: the compositor would shrink it back to its old
-// size just to follow the pointer, which is rarely what the drag was meant
-// for.
+// Whether a drag on the window's caption should move it. A window filling the
+// screen is not moved: the compositor would restore it to its old size just to
+// follow the pointer, which is rarely what was intended.
 bool windowCanBeMoved(const QWidget *window);
 
-// The pointer that says which way those edges would stretch.
+// The cursor shape indicating which way those edges would resize.
 Qt::CursorShape cursorForWindowEdges(Qt::Edges edges);
 
-// Asks the window manager to take over a resize from these edges. False
-// when there is nothing to hand over, so the caller can treat the press as
-// an ordinary one.
+// Asks the window manager to take over a resize from these edges. Returns false
+// when there is nothing to hand over, so the caller can treat the press as an
+// ordinary one.
 bool startWindowResize(QWidget *window, Qt::Edges edges);

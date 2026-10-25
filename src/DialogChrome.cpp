@@ -15,12 +15,12 @@
 namespace {
 
 // The coloured strip down the left of a dialog: a band of caption colour with
-// the dialog's business written up it, wide enough for the words to be read
-// at the size the rest of the dialog is set in.
+// the dialog's title written up it, wide enough to stay legible at the type
+// size used in the rest of the dialog.
 constexpr int kBannerWidth = 36;
 
-// `weight` of `over`, the rest of `under`: how a border colour is found that
-// belongs to the scheme rather than being a grey laid on top of it.
+// Mixes `weight` of `over` into `under`, which gives a border colour taken from
+// the scheme rather than a grey laid over it.
 QColor blend(const QColor &under, const QColor &over, qreal weight) {
     const qreal keep = 1.0 - weight;
     return QColor(qRound(under.red() * keep + over.red() * weight),
@@ -28,27 +28,27 @@ QColor blend(const QColor &under, const QColor &over, qreal weight) {
                   qRound(under.blue() * keep + over.blue() * weight));
 }
 
-// The strip itself: the caption's own colour, with the word it carries set
-// sideways, reading upwards the way a book's spine does.
+// The strip itself: the caption colour, with its text rotated to read upwards,
+// like a book spine.
 class EdgeBanner : public QWidget {
 public:
     EdgeBanner(const QString &text, QWidget *parent) : QWidget(parent), m_text(text) {
         setFixedWidth(kBannerWidth);
-        // Nothing to click: the strip is a label, and a drag on it should
-        // reach whatever is underneath.
+        // Not interactive: the strip is a label, and a drag on it should reach
+        // the widget underneath.
         setAttribute(Qt::WA_TransparentForMouseEvents);
     }
 
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
-        // Its colours come from its palette rather than being kept here, so
-        // that a dialog previewing a scheme can recolour the whole chrome by
-        // handing its parts new palettes.
+        // Colours come from its palette rather than being stored here, so a
+        // dialog previewing a scheme can recolour the whole chrome by setting
+        // new palettes on its parts.
         painter.fillRect(rect(), palette().color(QPalette::Window));
 
-        // Small caps, spaced out lengthways: the band is a heading, so it is
-        // set a shade smaller than the form beside it but still read as one.
+        // Small caps with extra letter spacing: the band is a heading, set
+        // slightly smaller than the form beside it but still reading as one.
         QFont heading = font();
         if (heading.pointSizeF() > 0) {
             heading.setPointSizeF(std::max(7.0, heading.pointSizeF() * 0.92));
@@ -72,9 +72,9 @@ private:
     QString m_text;
 };
 
-// Fields with an edge and a little padding, and the caption colour to say
-// which one the keyboard is in. Written out with the scheme's colours so that
-// a dialog follows Options > Colors like everything else.
+// Fields with a border and some padding, and the caption colour to mark the one
+// with focus. Written with the scheme's colours so a dialog follows Options >
+// Colors like everything else.
 QString styleSheetFor(const Theme &theme, const QColor &edge) {
     return QStringLiteral(R"(
         QLineEdit, QComboBox, QListWidget, QAbstractScrollArea {
@@ -118,26 +118,26 @@ QString styleSheetFor(const Theme &theme, const QColor &edge) {
              blend(theme.windowBg, theme.windowText, 0.55).name());
 }
 
-// What each part of the chrome is called, so that recolouring it later can
-// find the parts again without the dialog having to keep hold of them.
+// The object names of the chrome's parts, so recolouring can find them again
+// without the dialog keeping references.
 const char *kBannerName = "dialogBanner";
 const char *kBodyName = "dialogBody";
 const char *kFooterName = "dialogFooter";
 const char *kRuleName = "dialogRule";
 
-// Puts the scheme on the parts, which is everything the chrome's look is:
-// two coloured surfaces, a rule between them, the strip, and the style sheet
-// the fields and buttons are drawn by.
+// Applies the scheme to every part of the chrome: the two coloured surfaces,
+// the rule between them, the strip, and the style sheet the fields and buttons
+// are drawn with.
 void colourChrome(QDialog *dialog, const Theme &theme) {
-    // A line between a field and the surface it sits on, from the scheme's own
-    // ink rather than a grey: barely there on a pale theme and plain on a loud
-    // one, but never a colour the theme does not own.
+    // The line between a field and the surface it sits on, mixed from the
+    // scheme's own text colour rather than a fixed grey: subtle on a pale theme
+    // and clear on a strong one, but always a colour from the theme.
     const QColor edge = blend(theme.windowBg, theme.windowText, 0.30);
 
-    // The style sheet goes on first. Re-setting one makes the style unpolish
-    // the whole dialog and hand every widget back the palette it had saved at
-    // the first polish, so palettes set before this call would be wiped and
-    // the banner and footer would keep the scheme they were born in.
+    // The style sheet is set first. Setting one again makes the style unpolish
+    // the whole dialog and restore the palette every widget had at the first
+    // polish, so palettes set before this call would be discarded and the
+    // banner and footer would keep their original scheme.
     dialog->setStyleSheet(styleSheetFor(theme, edge));
 
     if (QWidget *banner = dialog->findChild<QWidget *>(QLatin1String(kBannerName))) {
@@ -147,8 +147,8 @@ void colourChrome(QDialog *dialog, const Theme &theme) {
         banner->setPalette(pal);
         banner->update();
     }
-    // The form sits on the window colour of the scheme rather than on the
-    // button grey the platform would hand a dialog.
+    // The form sits on the scheme's window colour rather than the button grey
+    // the platform would give a dialog.
     if (QWidget *body = dialog->findChild<QWidget *>(QLatin1String(kBodyName))) {
         QPalette pal = body->palette();
         pal.setColor(QPalette::Window, theme.windowBg);
@@ -174,8 +174,8 @@ DialogChrome applyDialogChrome(QDialog *dialog, const QString &bannerText) {
     fieldsLayout->setContentsMargins(kDialogMargin, kDialogMargin, kDialogMargin, kDialogMargin);
     fieldsLayout->setSpacing(kDialogRowSpacing);
 
-    // A rule, then the buttons in a band of the button colour: what is being
-    // filled in, then what is done about it.
+    // A rule, then the buttons in a band of the button colour, separating the
+    // form from the actions.
     auto *rule = new QFrame(dialog);
     rule->setObjectName(QLatin1String(kRuleName));
     rule->setFrameShape(QFrame::HLine);

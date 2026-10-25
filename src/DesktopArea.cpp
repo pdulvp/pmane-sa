@@ -6,20 +6,20 @@
 #include <QPaintEvent>
 
 DesktopArea::DesktopArea(QWidget *parent) : QMdiArea(parent) {
-    // A group window dragged off the edge, or left out there when the
-    // Program Manager's own window was made smaller, is still on the
-    // desktop: the bars are how it is reached again. Progman's own client
-    // area scrolled the same way.
+    // A group window dragged off the edge, or left outside after the Program
+    // Manager window was made smaller, is still on the desktop, and the scroll
+    // bars are how it is reached again. Progman's client area scrolled the same
+    // way.
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 }
 
 void DesktopArea::scrollContentsBy(int dx, int dy) {
     QMdiArea::scrollContentsBy(dx, dy);
-    // Scrolling blits what was already drawn and repaints only the strip
-    // that came into view, which would carry the wallpaper and the screen's
-    // name along with it. Both belong to the viewport rather than to what
-    // is arranged on it, so the whole of it is drawn again.
+    // Scrolling blits what was already drawn and repaints only the strip that
+    // came into view, which would move the wallpaper and the screen name with
+    // it. Both belong to the viewport rather than to its contents, so the whole
+    // viewport is repainted instead.
     viewport()->update();
 }
 
@@ -51,8 +51,8 @@ void DesktopArea::paintEvent(QPaintEvent *event) {
 
     if (!m_wallpaper.isNull() && !viewport()->size().isEmpty()) {
         QPainter wall(viewport());
-        // Covered rather than fitted, so there is never a band of desktop
-        // colour down an edge; what overhangs is trimmed evenly.
+        // Scaled to cover rather than to fit, so there is never a band of
+        // desktop colour down an edge; the overhang is trimmed evenly.
         const QPixmap picture = scaledWallpaper();
         const QRect area = viewport()->rect();
         wall.drawPixmap(area, picture,
@@ -72,10 +72,10 @@ void DesktopArea::paintEvent(QPaintEvent *event) {
     font.setLetterSpacing(QFont::PercentageSpacing, 108);
     painter.setFont(font);
 
-    // Legible against either a dark or a light desktop without ever
-    // competing with the group windows in front of it. A wallpaper has no
-    // one colour behind the name to be derived from, so there it is written
-    // in white, faint enough to read as part of the picture.
+    // Legible against either a dark or a light desktop without competing with
+    // the group windows in front of it. A wallpaper has no single colour behind
+    // the name to derive from, so over one the name is drawn in white, faint
+    // enough to read as part of the picture.
     QColor ink;
     if (m_wallpaper.isNull()) {
         const QColor desktop = background().color();
@@ -86,8 +86,8 @@ void DesktopArea::paintEvent(QPaintEvent *event) {
     }
     painter.setPen(ink);
 
-    // Bottom right, clear of the row of minimized groups along the bottom
-    // left, and clear of the cascade of windows opening from the top left.
+    // Bottom right, clear of the row of minimized groups along the bottom left
+    // and of the cascade of windows opening from the top left.
     const int margin = 16;
     const QRect area = viewport()->rect().adjusted(
         margin, margin, -margin, -(MinimizedGroupIcon::kCellHeight + margin));

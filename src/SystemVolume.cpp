@@ -7,18 +7,18 @@
 
 namespace {
 
-// Whatever wpctl calls the output everything plays through, rather than a
-// particular sound card: the desktop may move it while this is running.
+// wpctl's name for the default output rather than a particular sound card,
+// since the desktop may change which device that is while this is running.
 const char *kSink = "@DEFAULT_AUDIO_SINK@";
 
-// PipeWire's own change reporter. It prints as things happen, which is the
-// point: nothing here has to ask.
+// PipeWire's change reporter: it prints as things happen, so nothing here has
+// to poll.
 const char *kMonitor = "pw-mon";
 
-// A burst of changes arrives as one thing is done -- a key held down, a
-// slider dragged -- so the mixer is asked once the burst has stopped.
+// One action, such as a held volume key or a dragged slider, produces a burst
+// of changes, so the mixer is read once the burst has stopped.
 constexpr int kSettleMs = 120;
-// What the watch falls back to where there is nothing to watch with.
+// The polling interval used when no watcher is available.
 constexpr int kPollMs = 3000;
 
 QString wpctl() {
@@ -26,7 +26,7 @@ QString wpctl() {
     return path;
 }
 
-// wpctl answers "Volume: 0.36", and "Volume: 0.36 [MUTED]" when it is off.
+// wpctl prints "Volume: 0.36", or "Volume: 0.36 [MUTED]" when muted.
 double volumeIn(const QString &answer) {
     static const QRegularExpression level(QStringLiteral("Volume:\\s*([0-9]*\\.?[0-9]+)"));
     const QRegularExpressionMatch match = level.match(answer);
@@ -47,7 +47,7 @@ QString ask() {
 }
 
 // Started and left to finish on its own: nothing here needs to know when a
-// one-word instruction to the mixer has been carried out.
+// single mixer command has completed.
 void tellMixer(const QStringList &arguments) {
     if (wpctl().isEmpty()) return;
     auto *set = new QProcess;
@@ -113,9 +113,9 @@ SystemVolumeWatch::SystemVolumeWatch(QObject *parent) : QObject(parent) {
     const QString monitor = QStandardPaths::findExecutable(QLatin1String(kMonitor));
     if (!monitor.isEmpty()) {
         m_monitor = new QProcess(this);
-        // Everything it says means the same thing here: something about the
-        // sound has moved. What moved is read from the mixer afterwards,
-        // which is simpler than parsing a running commentary.
+        // Every line means the same thing here: something about the audio
+        // changed. What changed is then read from the mixer, which is simpler
+        // than parsing the stream.
         connect(m_monitor, &QProcess::readyReadStandardOutput, this, [this] {
             m_monitor->readAllStandardOutput();
             m_settle->start();
@@ -131,7 +131,7 @@ SystemVolumeWatch::SystemVolumeWatch(QObject *parent) : QObject(parent) {
 
     if (m_listening) return;
 
-    // Nothing to listen with: back to asking every few seconds.
+    // No watcher available: fall back to polling every few seconds.
     auto *poll = new QTimer(this);
     poll->setInterval(kPollMs);
     connect(poll, &QTimer::timeout, this, &SystemVolumeWatch::changed);

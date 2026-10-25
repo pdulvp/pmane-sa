@@ -4,7 +4,7 @@
 
 namespace {
 
-// The buttons taken out of a group's caption.
+// The caption buttons removed from a group window.
 bool isRemoved(QStyle::SubControl subControl) {
     switch (subControl) {
     case QStyle::SC_TitleBarSysMenu:
@@ -17,12 +17,12 @@ bool isRemoved(QStyle::SubControl subControl) {
     }
 }
 
-// The caption as this desktop wants it. What the style lays out comes from
-// the window flags rather than from the sub-controls it is asked for, so
-// clearing the hints that reserve a slot is what both removes a button and
-// closes up the gap it would have left -- the close box hangs off the system
-// menu hint, there being no flag of its own for it. With the system menu box
-// gone the title starts at the left edge, where the box used to be.
+// The caption as this desktop needs it. The style lays out from the window
+// flags rather than from the sub-controls requested, so clearing the hints that
+// reserve a slot both removes a button and closes the gap it would leave. The
+// close box depends on the system menu hint, having no flag of its own. With
+// the system menu box gone, the title starts at the left edge where that box
+// used to be.
 QStyleOptionTitleBar groupCaption(const QStyleOptionTitleBar &bar) {
     QStyleOptionTitleBar caption = bar;
     caption.titleBarFlags &= ~(Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint);
@@ -64,8 +64,8 @@ QStyle::SubControl GroupCaptionStyle::hitTestComplexControl(ComplexControl contr
                                                             const QPoint &pos,
                                                             const QWidget *widget) const {
     const SubControl hit = QProxyStyle::hitTestComplexControl(control, option, pos, widget);
-    // A button that is no longer drawn is no longer there to be pressed --
-    // the caption's bare strip is all that is left where it was.
+    // A button that is no longer drawn cannot be pressed: what is left in its
+    // place is bare caption.
     if (control == CC_TitleBar && isRemoved(hit)) return SC_None;
     return hit;
 }

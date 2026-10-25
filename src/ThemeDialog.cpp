@@ -97,8 +97,8 @@ void ThemePreview::paintEvent(QPaintEvent *) {
     p.drawRect(iconA);
     p.drawRect(iconB);
 
-    // The selected label carries the highlight, hugging its text just as
-    // the real icon grid does.
+    // The selected label carries the highlight around its text, as the real
+    // icon grid does.
     const QRect labelA(centreA - labelWidth / 2, iconA.bottom() + 3, labelWidth, lineHeight);
     const QRect textA = p.fontMetrics().boundingRect(labelA, Qt::AlignCenter, tr("Setup"));
     p.fillRect(textA.adjusted(-2, -1, 2, 1), m_theme.highlight);
@@ -113,9 +113,9 @@ void ThemePreview::paintEvent(QPaintEvent *) {
 ThemeDialog::ThemeDialog(const QString &currentTheme, QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Colors"));
 
-    // The banner, the coloured surfaces and the field styling the dialogs
-    // share. This one is dressed in the scheme it is previewing, so the
-    // chrome is put on again whenever the choice changes.
+    // The banner, coloured surfaces and field styling shared by the dialogs.
+    // This dialog is drawn in the scheme it is previewing, so the chrome is
+    // reapplied whenever the choice changes.
     const DialogChrome chrome = applyDialogChrome(this, tr("Colors"));
 
     m_combo = new QComboBox(this);
@@ -137,9 +137,9 @@ ThemeDialog::ThemeDialog(const QString &currentTheme, QWidget *parent) : QDialog
 
     m_preview = new ThemePreview(this);
     m_preview->setTheme(themeByName(m_combo->currentText()));
-    // The miniature paints its own desktop right out to its edge, so the
-    // frame around it belongs to a holder: a border on the preview itself
-    // would be painted straight over.
+    // The miniature paints its own desktop out to its edge, so the frame around
+    // it belongs to a container widget: a border on the preview itself would be
+    // painted over.
     auto *previewWell = new QFrame(this);
     previewWell->setObjectName(QStringLiteral("previewWell"));
     auto *wellLayout = new QVBoxLayout(previewWell);
@@ -159,9 +159,9 @@ ThemeDialog::ThemeDialog(const QString &currentTheme, QWidget *parent) : QDialog
 
     connect(m_combo, &QComboBox::currentTextChanged, this, [this](const QString &name) {
         m_preview->setTheme(themeByName(name));
-        // The desktop behind takes the scheme first, which is what sets the
-        // current theme; this dialog then puts it on too, so the colours
-        // being chosen are the ones being worn.
+        // The desktop behind applies the scheme first, which sets the current
+        // theme; this dialog then applies it too, so the colours being chosen
+        // are the ones displayed.
         emit themePreviewed(name);
         refreshDialogChrome(this);
     });

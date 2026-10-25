@@ -19,25 +19,24 @@ QString tr(const char *text) {
     return QCoreApplication::translate("Launchers", text);
 }
 
-// The two launchers whose runners are read off the machine rather than set
-// up here: every wine installed, and every Proton build under Steam.
+// The two launchers whose runners are detected on the machine rather than
+// configured here: every installed wine, and every Proton build under Steam.
 const char *kWineId = "wine";
 const char *kProtonId = "proton";
 
-// Prefixed, so that a discovered runner's id can never collide with one
-// minted for a runner someone added by hand.
+// Prefixed so a detected runner's id can never collide with one generated for
+// a runner added by hand.
 const char *kWinePrefix = "wine:";
 const char *kProtonPrefix = "proton:";
 
-// Where an emulator keeps its cores when no folder has been given: a
-// libretro install puts them in a `cores` directory beside the binary. An
-// alias is asked what it stands for, which is the one thing only the shell
-// knows.
+// Where an emulator keeps its cores when no folder is configured: a libretro
+// install puts them in a `cores` directory beside the binary. An alias is
+// resolved through the shell, which is the only thing that knows it.
 QString coresDirFor(const Launcher &launcher, const LauncherRunner &runner) {
     if (!launcher.coresDir.isEmpty()) return launcher.coresDir;
 
-    // Beside the runner's own binary, not some other install's: two
-    // RetroArch installs keep their cores in their own folders.
+    // Beside this runner's own binary: two RetroArch installs each keep their
+    // cores in their own folder.
     if (runner.command.startsWith(QLatin1Char('/'))) {
         const QString cores = QFileInfo(runner.command).absolutePath() + QStringLiteral("/cores");
         if (QDir(cores).exists()) return cores;
@@ -61,9 +60,9 @@ QString coresDirFor(const Launcher &launcher, const LauncherRunner &runner) {
     return QDir(cores).exists() ? cores : QString();
 }
 
-// The core to play this file with, as a full path: whatever the launcher's
-// table says the file type takes. Empty when it does not say, which leaves
-// the program to start without one.
+// The full path of the core to play this file with, taken from the launcher's
+// core table. Empty when the table has no entry for the file type, in which
+// case the program is started without one.
 QString coreFor(const Launcher &launcher, const QString &path, const LauncherRunner &runner) {
     if (!launcher.usesCores) return {};
 
@@ -77,7 +76,7 @@ QString coreFor(const Launcher &launcher, const QString &path, const LauncherRun
     }
     if (core.isEmpty()) return {};
 
-    // A core given as a path of its own is taken as it stands.
+    // A core already given as a path is used as it is.
     if (core.startsWith(QLatin1Char('/'))) return QFile::exists(core) ? core : QString();
 
     const QString dir = coresDirFor(launcher, runner);
@@ -89,8 +88,8 @@ QString coreFor(const Launcher &launcher, const QString &path, const LauncherRun
 QStringList expand(const QString &arguments, const QString &file, const QString &core,
                    const QString &appId) {
     QStringList out;
-    // Split first and substitute after, so that a path with spaces in it
-    // stays one argument however the template was written.
+    // Split first and substitute afterwards, so a path containing spaces stays
+    // one argument whatever the template looks like.
     for (const QString &original : QProcess::splitCommand(arguments)) {
         QString piece = original;
         piece.replace(QLatin1String("{file}"), file);
@@ -98,10 +97,9 @@ QStringList expand(const QString &arguments, const QString &file, const QString 
         piece.replace(QLatin1String("{core}"), core);
         piece.replace(QLatin1String("{appid}"), appId);
 
-        // A placeholder that stood for nothing leaves an empty argument, and
-        // an empty argument is not nothing: it is an argument. Out it goes,
-        // and the flag introducing it goes with it, so "-L {core} {file}" is
-        // simply the file when no core was found.
+        // A placeholder with no value leaves an empty argument, which is still
+        // an argument. Drop it, and the flag introducing it with it, so
+        // "-L {core} {file}" is just the file when no core was found.
         if (piece.isEmpty() && original.contains(QLatin1Char('{'))) {
             if (!out.isEmpty() && out.last().startsWith(QLatin1Char('-'))) out.removeLast();
             continue;
@@ -116,10 +114,10 @@ QVector<Launcher> *loaded() {
     return &launchers;
 }
 
-// An item saved before wine and Proton were told apart named a wine profile,
-// and that profile is where its Proton build was recorded. This maps the one
-// to the other so such an item keeps running through the build it was set up
-// with rather than quietly dropping back to plain wine.
+// An item saved before wine and Proton were separate launchers names a wine
+// profile, and that profile is where its Proton build was recorded. This maps
+// one to the other, so such an item keeps running through the build it was set
+// up with instead of falling back to plain wine.
 QHash<QString, QString> *legacyProtonProfiles() {
     static QHash<QString, QString> map;
     return &map;
@@ -135,9 +133,9 @@ LauncherRunner makeRunner(const QString &id, const QString &name, const QString 
     return runner;
 }
 
-// The wines and the Proton builds on the machine, as runners. Read off it
-// every session rather than saved, so one installed since last time is simply
-// there and one uninstalled is simply gone.
+// The installed wines and Proton builds, as runners. Detected every session
+// rather than saved, so one installed since last time appears and one
+// uninstalled disappears.
 void appendDiscoveredRunners(Launcher &launcher) {
     if (launcher.id == QLatin1String(kWineId)) {
         for (const WineBuild &build : installedWineBuilds()) {
@@ -156,8 +154,8 @@ void appendDiscoveredRunners(Launcher &launcher) {
         runner.name = tool.displayName;
         runner.compatToolId = tool.id;
         runner.discovered = true;
-        // Shown so the list reads as programs; it is protonInvocation that
-        // actually starts one of these.
+        // Set for display, so the list reads as programs; protonInvocation()
+        // is what actually starts one of these.
         runner.command = tool.protonPath;
         launcher.runners.append(runner);
     }
@@ -172,14 +170,14 @@ void load() {
         settings.beginGroup(QStringLiteral("launchers/") + launcher.id);
         if (!settings.contains(QStringLiteral("extensions"))) {
             settings.endGroup();
-            continue; // never edited: keep the launcher as it shipped
+            continue; // never edited: keep the launcher's shipped settings
         }
 
         launcher.extensions =
             settings.value(QStringLiteral("extensions"), launcher.extensions).toStringList();
         if (launcher.usesPrefixes) {
             launcher.prefixesDir = settings.value(QStringLiteral("prefixesDir")).toString();
-            // A table emptied on purpose stays empty, as the cores one does.
+            // A list emptied deliberately stays empty, as the core list does.
             if (settings.contains(QStringLiteral("prefixes"))) {
                 launcher.prefixes =
                     settings.value(QStringLiteral("prefixes")).toStringList();
@@ -197,13 +195,13 @@ void load() {
                 if (split <= 0) continue;
                 cores.append({pair.left(split), pair.mid(split + 1)});
             }
-            // A table emptied on purpose stays empty; one that was never
-            // written at all stays the one the launcher shipped with.
+            // A list emptied deliberately stays empty; one never written at
+            // all keeps the launcher's shipped value.
             if (settings.contains(QStringLiteral("cores"))) launcher.cores = cores;
         }
 
-        // The runners someone added by hand. The discovered ones are not in
-        // here and are put back afterwards.
+        // The runners added by hand. The detected ones are not saved here and
+        // are appended again afterwards.
         if (settings.contains(QStringLiteral("runners/size"))) {
             QVector<LauncherRunner> runners;
             const int count = settings.beginReadArray(QStringLiteral("runners"));
@@ -222,9 +220,9 @@ void load() {
             launcher.runners = runners;
         }
 
-        // Profiles are gone: nothing was left to keep on one. The array is
-        // still read, for the one thing it recorded that an item may still be
-        // pointing at -- the Proton build a wine profile stood for.
+        // Profiles no longer exist. The array is still read for the one thing
+        // it recorded that an item may still refer to: the Proton build a wine
+        // profile stood for.
         const int count = settings.beginReadArray(QStringLiteral("profiles"));
         for (int i = 0; i < count; ++i) {
             settings.setArrayIndex(i);
@@ -239,9 +237,9 @@ void load() {
         settings.endGroup();
     }
 
-    // Last, so a build installed on the machine lands behind whatever this
-    // desktop added by hand, and so that a launcher never edited at all --
-    // skipped by the loop above -- gets them too.
+    // Last, so a detected build is listed after the runners added by hand, and
+    // so that a launcher never edited, skipped by the loop above, gets them
+    // too.
     for (Launcher &launcher : result) appendDiscoveredRunners(launcher);
 
     *loaded() = result;
@@ -273,8 +271,8 @@ const LauncherRunner *Launcher::defaultRunner() const {
 QVector<Launcher> defaultLaunchers() {
     QVector<Launcher> result;
 
-    // Wine first, so that a .exe with nothing set up lands on it rather than
-    // on Proton: it is the one that needs no Steam.
+    // Wine first, so an unconfigured .exe goes to it rather than to Proton,
+    // since it does not need Steam.
     Launcher wine;
     wine.id = QLatin1String(kWineId);
     wine.name = tr("Wine");
@@ -298,8 +296,8 @@ QVector<Launcher> defaultLaunchers() {
     proton.usesPrefixes = true;
     proton.usesWindowScale = true;
     proton.usesArguments = true;
-    // Proton is handed the executable by protonInvocation, which knows the
-    // environment it wants as well; this is here for the sake of the rest.
+    // protonInvocation() passes the executable to Proton, along with the
+    // environment it needs; this field is only here for consistency.
     proton.arguments = QStringLiteral("run {file}");
     result << proton;
 
@@ -370,8 +368,8 @@ const QVector<Launcher> &launchers() {
 
 void setLaunchers(const QVector<Launcher> &updated) {
     QSettings settings;
-    // Written out whole: a runner deleted in the dialog has to leave, and the
-    // array it was in is the only record of it.
+    // Written out in full: a runner deleted in the dialog has to disappear,
+    // and this array is the only record of it.
     settings.remove(QStringLiteral("launchers"));
     for (const Launcher &launcher : updated) {
         settings.beginGroup(QStringLiteral("launchers/") + launcher.id);
@@ -392,9 +390,9 @@ void setLaunchers(const QVector<Launcher> &updated) {
             settings.setValue(QStringLiteral("cores"), pairs);
         }
 
-        // The wines and Proton builds among them are read off the machine
-        // each session, so they are left out: saving them would freeze a list
-        // that should follow what is installed.
+        // The wines and Proton builds are detected each session, so they are
+        // left out: saving them would freeze a list that has to follow what is
+        // installed.
         QVector<LauncherRunner> saved;
         for (const LauncherRunner &runner : launcher.runners) {
             if (!runner.discovered) saved.append(runner);
@@ -436,8 +434,8 @@ QVector<LauncherChoice> launchersFor(const QString &path) {
     QVector<LauncherChoice> choices;
     for (const Launcher *launcher : launchersForPath(path)) {
         for (const LauncherRunner &runner : launcher->runners) {
-            // The launcher, and the runner where there is a choice of them --
-            // but never a word twice, so a runner already called "Wine
+            // The launcher name, plus the runner name when there is a choice,
+            // without repeating a word: a runner already called "Wine
             // (system)" is not prefixed with "Wine" again.
             QString label = launcher->name;
             if (launcher->runners.size() > 1 && !runner.name.isEmpty()) {
@@ -463,12 +461,12 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
     const QStringList parts = id.split(QLatin1Char('/'), Qt::SkipEmptyParts);
     if (parts.size() >= 2) {
         if (const Launcher *named = launcherById(parts.first())) {
-            // Two parts is launcher and runner. A third is from when a
-            // profile sat between them, and the runner was the last.
+            // Two parts means launcher and runner. A third part comes from
+            // when a profile sat between them, the runner being last.
             const LauncherRunner *runner = named->runner(parts.last());
 
-            // Older still: the middle part was a wine profile that stood for
-            // a Proton build, and the build is where the item should go.
+            // Older still: the middle part was a wine profile standing for a
+            // Proton build, which is where the item should be sent.
             if (!runner) {
                 const QString legacy = legacyProtonProfiles()->value(parts.at(1));
                 if (!legacy.isEmpty()) {
@@ -490,8 +488,8 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
         }
     }
 
-    // Nothing asked for, or a launcher since renamed away: the first one
-    // claiming the type, started the way it leads with.
+    // Nothing named, or a launcher that no longer exists: use the first one
+    // claiming the type, with its default runner.
     const QVector<const Launcher *> claiming = launchersForPath(path);
     if (claiming.isEmpty()) return;
     const Launcher *launcher = claiming.first();
@@ -504,16 +502,16 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
 LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunner &runner,
                                    const QString &path, const QStringList &extraArgs) {
     const QString core = coreFor(launcher, path, runner);
-    // Steam is handed an app id rather than a file: the manifest the item
-    // points at is only where that id is written down.
+    // Steam takes an app id rather than a file; the manifest the item points
+    // at is only where that id is recorded.
     const QString appId = launcher.usesSteamLibraries ? steamAppId(path) : QString();
-    // The launcher's own line, with the file in it, then the item's.
+    // The launcher's own arguments, with the file substituted in, then the
+    // item's.
     const QStringList args = expand(launcher.arguments, path, core, appId) + extraArgs;
 
-    // A command that is neither on the PATH nor a path of its own can only
-    // be an alias or a shell function, whatever the setting says: starting it
-    // directly would fail every time, so it is looked for where such things
-    // live.
+    // A command that is neither on the PATH nor a path can only be an alias or
+    // a shell function, whatever the setting says: running it directly would
+    // always fail, so it is run through a shell regardless.
     const bool viaShell = runner.useShell ||
                           (!runner.command.contains(QLatin1Char('/')) &&
                            QStandardPaths::findExecutable(runner.command).isEmpty());
@@ -525,10 +523,10 @@ LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunne
         return call;
     }
 
-    // An alias or a shell function exists only inside an interactive shell,
-    // so one is started to run it. The arguments go through as positional
-    // parameters rather than being written into the command line, so that
-    // nothing in them is read as shell syntax.
+    // An alias or shell function only exists inside an interactive shell, so
+    // one is started to run it. The arguments are passed as positional
+    // parameters rather than written into the command line, so nothing in them
+    // is interpreted as shell syntax.
     call.program = QStringLiteral("bash");
     call.args = QStringList{QStringLiteral("-ic"),
                             runner.command + QStringLiteral(" \"$@\""), QStringLiteral("_")} +
