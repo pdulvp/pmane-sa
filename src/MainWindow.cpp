@@ -14,6 +14,7 @@
 #include "LaunchNotices.h"
 #include "MinimizedGroupIcon.h"
 #include "NotificationArea.h"
+#include "ScreenTransition.h"
 #include "TitleBar.h"
 #include "WindowEdges.h"
 #include "Theme.h"
@@ -25,6 +26,7 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QCloseEvent>
 #include <QDir>
 #include <QFile>
@@ -36,6 +38,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QMessageBox>
 
 #include <functional>
@@ -191,6 +194,8 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateWindowMenu);
     connect(m_mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onSubWindowActivated);
     m_mdiArea->viewport()->installEventFilter(this);
+    // Above the group windows, since those are children of the same viewport.
+    m_screenSlide = new ScreenTransition(m_mdiArea->viewport());
 }
 
 MainWindow::~MainWindow() {
@@ -740,12 +745,58 @@ void MainWindow::switchToScreen(const QString &name) {
         return;
     }
 
+    // Which way the slide runs: a screen further down the menu arrives from
+    // the right, one further up from the left.
+    const QStringList names = m_screens.names();
+    const int direction = names.indexOf(name) > names.indexOf(m_screens.current()) ? 1 : -1;
+
+    // The desktop as it stands, taken before anything is torn down. The
+    // overlay is a child of the viewport, so it is kept out of the picture.
+    QPixmap outgoing;
+    if (m_screenSlide && isVisible()) {
+        m_screenSlide->hide();
+        outgoing = m_mdiArea->viewport()->grab();
+        // Held over the desktop for the swap below, which empties it and
+        // fills it again. Any of that which reaches the screen is covered.
+        m_screenSlide->hold(outgoing);
+    }
+
     save();
     clearDesktop();
     m_screens.setCurrent(name);
     load();
     rebuildScreenMenu();
     updateWindowTitle();
+
+    if (!outgoing.isNull()) {
+        // The group windows just created are stacked above the overlay, which
+        // has to stay in front of them for the rest of this.
+        m_screenSlide->raise();
+
+        // A theme of its own on the screen arriving is applied through
+        // qApp->setPalette(), which posts its change events rather than
+        // sending them. Delivered here, so the picture taken next is the new
+        // desktop in its own colours instead of the old ones. Only what is
+        // already posted is delivered: no user input, no timers, so the
+        // switch cannot be re-entered from here. The repaint it also delivers
+        // lands under the overlay.
+        QCoreApplication::sendPostedEvents();
+
+        // The new desktop is already built and laid out; grab() paints it
+        // without waiting for the repaint it has queued. Hidden for the grab
+        // so it is not in its own picture, and shown again by run() before
+        // the event loop is reached, so the desktop is never uncovered.
+        m_screenSlide->hide();
+        const QPixmap incoming = m_mdiArea->viewport()->grab();
+        m_screenSlide->run(outgoing, incoming, direction);
+    }
+}
+
+void MainWindow::stepToNeighbourScreen(int step) {
+    const QStringList names = m_screens.names();
+    const int next = names.indexOf(m_screens.current()) + step;
+    if (next < 0 || next >= names.size()) return;
+    switchToScreen(names[next]);
 }
 
 void MainWindow::newScreen() {
@@ -1079,6 +1130,30 @@ void MainWindow::forgetEdits() {
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_mdiArea->viewport()) {
         if (event->type() == QEvent::Resize) arrangeMinimizedIcons();
+        // A wheel tilted left or right over the bare desktop steps through the
+        // screens. The vertical wheel is left to the MDI area, which scrolls
+        // the arrangement of group windows with it.
+        if (event->type() == QEvent::Wheel) {
+            auto *wheel = static_cast<QWheelEvent *>(event);
+            const int sideways = wheel->angleDelta().x();
+            if (sideways == 0) return QMainWindow::eventFilter(watched, event);
+
+            // A reversal is a new gesture, not a continuation of the last one.
+            if ((sideways > 0) != (m_wheelTravel > 0)) m_wheelTravel = 0;
+            m_wheelTravel += sideways;
+
+            // One notch, one screen, and no second step while the slide from
+            // the first is still running.
+            const int kNotch = 120;
+            if (qAbs(m_wheelTravel) >= kNotch &&
+                !(m_screenSlide && m_screenSlide->running())) {
+                // angleDelta().x() is positive when the wheel is tilted left,
+                // which goes back through the menu.
+                stepToNeighbourScreen(m_wheelTravel > 0 ? -1 : 1);
+                m_wheelTravel = 0;
+            }
+            return true;
+        }
         // A press that reaches the viewport landed on bare desktop; an icon
         // consumes its own presses.
         if (event->type() == QEvent::MouseButtonPress) {

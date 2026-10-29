@@ -52,6 +52,8 @@ set(PMANE_SOURCES
     src/MainWindow.h
     src/DesktopArea.cpp
     src/DesktopArea.h
+    src/ScreenTransition.cpp
+    src/ScreenTransition.h
     src/DialogChrome.cpp
     src/DialogChrome.h
     src/TextPromptDialog.cpp

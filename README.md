@@ -74,6 +74,10 @@ launcher is worked out from the extension.
 
 It allows to define several screens, the last one opened will be opened at startup
 
+Besides the **Screens** menu and Ctrl+1..9, a mouse wheel tilted left or right
+over the bare desktop moves to the previous or the next screen, which slides in
+from the side it comes from.
+
 ## Looks
 
 Twelve colour schemes — Harbour, Vellum, Orchard, Cobalt, Rhubarb, Tarmac,

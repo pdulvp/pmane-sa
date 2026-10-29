@@ -22,6 +22,7 @@ class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
 class NotificationArea;
+class ScreenTransition;
 class TitleBar;
 
 // The main "Program Manager" window: an MDI desktop holding Program Group
@@ -155,6 +156,19 @@ private:
     // The same while a group is being moved: the whole window is shifted onto
     // a neighbour's edge rather than one edge being held to it.
     void snapWhileMoving(QMdiSubWindow *sub, int reach = AlignmentGuides::kSnapDistance);
+
+    // Moves to the screen `step` places away in menu order, which is what a
+    // horizontal wheel step over the bare desktop does. Stops at either end:
+    // the list does not wrap.
+    void stepToNeighbourScreen(int step);
+
+    // The slide shown while one screen replaces another, drawn over the
+    // desktop. Created on the MDI area's viewport.
+    ScreenTransition *m_screenSlide = nullptr;
+    // Horizontal wheel movement not yet spent on a screen change. A notch is
+    // 120 units; a touchpad or a free-spinning wheel sends smaller amounts,
+    // which are added up here rather than taken as a step each.
+    int m_wheelTravel = 0;
 
     void minimizeToIcon(QMdiSubWindow *sub);
     void restoreFromIcon(QMdiSubWindow *sub);
