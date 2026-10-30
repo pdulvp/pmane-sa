@@ -95,8 +95,8 @@ set(PMANE_SOURCES
     src/Kiosk.h
     src/LaunchNotices.cpp
     src/LaunchNotices.h
-    src/LegacyConfig.cpp
-    src/LegacyConfig.h
+    src/LegacyPaths.cpp
+    src/LegacyPaths.h
     src/LibretroCores.cpp
     src/LibretroCores.h
     src/NotificationArea.cpp

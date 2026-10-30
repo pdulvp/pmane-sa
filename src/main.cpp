@@ -7,7 +7,7 @@
 #include <QLocalSocket>
 #include <QCryptographicHash>
 #include "MainWindow.h"
-#include "LegacyConfig.h"
+#include "LegacyPaths.h"
 #include "ScreenManager.h"
 #include "Version.h"
 #include "GroupCaptionStyle.h"
@@ -87,10 +87,11 @@ int main(int argc, char *argv[]) {
     const QString configPath = parser.value(configOption);
     ScreenManager::useConfigPath(configPath);
 
-    // An install made before the organisation was renamed keeps its settings
-    // in the old folder. Moved before anything reads them; a folder named on
-    // the command line is where it says it is and is left alone.
-    if (configPath.isEmpty()) migrateLegacyConfigFolder();
+    // An install made before the organisation was renamed keeps its settings,
+    // its wine prefixes and its logs in the old folders. Moved before anything
+    // reads them; a folder named on the command line is where it says it is
+    // and is left alone.
+    if (configPath.isEmpty()) migrateLegacyFolders();
 
     // Only one Program Manager at a time. The name is per-user so separate
     // logins do not collide over the socket in the temp directory. Screens

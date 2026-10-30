@@ -150,9 +150,11 @@ One instance per user: starting a second one raises the first, switching screen
 on the way if one was asked for.
 
 Settings live in `~/.config/pdulvp/pmane-sa/`: `screens.ini` indexes them and
-each screen is an `.ini` of its own. They were under `~/.config/pmane-sa/`
-before the organisation was renamed; an install from then has its folder moved
-across on the first run of this version.
+each screen is an `.ini` of its own. The wine prefixes are under
+`~/.local/share/pdulvp/pmane-sa/` and the launch logs under
+`~/.cache/pdulvp/pmane-sa/`. All three were under `pmane-sa/` before the
+organisation was renamed; an install from then has them moved across on the
+first run of this version, unless something is already using the new place.
 
 `--configPath` keeps that lot in a directory of your own instead, and opens as
 an instance of its own so it can sit beside the Program Manager already
