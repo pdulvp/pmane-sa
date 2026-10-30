@@ -58,11 +58,27 @@ guessing: a prefix no item on any screen leads to is the only kind called unused
   installed; without it the row says so.
 * **Shader** — a ReShade effect, for anyone who wants a CRT on a flat panel.
 * **Icon** — taken out of the executable itself (16-bit and 32-bit PE resources
-  both), or picked from a file; **XP style** gives it the raised look.
+  both), or picked from a file; **XP style** gives it the raised look. A file
+  that carries no artwork falls back to the icon set for its type, below.
 
 Right-clicking an item offers the same, plus Run, Duplicate and Delete:
 
 ![An item's menu](docs/images/item-menu.png)
+
+## Default icons
+
+A ROM, a disc image or a DOSBox config holds no artwork, so left alone every
+one of them is drawn with the same generic icon. **Options ▸ Default Icons**
+gives each file type an icon of its own, picked from the same listing the
+properties dialog uses:
+
+![Default Icons](docs/images/default-icons.png)
+
+The types listed are the ones the launchers claim, so a file type added to a
+launcher appears here by itself. What an item ends up with, in order: the icon
+picked for the item, then the artwork the file carries — an `.exe` dropped on a
+group keeps its own — then the icon set for its type, then the generic one.
+Changing a type's icon redraws the items already on screen.
 
 ## Filling a group
 

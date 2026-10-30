@@ -81,6 +81,8 @@ private slots:
     void editSettings();
     // The launcher programs and the file types each one handles.
     void editLaunchers();
+    // One icon per file type, for the files that carry none of their own.
+    void editDefaultIcons();
     void about();
     void newScreen();
     void duplicateScreen();

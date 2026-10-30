@@ -3,6 +3,7 @@
 #include "SearchProvider.h"
 
 #include "AlignmentGuides.h"
+#include "DefaultIconsDialog.h"
 #include "LaunchersDialog.h"
 #include "TextPromptDialog.h"
 #include "ApplicationPickerDialog.h"
@@ -248,6 +249,7 @@ void MainWindow::buildMenus() {
     QMenu *optionsMenu = bar->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Colors..."), this, &MainWindow::chooseColors);
     optionsMenu->addAction(tr("&Launchers..."), this, &MainWindow::editLaunchers);
+    optionsMenu->addAction(tr("Default &Icons..."), this, &MainWindow::editDefaultIcons);
     optionsMenu->addAction(tr("&Settings..."), this, &MainWindow::editSettings);
     optionsMenu->addSeparator();
     m_saveOnExitAction = optionsMenu->addAction(tr("&Save Settings on Exit"));
@@ -1470,6 +1472,21 @@ void MainWindow::editLaunchers() {
     // items on the desktop are unchanged, since their command line is built
     // each time they run.
     setLaunchers(dialog.launchers());
+}
+
+void MainWindow::editDefaultIcons() {
+    DefaultIconsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    setDefaultIcons(dialog.icons());
+
+    // The desktop in front of us is already drawn: the items that took their
+    // icon from a file type rather than from artwork of their own derive it
+    // again, so the change is visible without reopening the screen.
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (GroupWindow *gw = qobject_cast<GroupWindow *>(sub->widget())) {
+            gw->refreshDerivedIcons();
+        }
+    }
 }
 
 void MainWindow::chooseColors() {

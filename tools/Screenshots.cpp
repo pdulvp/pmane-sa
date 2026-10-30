@@ -27,6 +27,7 @@
 #include <QTimer>
 
 #include "ApplicationPickerDialog.h"
+#include "DefaultIconsDialog.h"
 #include "CalculatorPane.h"
 #include "CalendarPane.h"
 #include "GroupCaptionStyle.h"
@@ -242,6 +243,13 @@ int main(int argc, char *argv[]) {
         LaunchersDialog dialog(&window);
         dialog.setOpenScreen(window.currentScreen(), items);
         shoot(&dialog, QStringLiteral("launchers"));
+    }
+
+    // Options > Default Icons, one icon per file type for the files that
+    // carry none of their own.
+    {
+        DefaultIconsDialog dialog(&window);
+        shoot(&dialog, QStringLiteral("default-icons"));
     }
 
     // An item's properties. A Windows program, which is the case where every

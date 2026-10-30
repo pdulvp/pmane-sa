@@ -2,6 +2,7 @@
 
 #include "SteamLibrary.h"
 
+#include "DefaultIcons.h"
 #include "DesktopEntry.h"
 #include "Ids.h"
 #include "ItemKind.h"
@@ -200,13 +201,29 @@ void completeProgramItem(ProgramItem &it) {
         if (nameIsOurs(it)) it.name = QDir(it.command).dirName();
         if (it.icon.isNull()) it.icon = QIcon::fromTheme(QStringLiteral("folder"));
     } else if (isDocument(it.command)) {
-        // A document holds no artwork to extract, so it takes the icon the
-        // desktop gives its file type.
-        if (it.icon.isNull()) it.icon = mimeIcon(it.command);
+        // A document holds no artwork to extract; its icon comes from the
+        // default set for its file type, or from the desktop, both below.
     } else if (it.icon.isNull()) {
         it.icon = loadIconFile(it.command, -1, &it.legacyIcon);
         if (!it.icon.isNull()) it.iconSource = it.command;
     }
+
+    // The icon chosen for this file type in Options > Default Icons, which is
+    // what a ROM or a disc image ends up with: the file itself carries no
+    // artwork, and without this they would all share one generic icon. Below
+    // the artwork a file does carry, so an .exe keeps its own.
+    if (it.icon.isNull()) {
+        bool legacy = false;
+        const QIcon preset = defaultIconForPath(it.command, &legacy);
+        if (!preset.isNull()) {
+            it.icon = preset;
+            it.legacyIcon = legacy;
+        }
+    }
+
+    // A document takes the icon the desktop gives its file type, which is
+    // itself a default and so comes after the one set here.
+    if (it.icon.isNull() && isDocument(it.command)) it.icon = mimeIcon(it.command);
 
     // Failing that, the launcher that runs it may have an icon in the desktop
     // theme.

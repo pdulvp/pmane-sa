@@ -50,6 +50,10 @@ set(PMANE_SOURCES
     src/Version.h
     src/MainWindow.cpp
     src/MainWindow.h
+    src/DefaultIcons.cpp
+    src/DefaultIcons.h
+    src/DefaultIconsDialog.cpp
+    src/DefaultIconsDialog.h
     src/DesktopArea.cpp
     src/DesktopArea.h
     src/ScreenTransition.cpp

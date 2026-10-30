@@ -31,6 +31,11 @@ public:
     void insertProgramItem(const ProgramItem &item, int row);
     void newItemDialog() { showPropertiesDialog(-1); }
 
+    // Derives again the icons that were not picked by hand, which is what the
+    // default icon of a file type having changed calls for. An item whose icon
+    // was chosen in its properties keeps it.
+    void refreshDerivedIcons();
+
     // Migration for desktops saved when XP icon styling was a single
     // application-wide switch: it restyled the legacy-artwork items, and each
     // item now carries the setting itself.

@@ -73,6 +73,18 @@ void GroupWindow::clearSelection() {
     m_list->setCurrentItem(nullptr);
 }
 
+void GroupWindow::refreshDerivedIcons() {
+    for (ProgramItem &it : m_items) {
+        // An icon picked in the properties dialog is not derived at all.
+        if (it.iconIndex >= 0) continue;
+        it.icon = QIcon();
+        it.iconSource.clear();
+        it.legacyIcon = false;
+        completeProgramItem(it);
+    }
+    rebuildList();
+}
+
 void GroupWindow::adoptGlobalXpStyleIcons() {
     for (ProgramItem &it : m_items) it.xpStyleIcon = it.legacyIcon;
     rebuildList();
