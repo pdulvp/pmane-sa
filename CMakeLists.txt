@@ -95,6 +95,8 @@ set(PMANE_SOURCES
     src/Kiosk.h
     src/LaunchNotices.cpp
     src/LaunchNotices.h
+    src/LegacyConfig.cpp
+    src/LegacyConfig.h
     src/LibretroCores.cpp
     src/LibretroCores.h
     src/NotificationArea.cpp
@@ -198,7 +200,7 @@ install(FILES debian/copyright
 # places, so the two cannot diverge.
 set(CPACK_GENERATOR "DEB")
 set(CPACK_PACKAGE_NAME "pmane-sa")
-set(CPACK_PACKAGE_VENDOR "pmane-sa")
+set(CPACK_PACKAGE_VENDOR "pdulvp")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A Windows 3.1 Program Manager for Linux")
 # One string rather than a list: a list would reach the control file with the
 # joining semicolons still in it.

@@ -205,7 +205,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     // The same application identity the program runs under, so the launchers
     // read from QSettings are the configured ones rather than an empty set.
-    QApplication::setOrganizationName("pmane-sa");
+    QApplication::setOrganizationName("pdulvp");
     QApplication::setApplicationName("pmane-sa");
     QApplication::setApplicationVersion(fullVersion());
     QApplication::setStyle(new GroupCaptionStyle);

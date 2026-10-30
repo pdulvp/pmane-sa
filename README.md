@@ -149,8 +149,10 @@ pmane-sa [--screen <name>] [--configPath <dir>]
 One instance per user: starting a second one raises the first, switching screen
 on the way if one was asked for.
 
-Settings live in `~/.config/pmane-sa/`: `screens.ini` indexes them and
-each screen is an `.ini` of its own.
+Settings live in `~/.config/pdulvp/pmane-sa/`: `screens.ini` indexes them and
+each screen is an `.ini` of its own. They were under `~/.config/pmane-sa/`
+before the organisation was renamed; an install from then has its folder moved
+across on the first run of this version.
 
 `--configPath` keeps that lot in a directory of your own instead, and opens as
 an instance of its own so it can sit beside the Program Manager already

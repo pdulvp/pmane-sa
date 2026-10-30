@@ -7,6 +7,7 @@
 #include <QLocalSocket>
 #include <QCryptographicHash>
 #include "MainWindow.h"
+#include "LegacyConfig.h"
 #include "ScreenManager.h"
 #include "Version.h"
 #include "GroupCaptionStyle.h"
@@ -40,7 +41,7 @@ void ensureIconTheme() {
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    QApplication::setOrganizationName("pmane-sa");
+    QApplication::setOrganizationName("pdulvp");
     QApplication::setApplicationName("pmane-sa");
     // The version and its build stamp, reported by --version and Help > About.
     QApplication::setApplicationVersion(fullVersion());
@@ -85,6 +86,11 @@ int main(int argc, char *argv[]) {
     const QString screen = parser.value(screenOption);
     const QString configPath = parser.value(configOption);
     ScreenManager::useConfigPath(configPath);
+
+    // An install made before the organisation was renamed keeps its settings
+    // in the old folder. Moved before anything reads them; a folder named on
+    // the command line is where it says it is and is left alone.
+    if (configPath.isEmpty()) migrateLegacyConfigFolder();
 
     // Only one Program Manager at a time. The name is per-user so separate
     // logins do not collide over the socket in the temp directory. Screens
