@@ -102,14 +102,6 @@ QStringList splitExtensions(const QString &text) {
     return out;
 }
 
-void fillCoreTable(QTableWidget *table, const QVector<QPair<QString, QString>> &cores) {
-    table->setRowCount(cores.size());
-    for (int row = 0; row < cores.size(); ++row) {
-        table->setItem(row, 0, new QTableWidgetItem(cores[row].first));
-        table->setItem(row, 1, new QTableWidgetItem(cores[row].second));
-    }
-}
-
 // An id no other runner of this launcher uses. A runner keeps its id for life,
 // renames included, since that is what the items pointing at it store.
 QString uniqueRunnerId(const QStringList &taken, const QString &name) {
@@ -393,62 +385,6 @@ void LaunchersDialog::buildLauncherPage() {
         // Steam's own entries cannot be removed here.
         if (cell && cell->data(kDiscoveredRole).toBool()) return;
         m_libraries->removeRow(row);
-    });
-
-    // The cores an emulator plays each file type with, shared by every profile
-    // that has not set one of its own.
-    m_coresBox = new QWidget(m_launcherPage);
-    auto *coresLayout = new QVBoxLayout(m_coresBox);
-    coresLayout->setContentsMargins(0, 0, 0, 0);
-    coresLayout->setSpacing(kDialogRowSpacing);
-
-    m_coresDir = new QLineEdit(m_coresBox);
-    m_coresDir->setPlaceholderText(tr("Found beside the program when left empty"));
-    auto *coresBrowse = new QPushButton(tr("Browse..."), m_coresBox);
-    coresBrowse->setAutoDefault(false);
-    auto *coresDirRow = new QHBoxLayout;
-    coresDirRow->setSpacing(8);
-    coresDirRow->addWidget(new QLabel(tr("Cores folder:"), m_coresBox));
-    coresDirRow->addWidget(m_coresDir, 1);
-    coresDirRow->addWidget(coresBrowse);
-    coresLayout->addLayout(coresDirRow);
-
-    m_cores = new QTableWidget(0, 2, m_coresBox);
-    m_cores->setHorizontalHeaderLabels({tr("File type"), tr("Core")});
-    m_cores->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_cores->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_cores->verticalHeader()->setVisible(false);
-    m_cores->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_cores->setFrameShape(QFrame::NoFrame);
-    showAtMostFourRows(m_cores);
-    coresLayout->addWidget(m_cores);
-
-    auto *addCore = new QPushButton(tr("Add"), m_coresBox);
-    auto *removeCore = new QPushButton(tr("Remove"), m_coresBox);
-    addCore->setAutoDefault(false);
-    removeCore->setAutoDefault(false);
-    auto *coreButtons = new QHBoxLayout;
-    coreButtons->addStretch();
-    coreButtons->addWidget(addCore);
-    coreButtons->addWidget(removeCore);
-    coresLayout->addLayout(coreButtons);
-    layout->addWidget(m_coresBox);
-
-    connect(addCore, &QPushButton::clicked, this, [this] {
-        const int row = m_cores->rowCount();
-        m_cores->insertRow(row);
-        m_cores->setItem(row, 0, new QTableWidgetItem);
-        m_cores->setItem(row, 1, new QTableWidgetItem);
-        m_cores->editItem(m_cores->item(row, 0));
-    });
-    connect(removeCore, &QPushButton::clicked, this, [this] {
-        const int row = m_cores->currentRow();
-        if (row >= 0) m_cores->removeRow(row);
-    });
-    connect(coresBrowse, &QPushButton::clicked, this, [this] {
-        const QString dir = QFileDialog::getExistingDirectory(this, tr("Cores Folder"),
-                                                              m_coresDir->text());
-        if (!dir.isEmpty()) m_coresDir->setText(dir);
     });
 
     layout->addStretch();
@@ -982,18 +918,10 @@ void LaunchersDialog::commitCurrentPage() {
             launcher.libraryFolders = folders;
         }
 
-        if (!launcher.usesCores) return;
-        launcher.coresDir = m_coresDir->text().trimmed();
-        QVector<QPair<QString, QString>> cores;
-        for (int row = 0; row < m_cores->rowCount(); ++row) {
-            const QTableWidgetItem *extension = m_cores->item(row, 0);
-            const QTableWidgetItem *core = m_cores->item(row, 1);
-            if (!extension || !core) continue;
-            const QString type = extension->text().trimmed().toLower();
-            if (type.isEmpty() || core->text().trimmed().isEmpty()) continue;
-            cores.append({type, core->text().trimmed()});
-        }
-        launcher.cores = cores;
+        // An emulator's cores are not edited here: they are read from the
+        // install, and which one plays a file belongs to the item. The
+        // launcher's `coresDir` and `cores`, if an older version wrote any,
+        // are left as they are.
     }
 }
 
@@ -1037,7 +965,6 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
     // which grows the dialog to fit the pair, and a window is not shrunk back
     // when its contents need less.
     if (!launcher.usesSteamLibraries) m_librariesBox->hide();
-    if (!launcher.usesCores) m_coresBox->hide();
     if (!launcher.usesPrefixes) m_prefixesBox->hide();
 
     m_librariesBox->setVisible(launcher.usesSteamLibraries);
@@ -1052,9 +979,4 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
         }
     }
 
-    m_coresBox->setVisible(launcher.usesCores);
-    if (launcher.usesCores) {
-        m_coresDir->setText(launcher.coresDir);
-        fillCoreTable(m_cores, launcher.cores);
-    }
 }

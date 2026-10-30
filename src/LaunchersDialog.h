@@ -122,10 +122,6 @@ private:
     QPushButton *m_libraryAdd;
     QPushButton *m_libraryRemove;
 
-    QWidget *m_coresBox;
-    QLineEdit *m_coresDir;
-    QTableWidget *m_cores;
-
     // The launcher the visible fields belong to, so they can be written back
     // before another row replaces them.
     int m_editingLauncher = -1;

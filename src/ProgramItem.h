@@ -28,6 +28,13 @@ struct ProgramItem {
     // the ones set up in Options > Launchers. Empty, or a profile since
     // deleted, means its launcher's default.
     QString launcher;
+    // Which emulator core plays it, by the core's file name, e.g.
+    // "dolphin_libretro.so". Empty means the one the launcher's table gives
+    // the file type, which is what every item of a desktop made before cores
+    // could be picked per item uses. Several cores often claim one extension:
+    // an .iso is a GameCube disc to Dolphin and a PSP one to PPSSPP, and only
+    // the item can say which it is.
+    QString core;
     // Which of the launcher's named wine prefixes it runs in. Empty, the usual
     // case, or a name since removed from the launcher, means the per-item
     // prefix every program gets.

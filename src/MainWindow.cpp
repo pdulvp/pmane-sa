@@ -67,6 +67,9 @@ void writeProgramItem(QSettings &settings, const ProgramItem &item) {
     // Stored only when the item shares a named prefix; otherwise it uses its
     // own, derived from the id.
     if (!item.prefix.isEmpty()) settings.setValue("prefix", item.prefix);
+    // Stored only when a core was picked for it; otherwise the launcher's
+    // table decides by file type.
+    if (!item.core.isEmpty()) settings.setValue("core", item.core);
     // Stored only when the user picked one of the several icons in the file.
     if (item.iconIndex >= 0) {
         settings.setValue("iconIndex", item.iconIndex);
@@ -99,6 +102,7 @@ ProgramItem readProgramItem(const QSettings &settings) {
     item.arguments = settings.value("arguments").toString();
     item.launcher = settings.value("launcher").toString();
     item.prefix = settings.value("prefix").toString();
+    item.core = settings.value("core").toString();
     item.iconIndex = settings.value("iconIndex", -1).toInt();
     item.iconSource = settings.value("iconSource").toString();
     item.xpStyleIcon = settings.value("xpStyleIcon", false).toBool();

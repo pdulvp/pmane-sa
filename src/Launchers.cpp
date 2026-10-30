@@ -1,6 +1,7 @@
 #include "Launchers.h"
 
 #include "CompatTools.h"
+#include "LibretroCores.h"
 #include "SteamLibrary.h"
 
 #include <QCoreApplication>
@@ -29,49 +30,90 @@ const char *kProtonId = "proton";
 const char *kWinePrefix = "wine:";
 const char *kProtonPrefix = "proton:";
 
-// Where an emulator keeps its cores when no folder is configured: a libretro
-// install puts them in a `cores` directory beside the binary. An alias is
-// resolved through the shell, which is the only thing that knows it.
-QString coresDirFor(const Launcher &launcher, const LauncherRunner &runner) {
-    if (!launcher.coresDir.isEmpty()) return launcher.coresDir;
+} // namespace
 
-    // Beside this runner's own binary: two RetroArch installs each keep their
-    // cores in their own folder.
+QString resolvedRunnerCommand(const LauncherRunner &runner) {
+    // Cached: an alias is resolved by asking an interactive shell, which costs
+    // the best part of a second and is asked for again by every launch, every
+    // core scan and every properties dialog.
+    static QHash<QString, QString> cache;
+    const QString key = runner.id + QLatin1Char('|') + runner.command;
+    const auto found = cache.constFind(key);
+    if (found != cache.constEnd()) return *found;
+
+    QString resolved;
     if (runner.command.startsWith(QLatin1Char('/'))) {
-        const QString cores = QFileInfo(runner.command).absolutePath() + QStringLiteral("/cores");
-        if (QDir(cores).exists()) return cores;
+        resolved = runner.command;
+    } else {
+        resolved = QStandardPaths::findExecutable(runner.command);
     }
 
-    QString binary = QStandardPaths::findExecutable(runner.command);
-    if (binary.isEmpty() && runner.useShell) {
+    // An alias is known to the shell and nowhere else, and its definition is
+    // a whole command line: the Lutris RetroArch is an alias carrying the
+    // `--config` of the install it belongs to, which is the only thing that
+    // says where its cores are.
+    if (resolved.isEmpty() && runner.useShell) {
         QProcess probe;
         probe.start(QStringLiteral("bash"),
                     {QStringLiteral("-ic"), QStringLiteral("alias %1").arg(runner.command)});
         if (probe.waitForFinished(3000)) {
             const QString definition = QString::fromLocal8Bit(probe.readAllStandardOutput());
-            static const QRegularExpression path(QStringLiteral("(/[^\\s'\"]+)"));
-            const QRegularExpressionMatch match = path.match(definition);
-            if (match.hasMatch()) binary = match.captured(1);
+            // alias name='<command line>'
+            static const QRegularExpression body(QStringLiteral("='(.*)'\\s*$"));
+            const QRegularExpressionMatch quoted = body.match(definition.trimmed());
+            if (quoted.hasMatch()) {
+                resolved = quoted.captured(1);
+            } else {
+                // Defined without quotes, or printed some other way: the first
+                // absolute path in it is the program.
+                static const QRegularExpression path(QStringLiteral("(/[^\\s'\"]+)"));
+                const QRegularExpressionMatch match = path.match(definition);
+                if (match.hasMatch()) resolved = match.captured(1);
+            }
         }
     }
-    if (binary.isEmpty()) return {};
 
+    cache.insert(key, resolved);
+    return resolved;
+}
+
+QString resolvedRunnerBinary(const LauncherRunner &runner) {
+    const QStringList parts = QProcess::splitCommand(resolvedRunnerCommand(runner));
+    return parts.isEmpty() ? QString() : parts.first();
+}
+
+QString coresFolderFor(const Launcher &launcher, const LauncherRunner &runner) {
+    if (!launcher.coresDir.isEmpty()) return launcher.coresDir;
+
+    // Beside this runner's own program: two RetroArch installs each keep their
+    // cores in their own folder.
+    const QString binary = resolvedRunnerBinary(runner);
+    if (binary.isEmpty()) return {};
     const QString cores = QFileInfo(binary).absolutePath() + QStringLiteral("/cores");
     return QDir(cores).exists() ? cores : QString();
 }
 
-// The full path of the core to play this file with, taken from the launcher's
-// core table. Empty when the table has no entry for the file type, in which
-// case the program is started without one.
-QString coreFor(const Launcher &launcher, const QString &path, const LauncherRunner &runner) {
+namespace {
+
+// The full path of the core to play this file with: the one the item names,
+// else the one the launcher's table gives the file type. Empty when neither
+// leads to an installed core, in which case the program is started without
+// one -- RetroArch then comes up on its own menu, which is better than loading
+// a core meant for another system.
+QString coreFor(const Launcher &launcher, const QString &path, const LauncherRunner &runner,
+                const QString &chosenCore) {
     if (!launcher.usesCores) return {};
 
-    QString core;
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    for (const auto &entry : launcher.cores) {
-        if (entry.first.compare(suffix, Qt::CaseInsensitive) == 0) {
-            core = entry.second;
-            break;
+    QString core = chosenCore;
+    if (core.isEmpty()) {
+        // No core of its own: every item of a desktop made before they could
+        // be picked per item is in this case.
+        const QString suffix = QFileInfo(path).suffix().toLower();
+        for (const auto &entry : launcher.cores) {
+            if (entry.first.compare(suffix, Qt::CaseInsensitive) == 0) {
+                core = entry.second;
+                break;
+            }
         }
     }
     if (core.isEmpty()) return {};
@@ -79,7 +121,9 @@ QString coreFor(const Launcher &launcher, const QString &path, const LauncherRun
     // A core already given as a path is used as it is.
     if (core.startsWith(QLatin1Char('/'))) return QFile::exists(core) ? core : QString();
 
-    const QString dir = coresDirFor(launcher, runner);
+    // Named by its file name, so it is looked for in the folder of the install
+    // that is about to load it.
+    const QString dir = coresFolderFor(launcher, runner);
     if (dir.isEmpty()) return {};
     const QString full = QDir(dir).filePath(core);
     return QFile::exists(full) ? full : QString();
@@ -445,9 +489,20 @@ QVector<LauncherChoice> launchersFor(const QString &path) {
                     label = launcher->name + QStringLiteral(" - ") + runner.name;
                 }
             }
-            choices.append({launcherId(*launcher, runner), label, launcher->usesPrefixes,
-                            launcher->prefixes, launcher->usesWindowScale,
-                            launcher->usesDpiScale, launcher->usesArguments});
+            LauncherChoice choice;
+            choice.id = launcherId(*launcher, runner);
+            choice.label = label;
+            choice.usesPrefixes = launcher->usesPrefixes;
+            choice.prefixes = launcher->prefixes;
+            choice.usesWindowScale = launcher->usesWindowScale;
+            choice.usesDpiScale = launcher->usesDpiScale;
+            choice.usesArguments = launcher->usesArguments;
+            // The cores of this install that play this file, which is what the
+            // properties dialog offers. Scanned once per install and then
+            // cached, so listing the launchers stays cheap.
+            choice.usesCores = launcher->usesCores;
+            if (launcher->usesCores) choice.cores = libretroCoresFor(*launcher, runner, path);
+            choices.append(choice);
         }
     }
     return choices;
@@ -500,8 +555,9 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
 }
 
 LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunner &runner,
-                                   const QString &path, const QStringList &extraArgs) {
-    const QString core = coreFor(launcher, path, runner);
+                                   const QString &path, const QStringList &extraArgs,
+                                   const QString &chosenCore) {
+    const QString core = coreFor(launcher, path, runner, chosenCore);
     // Steam takes an app id rather than a file; the manifest the item points
     // at is only where that id is recorded.
     const QString appId = launcher.usesSteamLibraries ? steamAppId(path) : QString();

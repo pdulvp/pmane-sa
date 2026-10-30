@@ -238,7 +238,7 @@ QString launchProgramItem(const ProgramItem &item) {
         // substituted in, and an interactive shell around it when the program
         // is an alias.
         const LauncherCommand command =
-            launcherCommandFor(*launcher, *runner, item.command, extraArgs);
+            launcherCommandFor(*launcher, *runner, item.command, extraArgs, item.core);
         call.program = command.program;
         call.args = command.args;
         // Names the program actually started, which is what would have to be

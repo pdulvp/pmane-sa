@@ -356,7 +356,7 @@ void writeItem(QDataStream &stream, const ProgramItem &item) {
     stream << item.id << item.name << item.customName << item.command << item.arguments
            << item.launcher << item.prefix << item.windowScalePercent
            << int(item.windowScaleMode) << item.nativeSize << item.shader << item.legacyIcon
-           << item.xpStyleIcon << item.iconIndex << item.iconSource;
+           << item.xpStyleIcon << item.iconIndex << item.iconSource << item.core;
 }
 
 ProgramItem readItem(QDataStream &stream) {
@@ -365,7 +365,7 @@ ProgramItem readItem(QDataStream &stream) {
     stream >> item.id >> item.name >> item.customName >> item.command >> item.arguments >>
         item.launcher >> item.prefix >> item.windowScalePercent >> scaleMode >>
         item.nativeSize >> item.shader >> item.legacyIcon >> item.xpStyleIcon >>
-        item.iconIndex >> item.iconSource;
+        item.iconIndex >> item.iconSource >> item.core;
     item.windowScaleMode = scaleMode == int(WindowScaleMode::WineDpi)
                                ? WindowScaleMode::WineDpi
                                : WindowScaleMode::Gamescope;

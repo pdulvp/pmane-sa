@@ -15,6 +15,7 @@
 #include "ItemKind.h"
 #include "PeIconExtractor.h"
 #include "Launchers.h"
+#include "LibretroCores.h"
 #include "DialogChrome.h"
 
 #include <QCheckBox>
@@ -100,6 +101,18 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     connect(m_prefixCombo, &QComboBox::currentIndexChanged, this,
             [this](int) { m_prefixName = m_prefixCombo->currentData().toString(); });
 
+    // Which core plays it. Several cores usually claim one file type -- an
+    // .iso is a GameCube disc to one and a PSP one to another -- so the choice
+    // belongs to the item, as the install it runs under does.
+    m_coreCombo = new QComboBox(this);
+    m_coreCombo->setToolTip(
+        tr("The emulator core this item is played by, out of those the chosen install "
+           "has for this kind of file. Left at its default, the core set for the file "
+           "type in Options > Launchers is used."));
+    m_form->addRow(tr("Core:"), m_coreCombo);
+    connect(m_coreCombo, &QComboBox::currentIndexChanged, this,
+            [this](int) { m_coreName = m_coreCombo->currentData().toString(); });
+
     // How large to run it. A program written for a 640x480 screen is tiny on a
     // modern one, and wine cannot scale it, so the program is run inside
     // gamescope, which draws it at its own size and scales the output.
@@ -173,6 +186,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
     connect(m_launcherCombo, &QComboBox::currentIndexChanged, this, [this](int) {
         updateArgumentsRow();
         updatePrefixRow();
+        updateCoreRow();
         updateScaleRow();
     });
     updateLauncherVisibility();
@@ -197,6 +211,7 @@ void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_scaleMode = item.windowScaleMode;
     m_shaderName = item.shader;
     m_prefixName = item.prefix;
+    m_coreName = item.core;
     populateLaunchers(item.launcher);
     m_xpStyleCheck->setChecked(item.xpStyleIcon);
     updateLauncherVisibility();
@@ -330,6 +345,53 @@ void ItemPropertiesDialog::updatePrefixRow() {
     if (usesPrefixes == m_prefixRowShown) return;
     m_prefixRowShown = usesPrefixes;
     m_form->setRowVisible(m_prefixCombo, usesPrefixes);
+    resize(width(), sizeHint().height());
+}
+
+void ItemPropertiesDialog::updateCoreRow() {
+    // The cores belong to the install, not to the family, so the list follows
+    // the current selection the way the prefixes do: a file type claimed by
+    // two RetroArch builds offers each build's own cores.
+    bool usesCores = false;
+    QVector<LibretroCore> cores;
+    const QString selected = m_launcherCombo->currentData().toString();
+    for (const LauncherChoice &choice : launchersFor(m_commandEdit->text().trimmed())) {
+        if (choice.id == selected) {
+            usesCores = choice.usesCores;
+            cores = choice.cores;
+            break;
+        }
+    }
+
+    {
+        const QSignalBlocker blocker(m_coreCombo);
+        m_coreCombo->clear();
+        // An empty value leaves it to the launcher's table, which is what
+        // every item made before this row existed is set to.
+        m_coreCombo->addItem(tr("Default (by file type)"), QString());
+        for (const LibretroCore &core : cores) {
+            m_coreCombo->addItem(core.displayName, core.file);
+            if (!core.systemName.isEmpty()) {
+                m_coreCombo->setItemData(m_coreCombo->count() - 1, core.systemName,
+                                         Qt::ToolTipRole);
+            }
+        }
+
+        const int found = m_coreCombo->findData(m_coreName);
+        if (found < 0 && !m_coreName.isEmpty()) {
+            // Named by the item but not in the install any more, or not
+            // claiming this file type. Kept, so opening the dialog cannot
+            // quietly hand a game to another emulator.
+            m_coreCombo->addItem(tr("%1 (no longer installed)").arg(m_coreName), m_coreName);
+            m_coreCombo->setCurrentIndex(m_coreCombo->count() - 1);
+        } else {
+            m_coreCombo->setCurrentIndex(qMax(found, 0));
+        }
+    }
+
+    if (usesCores == m_coreRowShown) return;
+    m_coreRowShown = usesCores;
+    m_form->setRowVisible(m_coreCombo, usesCores);
     resize(width(), sizeHint().height());
 }
 
@@ -535,6 +597,7 @@ void ItemPropertiesDialog::updateLauncherVisibility() {
     // Updated after the list was refilled, which may have moved the selection.
     updateArgumentsRow();
     updatePrefixRow();
+    updateCoreRow();
     updateScaleRow();
 
     if (show == m_launcherRowShown) return;
@@ -561,6 +624,7 @@ ProgramItem ItemPropertiesDialog::item() const {
     it.shader = m_shaderCombo->currentData().toString();
     it.launcher = m_launcherCombo->currentData().toString();
     it.prefix = m_prefixName;
+    it.core = m_coreName;
     it.xpStyleIcon = m_xpStyleCheck->isChecked();
     return it;
 }

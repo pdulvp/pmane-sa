@@ -95,6 +95,8 @@ set(PMANE_SOURCES
     src/Kiosk.h
     src/LaunchNotices.cpp
     src/LaunchNotices.h
+    src/LibretroCores.cpp
+    src/LibretroCores.h
     src/NotificationArea.cpp
     src/NotificationArea.h
     src/PeIconExtractor.cpp

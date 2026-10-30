@@ -43,6 +43,11 @@ private:
     // named ones set up on the launcher. The row is shown only for launchers
     // that use prefixes.
     void updatePrefixRow();
+    // The cores of the chosen install that play this file, read from the
+    // install itself. The row is shown only for an emulator that has to be
+    // told a core, and an .iso offering Dolphin and PPSSPP is the reason it is
+    // per item rather than per file type.
+    void updateCoreRow();
     // Shows the arguments row only where the item's own arguments reach the
     // program, which means a Windows program started by wine or a Proton
     // build. The other launchers are given a file or an id they determine
@@ -68,6 +73,8 @@ private:
     // Which wine prefix it runs in: its own, or one of the launcher's named
     // ones, for programs meant to share a prefix.
     QComboBox *m_prefixCombo;
+    // Which libretro core plays it, out of those the chosen install has.
+    QComboBox *m_coreCombo;
     // Scaling, for the launchers that run Windows programs: the factor, the
     // size the program draws at, and the button that measures it.
     QWidget *m_scaleRow;
@@ -86,6 +93,9 @@ private:
     // The chosen prefix, held separately from the combo box for the same reason
     // as the scale: the list is rebuilt whenever the launcher changes.
     QString m_prefixName;
+    // The chosen core, held separately from its combo box for the same reason:
+    // the list is rebuilt whenever the launcher changes.
+    QString m_coreName;
     QLabel *m_iconPreview;
     QCheckBox *m_xpStyleCheck;
     QFormLayout *m_form;
@@ -101,6 +111,7 @@ private:
     bool m_argumentsRowShown = true;
     bool m_launcherRowShown = true;
     bool m_prefixRowShown = true;
+    bool m_coreRowShown = true;
     bool m_scaleRowShown = true;
     // The item being edited, carrying the fields the dialog does not show, its
     // icon and icon source, through to item().

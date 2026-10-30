@@ -1,5 +1,7 @@
 #pragma once
 
+#include "LibretroCores.h"
+
 #include <QPair>
 #include <QString>
 #include <QStringList>
@@ -86,8 +88,11 @@ struct Launcher {
     // listed here: it has no name and is not removable from the dialog.
     QStringList prefixes;
 
-    // Emulator cores by file type: which core plays a .nes, which a .gba. An
-    // empty `coresDir` means it is derived from the program's location.
+    // Emulator cores by file type, as a version that had no core per item
+    // wrote them: which core plays a .nes, which a .gba, and the folder they
+    // are in. Read and never written now -- an item names its own core, out of
+    // what the install has -- and kept only so that an item carrying no core
+    // runs the core its file type used to give it.
     QString coresDir;
     QVector<QPair<QString, QString>> cores;
 
@@ -118,6 +123,19 @@ const Launcher *launcherById(const QString &id);
 // before Proton for a .exe.
 QVector<const Launcher *> launchersForPath(const QString &path);
 
+// The command line behind a runner: the program it names when that can be
+// found, else the definition of the alias it is, which carries arguments of
+// its own. Resolved once and kept for the session.
+QString resolvedRunnerCommand(const LauncherRunner &runner);
+// Just the program of it.
+QString resolvedRunnerBinary(const LauncherRunner &runner);
+
+// The folder an emulator loads its cores from: the one configured for the
+// family, else the `cores` directory beside this runner's own program, since a
+// runner is an install. Empty when neither is found, and meaningless for a
+// launcher that uses no cores.
+QString coresFolderFor(const Launcher &launcher, const LauncherRunner &runner);
+
 // The id an item stores for what runs it, naming both the launcher and the
 // runner so that a saved desktop is readable and unambiguous.
 QString launcherId(const Launcher &launcher, const LauncherRunner &runner);
@@ -138,6 +156,11 @@ struct LauncherChoice {
     bool usesDpiScale = false;
     // Whether the item's own arguments reach the program it starts.
     bool usesArguments = false;
+    // Whether it is an emulator that has to be told a core, and the cores of
+    // that install which play the file, by display name. Discovered from the
+    // install rather than configured; see LibretroCores.h.
+    bool usesCores = false;
+    QVector<LibretroCore> cores;
 };
 // Everything that can open this file: every runner of every launcher claiming
 // it, so an item can be pointed at one of them.
@@ -157,5 +180,8 @@ struct LauncherCommand {
     QString program;
     QStringList args;
 };
+// `chosenCore` is the core the item named, empty for an item that named none,
+// which then gets the one the launcher's table gives its file type.
 LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunner &runner,
-                                   const QString &path, const QStringList &extraArgs);
+                                   const QString &path, const QStringList &extraArgs,
+                                   const QString &chosenCore = QString());

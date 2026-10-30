@@ -31,7 +31,7 @@ what each one is given to work with, is the **Options ▸ Launchers** dialog:
 | **Proton** | `.exe` — any Proton build dropped into Steam's `compatibilitytools.d` |
 | **DOSBox** | `.conf` |
 | **ScummVM** | `.trs` |
-| **RetroArch** | ROMs, with a libretro core picked per file extension |
+| **RetroArch** | ROMs, with the core picked per item from those the install has |
 | **Steam** | games read out of the installed Steam libraries |
 
 ![The Launchers dialog](docs/images/launchers.png)
@@ -45,6 +45,13 @@ guessing: a prefix no item on any screen leads to is the only kind called unused
 
 * **Run with** — any of the launchers above, or nothing, to run the file itself.
 * **Prefix** — a Windows install of its own, or one shared by name.
+* **Core** — for a RetroArch item, which core plays it. The list is the cores
+  that install actually has for the file type, under the names their `.info`
+  files give them, read from the `retroarch.cfg` the build starts with — so
+  there is nothing to set up, and each RetroArch in **Run with** offers its
+  own. A `.iso` is a GameCube disc to Dolphin and a PSP one to PPSSPP, which is
+  why the choice belongs to the item: one `.iso` runs under Dolphin and the
+  next under PPSSPP.
 * **Window size** — a program written for a 640×480 screen is run inside
   `gamescope`, which renders it at its own size and scales the picture out. The
   size can be measured from the program rather than typed. Needs gamescope
