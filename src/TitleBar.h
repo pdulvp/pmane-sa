@@ -4,6 +4,7 @@
 
 class CalculatorPane;
 class CalendarPane;
+class ClockPane;
 class QLabel;
 class QMenuBar;
 class QSlider;
@@ -58,7 +59,7 @@ protected:
 
 private:
     void toggleMaximized();
-    // The time and date, in the system's own format.
+    // The time and the date, in the system's own format, each in its own label.
     void updateClock();
     void updateMaximizeButton();
     // Reads the mixer onto the slider and the button. The volume belongs to the
@@ -99,8 +100,14 @@ private:
     QToolButton *m_calculatorButton = nullptr;
     CalculatorPane *m_calculator = nullptr;
 
+    // The time and the date read as one thing but open different panes, so they
+    // are two labels: the clock face drops out of the time, the month out of
+    // the date.
     QLabel *m_clock;
-    // Drops out of the clock: the month, with the events from the desktop's
+    QLabel *m_date;
+    // Drops out of the time: the dial with its hands. Built on first use.
+    ClockPane *m_clockFace = nullptr;
+    // Drops out of the date: the month, with the events from the desktop's
     // calendars. Built on first use.
     CalendarPane *m_calendar = nullptr;
     QToolButton *m_minimizeButton;

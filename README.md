@@ -111,9 +111,11 @@ worked out from its own colours rather than picked separately.
 
 ## The strip along the top
 
-A clock that drops open into a month, a volume slider, a calculator, and a
-magnifier that hands the search over to the desktop shell. Each one can be
-turned off.
+A clock whose time drops open into a dial and whose date drops open into a
+month, a volume slider, a calculator, and a magnifier that hands the search
+over to the desktop shell. Each one can be turned off.
+
+![The clock](docs/images/clock.png)
 
 ![The calendar](docs/images/calendar.png)
 

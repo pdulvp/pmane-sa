@@ -137,6 +137,8 @@ set(PMANE_SOURCES
     src/CalendarPane.h
     src/CalculatorPane.cpp
     src/CalculatorPane.h
+    src/ClockPane.cpp
+    src/ClockPane.h
     src/SearchProvider.cpp
     src/SearchProvider.h
     src/SteamGamePickerDialog.cpp

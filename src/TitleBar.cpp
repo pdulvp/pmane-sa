@@ -2,6 +2,7 @@
 
 #include "CalculatorPane.h"
 #include "CalendarPane.h"
+#include "ClockPane.h"
 #include "DesktopShell.h"
 #include "Kiosk.h"
 #include "SystemVolume.h"
@@ -36,6 +37,10 @@ constexpr int kTitleMargin = 12;
 // Space around the clock, so it reads as separate from the title and the
 // buttons.
 constexpr int kClockMargin = 10;
+
+// Between the time and the date, which are two labels and must still read as
+// one reading of the clock rather than as two fields.
+constexpr int kClockGap = 12;
 
 // The volume slider: long enough to be usable, short enough to leave the title
 // the middle of the strip.
@@ -118,15 +123,23 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     m_calculatorButton = captionButton(this, QStyle::SP_FileDialogDetailedView);
     m_calculatorButton->setToolTip(tr("Calculator"));
 
+    // The time and the date, each opening its own pane: the dial drops out of
+    // the time and the month out of the date, as the desktop's own clock opens
+    // the month. Since the strip is used for dragging, both need a pointing
+    // cursor to show that they are clickable.
     m_clock = new QLabel(this);
-    m_clock->setContentsMargins(kClockMargin, 0, kClockMargin, 0);
+    m_clock->setContentsMargins(kClockMargin, 0, 0, 0);
     m_clock->setAlignment(Qt::AlignCenter);
-    // Clicking the date opens the month below it, as the desktop's own clock
-    // does. Since the strip is used for dragging, the clock needs a pointing
-    // cursor to show that it is clickable.
     m_clock->setCursor(Qt::PointingHandCursor);
-    m_clock->setToolTip(tr("Show the month"));
+    m_clock->setToolTip(tr("Show the clock"));
     m_clock->installEventFilter(this);
+
+    m_date = new QLabel(this);
+    m_date->setContentsMargins(kClockGap, 0, kClockMargin, 0);
+    m_date->setAlignment(Qt::AlignCenter);
+    m_date->setCursor(Qt::PointingHandCursor);
+    m_date->setToolTip(tr("Show the month"));
+    m_date->installEventFilter(this);
     updateClock();
 
     auto *clockTimer = new QTimer(this);
@@ -165,6 +178,7 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     }
     layout->addWidget(m_calculatorButton);
     layout->addWidget(m_clock);
+    layout->addWidget(m_date);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
     layout->addWidget(m_closeButton);
@@ -241,8 +255,14 @@ void TitleBar::applyKioskSettings() {
         // that button.
         if (!kiosk.showCalculator && m_calculator) m_calculator->hide();
     }
+    // The one setting governs the whole reading of the clock, the time and the
+    // date together, as it did when they were a single label.
     m_clock->setVisible(kiosk.showCalendar);
-    if (!kiosk.showCalendar && m_calendar) m_calendar->hide();
+    m_date->setVisible(kiosk.showCalendar);
+    if (!kiosk.showCalendar) {
+        if (m_clockFace) m_clockFace->hide();
+        if (m_calendar) m_calendar->hide();
+    }
 
     // The buttons follow too: the lock is precisely about whether the window
     // can leave full screen.
@@ -253,6 +273,7 @@ void TitleBar::applyPalette(const QPalette &palette) {
     setPalette(palette);
     m_menuBar->setPalette(palette);
     m_clock->setPalette(palette);
+    m_date->setPalette(palette);
     // The strip's text colour, black or white according to how dark the desktop
     // colour is; its icons are tinted to match.
     const QColor ink = palette.color(QPalette::WindowText);
@@ -335,6 +356,7 @@ QRect TitleBar::titleArea() const {
                                   static_cast<const QWidget *>(m_volumeButton),
                                   static_cast<const QWidget *>(m_calculatorButton),
                                   static_cast<const QWidget *>(m_clock),
+                                  static_cast<const QWidget *>(m_date),
                                   static_cast<const QWidget *>(m_minimizeButton),
                                   static_cast<const QWidget *>(m_maximizeButton),
                                   static_cast<const QWidget *>(m_closeButton)}) {
@@ -406,12 +428,11 @@ void TitleBar::updateVolumeIcon(int value, bool muted) {
 void TitleBar::updateClock() {
     const QLocale locale = QLocale::system();
     const QDateTime now = QDateTime::currentDateTime();
-    // The system's short time and date formats. The label ignores text it is
+    // The system's short time and date formats. A label ignores text it is
     // already showing, so the updates in between cost nothing.
-    m_clock->setText(QStringLiteral("%1   %2")
-                         .arg(locale.toString(now.time(), QLocale::ShortFormat),
-                              locale.toString(now.date(), QLocale::ShortFormat)));
-    m_clock->setToolTip(locale.toString(now.date(), QLocale::LongFormat));
+    m_clock->setText(locale.toString(now.time(), QLocale::ShortFormat));
+    m_date->setText(locale.toString(now.date(), QLocale::ShortFormat));
+    m_date->setToolTip(locale.toString(now.date(), QLocale::LongFormat));
 }
 
 void TitleBar::mousePressEvent(QMouseEvent *event) {
@@ -491,15 +512,26 @@ void TitleBar::updateMaximizeButton() {
 }
 
 bool TitleBar::eventFilter(QObject *watched, QEvent *event) {
-    // Clicking the clock opens the month below it. Built on first click rather
-    // than with the strip, since most sessions never open it and building it
-    // queries the calendar service.
+    // Clicking the time opens the dial below it, and clicking the date the
+    // month. Both are built on first click rather than with the strip: most
+    // sessions open neither, and building the month queries the calendar
+    // service.
     if (watched == m_clock && event->type() == QEvent::MouseButtonPress) {
+        if (!m_clockFace) m_clockFace = new ClockPane(this);
+        if (m_clockFace->isVisible()) {
+            m_clockFace->hide();
+        } else {
+            m_clockFace->popUpAt(m_clock);
+        }
+        return true;
+    }
+
+    if (watched == m_date && event->type() == QEvent::MouseButtonPress) {
         if (!m_calendar) m_calendar = new CalendarPane(this);
         if (m_calendar->isVisible()) {
             m_calendar->hide();
         } else {
-            m_calendar->popUpAt(m_clock);
+            m_calendar->popUpAt(m_date);
         }
         return true;
     }

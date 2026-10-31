@@ -30,6 +30,7 @@
 #include "DefaultIconsDialog.h"
 #include "CalculatorPane.h"
 #include "CalendarPane.h"
+#include "ClockPane.h"
 #include "GroupCaptionStyle.h"
 #include "GroupWindow.h"
 #include "IconListWidget.h"
@@ -327,8 +328,11 @@ int main(int argc, char *argv[]) {
         shoot(&dialog, QStringLiteral("settings"));
     }
 
-    // The two panes the strip along the top opens.
+    // The three panes the strip along the top opens.
     {
+        ClockPane clock(&window);
+        shoot(&clock, QStringLiteral("clock"));
+
         CalendarPane calendar(&window);
         shoot(&calendar, QStringLiteral("calendar"));
 
