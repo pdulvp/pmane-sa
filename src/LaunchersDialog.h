@@ -99,11 +99,16 @@ private:
     QWidget *m_launcherPage;
     QLineEdit *m_extensions;
     QFormLayout *m_launcherForm;
+    // The programs that can act as the launcher, hidden for one that opens its
+    // files with the desktop's default application and has none to list.
+    QWidget *m_runnersBox;
     QLabel *m_runnersTitle;
     QTableWidget *m_runners;
     QPushButton *m_runnerAdd;
     QPushButton *m_runnerRemove;
     QPushButton *m_runnerBrowse;
+    // Said instead of the programs list when the launcher has no programs.
+    QLabel *m_defaultAppNote;
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
     // The prefixes an item can be pointed at: the per-item one first, then the

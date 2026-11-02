@@ -3,7 +3,6 @@
 #include "Launchers.h"
 
 #include <QFileInfo>
-#include <QStringList>
 
 namespace {
 // Which file types belong to a kind is now the launcher's business: it is
@@ -42,14 +41,7 @@ bool isDesktopEntry(const QString &path) {
 }
 
 bool isDocument(const QString &path) {
-    static const QStringList extensions = {
-        QStringLiteral(".pdf"),
-        QStringLiteral(".cbz"),
-    };
-    for (const QString &extension : extensions) {
-        if (path.endsWith(extension, Qt::CaseInsensitive)) return true;
-    }
-    return false;
+    return claimedBy("documents", path);
 }
 
 bool isLaunchable(const QString &path) {

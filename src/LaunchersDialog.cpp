@@ -196,13 +196,19 @@ void LaunchersDialog::buildLauncherPage() {
     m_launcherForm->addRow(tr("File types:"), m_extensions);
     layout->addLayout(m_launcherForm);
 
-    // The programs that can act as this launcher. For wine and Proton the list
-    // is detected; for the others it is where a full path to an install
-    // outside the PATH is entered.
-    m_runnersTitle = new QLabel(m_launcherPage);
-    layout->addWidget(m_runnersTitle);
+    // The programs that can act as this launcher, in one box so the whole
+    // section hides for a launcher that has no programs. For wine and Proton
+    // the list is detected; for the others it is where a full path to an
+    // install outside the PATH is entered.
+    m_runnersBox = new QWidget(m_launcherPage);
+    auto *runnersLayout = new QVBoxLayout(m_runnersBox);
+    runnersLayout->setContentsMargins(0, 0, 0, 0);
+    runnersLayout->setSpacing(kDialogRowSpacing);
 
-    m_runners = new QTableWidget(0, 3, m_launcherPage);
+    m_runnersTitle = new QLabel(m_runnersBox);
+    runnersLayout->addWidget(m_runnersTitle);
+
+    m_runners = new QTableWidget(0, 3, m_runnersBox);
     m_runners->setHorizontalHeaderLabels({tr("Name"), tr("Program"), tr("Shell")});
     m_runners->horizontalHeader()->setSectionResizeMode(kRunnerName,
                                                         QHeaderView::ResizeToContents);
@@ -213,11 +219,11 @@ void LaunchersDialog::buildLauncherPage() {
     m_runners->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_runners->setFrameShape(QFrame::NoFrame);
     showAtMostFourRows(m_runners);
-    layout->addWidget(m_runners);
+    runnersLayout->addWidget(m_runners);
 
-    m_runnerAdd = new QPushButton(tr("Add"), m_launcherPage);
-    m_runnerRemove = new QPushButton(tr("Remove"), m_launcherPage);
-    m_runnerBrowse = new QPushButton(tr("Browse..."), m_launcherPage);
+    m_runnerAdd = new QPushButton(tr("Add"), m_runnersBox);
+    m_runnerRemove = new QPushButton(tr("Remove"), m_runnersBox);
+    m_runnerBrowse = new QPushButton(tr("Browse..."), m_runnersBox);
     for (QPushButton *button : {m_runnerAdd, m_runnerRemove, m_runnerBrowse}) {
         button->setAutoDefault(false);
     }
@@ -227,7 +233,17 @@ void LaunchersDialog::buildLauncherPage() {
     runnerButtons->addStretch();
     runnerButtons->addWidget(m_runnerAdd);
     runnerButtons->addWidget(m_runnerRemove);
-    layout->addLayout(runnerButtons);
+    runnersLayout->addLayout(runnerButtons);
+    layout->addWidget(m_runnersBox);
+
+    // What a launcher that opens its files with the desktop's default
+    // application says in place of the programs list.
+    m_defaultAppNote = new QLabel(
+        tr("These files open with the application the desktop has registered for them, "
+           "so there is no program to set here."),
+        m_launcherPage);
+    m_defaultAppNote->setWordWrap(true);
+    layout->addWidget(m_defaultAppNote);
 
     connect(m_runnerAdd, &QPushButton::clicked, this, [this] {
         addRunnerRow(LauncherRunner{});
@@ -934,6 +950,11 @@ void LaunchersDialog::showPageFor(QTreeWidgetItem *item) {
     m_editingLauncher = r;
 
     m_extensions->setText(joinExtensions(launcher.extensions));
+
+    // A launcher that opens its files with the desktop's default application
+    // has no programs to list.
+    m_runnersBox->setVisible(!launcher.usesDefaultApp);
+    m_defaultAppNote->setVisible(launcher.usesDefaultApp);
 
     m_runnersTitle->setText(tr("Available %1:").arg(launcher.name));
     m_runners->setRowCount(0);

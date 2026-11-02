@@ -630,11 +630,24 @@ ProgramItem ItemPropertiesDialog::item() const {
 }
 
 void ItemPropertiesDialog::browseCommand() {
+    // The documents launcher's file types, as filter patterns: each extension in
+    // lower and upper case, the way the filter lists them.
+    QStringList documentPatterns;
+    if (const Launcher *documents = launcherById(QStringLiteral("documents"))) {
+        for (const QString &extension : documents->extensions) {
+            documentPatterns << QStringLiteral("*.") + extension
+                             << QStringLiteral("*.") + extension.toUpper();
+        }
+    }
+    const QString documents = documentPatterns.isEmpty()
+                                  ? QStringLiteral("*")
+                                  : documentPatterns.join(QLatin1Char(' '));
     QString path = QFileDialog::getOpenFileName(
         this, tr("Select Program"), m_commandEdit->text(),
-        tr("Programs and documents (*.exe *.EXE *.desktop *.conf *.pdf *.PDF *.cbz *.CBZ);;"
+        tr("Programs and documents (*.exe *.EXE *.desktop *.conf %1);;"
            "Programs (*.exe *.EXE);;Applications (*.desktop);;DOSBox configs (*.conf);;"
-           "Documents (*.pdf *.PDF *.cbz *.CBZ);;All Files (*)"));
+           "Documents (%1);;All Files (*)")
+            .arg(documents));
     if (path.isEmpty()) return;
 
     m_commandEdit->setText(path);

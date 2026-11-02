@@ -76,6 +76,10 @@ struct Launcher {
     // Steam finds the game itself, so this launcher is configured with the
     // library locations rather than with a program.
     bool usesSteamLibraries = false;
+    // Files are opened by the application the desktop has registered for their
+    // type, so there is no program to configure and the runners list is not
+    // shown for such a launcher.
+    bool usesDefaultApp = false;
 
     // Where the prefixes its runners create are kept, one per program, each
     // holding its C: drive, registry and saved games. Empty means this

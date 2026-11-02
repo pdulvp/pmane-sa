@@ -402,6 +402,17 @@ QVector<Launcher> defaultLaunchers() {
         makeRunner(QStringLiteral("steam"), tr("Steam"), QStringLiteral("steam"))};
     result << steam;
 
+    // Documents are handed to whatever the desktop has registered for their
+    // type, so there is no program to list: only the file types are set here.
+    Launcher documents;
+    documents.id = QStringLiteral("documents");
+    documents.name = tr("Documents");
+    documents.description = tr("Files opened by the application the desktop has registered "
+                               "for their type.");
+    documents.extensions = {QStringLiteral("pdf"), QStringLiteral("cbz")};
+    documents.usesDefaultApp = true;
+    result << documents;
+
     return result;
 }
 
