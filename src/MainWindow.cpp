@@ -588,8 +588,6 @@ void MainWindow::updateWindowMenu() {
         if (!gw) continue;
         QMdiSubWindow *sub = subs[i];
         QAction *act = m_windowMenu->addAction(tr("&%1 %2").arg(i + 1).arg(gw->title()));
-        act->setCheckable(true);
-        act->setChecked(sub == m_mdiArea->activeSubWindow());
         connect(act, &QAction::triggered, this, [this, sub]() {
             if (m_minimizedIcons.contains(sub)) {
                 restoreFromIcon(sub);
