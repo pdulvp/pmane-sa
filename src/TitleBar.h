@@ -5,7 +5,6 @@
 class CalculatorPane;
 class CalendarPane;
 class ClockPane;
-class QLabel;
 class QMenuBar;
 class QSlider;
 class SystemVolumeWatch;
@@ -101,10 +100,11 @@ private:
     CalculatorPane *m_calculator = nullptr;
 
     // The time and the date read as one thing but open different panes, so they
-    // are two labels: the clock face drops out of the time, the month out of
-    // the date.
-    QLabel *m_clock;
-    QLabel *m_date;
+    // are two buttons: the clock face drops out of the time, the month out of
+    // the date. Buttons rather than labels so that each lights up under the
+    // pointer, as everything else on the strip that can be clicked does.
+    QToolButton *m_clock;
+    QToolButton *m_date;
     // Drops out of the time: the dial with its hands. Built on first use.
     ClockPane *m_clockFace = nullptr;
     // Drops out of the date: the month, with the events from the desktop's

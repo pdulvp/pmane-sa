@@ -13,7 +13,6 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QHBoxLayout>
-#include <QLabel>
 #include <QSignalBlocker>
 #include <QProxyStyle>
 #include <QSlider>
@@ -67,6 +66,20 @@ public:
         return QProxyStyle::styleHint(hint, option, widget, returnData);
     }
 };
+
+// The time and the date: a caption button carrying text rather than a glyph,
+// and as wide as the text needs. Auto-raise gives it the strip's flat look
+// until the pointer is on it, which is the whole point of its being a button.
+QToolButton *clockButton(QWidget *parent, const QString &tip) {
+    auto *button = new QToolButton(parent);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setFixedHeight(kButtonHeight);
+    button->setAutoRaise(true);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setCursor(Qt::PointingHandCursor);
+    button->setToolTip(tip);
+    return button;
+}
 
 QToolButton *captionButton(QWidget *parent, QStyle::StandardPixmap glyph) {
     auto *button = new QToolButton(parent);
@@ -125,21 +138,11 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
 
     // The time and the date, each opening its own pane: the dial drops out of
     // the time and the month out of the date, as the desktop's own clock opens
-    // the month. Since the strip is used for dragging, both need a pointing
-    // cursor to show that they are clickable.
-    m_clock = new QLabel(this);
-    m_clock->setContentsMargins(kClockMargin, 0, 0, 0);
-    m_clock->setAlignment(Qt::AlignCenter);
-    m_clock->setCursor(Qt::PointingHandCursor);
-    m_clock->setToolTip(tr("Show the clock"));
-    m_clock->installEventFilter(this);
-
-    m_date = new QLabel(this);
-    m_date->setContentsMargins(kClockGap, 0, kClockMargin, 0);
-    m_date->setAlignment(Qt::AlignCenter);
-    m_date->setCursor(Qt::PointingHandCursor);
-    m_date->setToolTip(tr("Show the month"));
-    m_date->installEventFilter(this);
+    // the month. Caption buttons rather than labels, so that each lights up
+    // under the pointer and presses in like the buttons beside them; the strip
+    // is used for dragging, and something clickable on it has to say so.
+    m_clock = clockButton(this, tr("Show the clock"));
+    m_date = clockButton(this, tr("Show the month"));
     updateClock();
 
     auto *clockTimer = new QTimer(this);
@@ -177,8 +180,14 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         layout->addSpacing(kVolumeMargin);
     }
     layout->addWidget(m_calculatorButton);
+    // The space the clock used to carry in its own margins: a button's padding
+    // is what its hover panel hugs, so the room around the pair belongs to the
+    // layout instead.
+    layout->addSpacing(kClockMargin);
     layout->addWidget(m_clock);
+    layout->addSpacing(kClockGap);
     layout->addWidget(m_date);
+    layout->addSpacing(kClockMargin);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
     layout->addWidget(m_closeButton);
@@ -186,6 +195,27 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     if (m_searchButton) {
         connect(m_searchButton, &QToolButton::clicked, this, [] { openDesktopSearch(); });
     }
+
+    // Both panes are built on first click rather than with the strip: most
+    // sessions open neither, and building the month queries the calendar
+    // service.
+    connect(m_clock, &QToolButton::clicked, this, [this] {
+        if (!m_clockFace) m_clockFace = new ClockPane(this);
+        if (m_clockFace->isVisible()) {
+            m_clockFace->hide();
+        } else {
+            m_clockFace->popUpAt(m_clock);
+        }
+    });
+
+    connect(m_date, &QToolButton::clicked, this, [this] {
+        if (!m_calendar) m_calendar = new CalendarPane(this);
+        if (m_calendar->isVisible()) {
+            m_calendar->hide();
+        } else {
+            m_calendar->popUpAt(m_date);
+        }
+    });
 
     connect(m_calculatorButton, &QToolButton::clicked, this, [this] {
         if (!m_calculator) m_calculator = new CalculatorPane(this);
@@ -512,30 +542,6 @@ void TitleBar::updateMaximizeButton() {
 }
 
 bool TitleBar::eventFilter(QObject *watched, QEvent *event) {
-    // Clicking the time opens the dial below it, and clicking the date the
-    // month. Both are built on first click rather than with the strip: most
-    // sessions open neither, and building the month queries the calendar
-    // service.
-    if (watched == m_clock && event->type() == QEvent::MouseButtonPress) {
-        if (!m_clockFace) m_clockFace = new ClockPane(this);
-        if (m_clockFace->isVisible()) {
-            m_clockFace->hide();
-        } else {
-            m_clockFace->popUpAt(m_clock);
-        }
-        return true;
-    }
-
-    if (watched == m_date && event->type() == QEvent::MouseButtonPress) {
-        if (!m_calendar) m_calendar = new CalendarPane(this);
-        if (m_calendar->isVisible()) {
-            m_calendar->hide();
-        } else {
-            m_calendar->popUpAt(m_date);
-        }
-        return true;
-    }
-
 
 
     if (watched == window()) {
