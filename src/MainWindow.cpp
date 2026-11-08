@@ -3,6 +3,7 @@
 #include "SearchProvider.h"
 
 #include "AlignmentGuides.h"
+#include "DefaultIcons.h"
 #include "DefaultIconsDialog.h"
 #include "LaunchersDialog.h"
 #include "TextPromptDialog.h"
@@ -1510,6 +1511,10 @@ void MainWindow::editDefaultIcons() {
 }
 
 void MainWindow::refreshIcons() {
+    // The default icons of file types are cached per type, a file that was
+    // missing included; drop that cache too, so an icon file that was on a
+    // drive not yet mounted is read now.
+    clearDefaultIconCache();
     // includeChosen: an icon picked in the properties dialog is retried too,
     // since its file may have been on a drive that was not mounted yet. An
     // item whose file is still missing falls back to a generic icon, as at

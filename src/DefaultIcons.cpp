@@ -121,6 +121,10 @@ void setDefaultIcons(const QHash<QString, DefaultIcon> &icons) {
     settings.endGroup();
 }
 
+void clearDefaultIconCache() {
+    cache()->clear();
+}
+
 QIcon defaultIconForPath(const QString &path, bool *legacy) {
     load();
     if (legacy) *legacy = false;

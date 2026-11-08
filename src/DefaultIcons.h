@@ -42,3 +42,9 @@ QIcon iconFromDefault(const DefaultIcon &icon, bool *legacy = nullptr);
 // Null when its type has no default, or when the file the default names is
 // gone.
 QIcon defaultIconForPath(const QString &path, bool *legacy = nullptr);
+
+// Drops the artwork already read for each file type, so the next
+// defaultIconForPath() reads its file again. For when a drive has been
+// mounted and a file that was missing may now be there; the settings
+// themselves are kept.
+void clearDefaultIconCache();
