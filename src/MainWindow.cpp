@@ -14,6 +14,7 @@
 #include "Kiosk.h"
 #include "LaunchNotices.h"
 #include "MinimizedGroupIcon.h"
+#include "MountWatch.h"
 #include "NotificationArea.h"
 #include "ScreenTransition.h"
 #include "TitleBar.h"
@@ -90,6 +91,16 @@ void writeProgramItem(QSettings &settings, const ProgramItem &item) {
     if (item.nativeSize.isValid() && !item.nativeSize.isEmpty()) {
         settings.setValue("nativeSize", item.nativeSize);
     }
+}
+
+// The icons a minimized group previews: its first few items' icons.
+QVector<QIcon> previewIconsOf(const GroupWindow *group) {
+    QVector<QIcon> preview;
+    for (const ProgramItem &item : group->items()) {
+        if (preview.size() >= MinimizedGroupIcon::kMaxPreviewIcons) break;
+        preview.append(item.icon);
+    }
+    return preview;
 }
 
 ProgramItem readProgramItem(const QSettings &settings) {
@@ -188,6 +199,11 @@ MainWindow::MainWindow(const QString &startupScreen, QWidget *parent) : QMainWin
             &MainWindow::refreshDesktopWallpaper);
     refreshDesktopWallpaper();
 
+    // A drive mounted after the desktop loaded makes the files its items point
+    // at readable, so their icons can be read for real then.
+    m_mountWatch = new MountWatch(this);
+    connect(m_mountWatch, &MountWatch::mounted, this, &MainWindow::refreshIcons);
+
     connect(m_titleBar, &TitleBar::darkModeToggled, this, [this](bool dark) {
         setDarkMode(dark);
         // Every palette derives from the scheme, so reapply the whole theme
@@ -276,6 +292,16 @@ void MainWindow::buildMenus() {
     // the menu has been opened once.
     addAction(m_undoAction);
     addAction(m_redoAction);
+
+    // Re-reads every item's icon from disk, for the files on a drive that was
+    // not mounted when the desktop loaded. Owned by the window like the undo
+    // and redo actions, so rebuilding the Window menu does not delete it.
+    m_refreshAction = new QAction(tr("&Refresh"), this);
+    m_refreshAction->setShortcut(QKeySequence::Refresh);
+    m_refreshAction->setShortcutContext(Qt::ApplicationShortcut);
+    connect(m_refreshAction, &QAction::triggered, this, &MainWindow::refreshIcons);
+    addAction(m_refreshAction);
+
     updateEditActions();
 
     m_windowMenu = bar->addMenu(tr("&Window"));
@@ -580,6 +606,7 @@ void MainWindow::updateWindowMenu() {
     m_windowMenu->addAction(m_redoAction);
     m_windowMenu->addSeparator();
     m_windowMenu->addAction(tr("&Tile"), m_mdiArea, &QMdiArea::tileSubWindows);
+    m_windowMenu->addAction(m_refreshAction);
     m_windowMenu->addSeparator();
 
     const QList<QMdiSubWindow *> subs = m_mdiArea->subWindowList();
@@ -882,12 +909,7 @@ void MainWindow::minimizeToIcon(QMdiSubWindow *sub) {
     icon->setDesktopColor(themeByName(m_themeName).desktop);
 
     // Preview the group by its first few program icons.
-    QVector<QIcon> preview;
-    for (const ProgramItem &item : group->items()) {
-        if (preview.size() >= MinimizedGroupIcon::kMaxPreviewIcons) break;
-        preview.append(item.icon);
-    }
-    icon->setPreviewIcons(preview);
+    icon->setPreviewIcons(previewIconsOf(group));
     connect(icon, &MinimizedGroupIcon::restoreRequested, this,
             [this, sub]() { restoreFromIcon(sub); });
     // The same menu the caption carries when the group is open: a minimized
@@ -1483,6 +1505,25 @@ void MainWindow::editDefaultIcons() {
     for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
         if (GroupWindow *gw = qobject_cast<GroupWindow *>(sub->widget())) {
             gw->refreshDerivedIcons();
+        }
+    }
+}
+
+void MainWindow::refreshIcons() {
+    // includeChosen: an icon picked in the properties dialog is retried too,
+    // since its file may have been on a drive that was not mounted yet. An
+    // item whose file is still missing falls back to a generic icon, as at
+    // load time: nothing is removed.
+    for (QMdiSubWindow *sub : m_mdiArea->subWindowList()) {
+        if (GroupWindow *gw = qobject_cast<GroupWindow *>(sub->widget())) {
+            gw->refreshDerivedIcons(true);
+        }
+    }
+    // A minimized group previews its items' icons, a snapshot taken when it
+    // was minimized; rebuild those previews from the refreshed items.
+    for (auto it = m_minimizedIcons.constBegin(); it != m_minimizedIcons.constEnd(); ++it) {
+        if (GroupWindow *gw = qobject_cast<GroupWindow *>(it.key()->widget())) {
+            it.value()->setPreviewIcons(previewIconsOf(gw));
         }
     }
 }

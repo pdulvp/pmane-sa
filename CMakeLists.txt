@@ -111,6 +111,8 @@ set(PMANE_SOURCES
     src/ItemPropertiesDialog.h
     src/MinimizedGroupIcon.cpp
     src/MinimizedGroupIcon.h
+    src/MountWatch.cpp
+    src/MountWatch.h
     src/GroupCaptionStyle.cpp
     src/GroupCaptionStyle.h
     src/IconEffect.cpp

@@ -21,6 +21,7 @@ class GnomeWallpaper;
 class QVariantAnimation;
 class SearchProvider;
 class MinimizedGroupIcon;
+class MountWatch;
 class NotificationArea;
 class ScreenTransition;
 class TitleBar;
@@ -83,6 +84,9 @@ private slots:
     void editLaunchers();
     // One icon per file type, for the files that carry none of their own.
     void editDefaultIcons();
+    // Re-reads every item's icon from disk, whether asked for in the Window
+    // menu or because a drive was mounted after the desktop loaded.
+    void refreshIcons();
     void about();
     void newScreen();
     void duplicateScreen();
@@ -141,6 +145,10 @@ private:
     void refreshDesktopWallpaper();
     GnomeWallpaper *m_wallpaperWatch = nullptr;
     bool m_useDesktopWallpaper = false;
+
+    // Reports a newly mounted drive, so the icons whose files live on it can
+    // be read. Event-driven: it watches the kernel's mount table.
+    MountWatch *m_mountWatch = nullptr;
 
     QVariantAnimation *m_themeFade = nullptr;
     // The colours actually on screen. currentTheme() gives the configured
@@ -262,6 +270,10 @@ private:
     bool m_applyingLayout = false;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
+    // Window > Refresh: re-reads the items' icons, kept beside the undo and
+    // redo actions for the same reason, so rebuilding the Window menu does
+    // not delete it.
+    QAction *m_refreshAction = nullptr;
 
     QMenu *m_screenMenu;
     // Makes the per-screen radio buttons mutually exclusive.

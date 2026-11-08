@@ -73,13 +73,19 @@ void GroupWindow::clearSelection() {
     m_list->setCurrentItem(nullptr);
 }
 
-void GroupWindow::refreshDerivedIcons() {
+void GroupWindow::refreshDerivedIcons(bool includeChosen) {
     for (ProgramItem &it : m_items) {
-        // An icon picked in the properties dialog is not derived at all.
-        if (it.iconIndex >= 0) continue;
+        // An icon picked in the properties dialog is not derived at all,
+        // unless the caller asks for it too, to retry a file that may have
+        // appeared since, such as a drive mounted after the desktop loaded.
+        if (it.iconIndex >= 0 && !includeChosen) continue;
         it.icon = QIcon();
-        it.iconSource.clear();
         it.legacyIcon = false;
+        // A derived item's icon source is derived along with the icon; a
+        // picked one is the user's choice and stays, so completeProgramItem()
+        // retries it first. When the file is still missing the item falls
+        // back to a generic icon as usual: nothing is removed.
+        if (it.iconIndex < 0) it.iconSource.clear();
         completeProgramItem(it);
     }
     rebuildList();

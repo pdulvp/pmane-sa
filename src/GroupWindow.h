@@ -33,8 +33,10 @@ public:
 
     // Derives again the icons that were not picked by hand, which is what the
     // default icon of a file type having changed calls for. An item whose icon
-    // was chosen in its properties keeps it.
-    void refreshDerivedIcons();
+    // was chosen in its properties keeps it, unless `includeChosen` is set:
+    // then the chosen icons are retried too, since their file may have been on
+    // a drive that was not mounted when the desktop loaded.
+    void refreshDerivedIcons(bool includeChosen = false);
 
     // Migration for desktops saved when XP icon styling was a single
     // application-wide switch: it restyled the legacy-artwork items, and each
