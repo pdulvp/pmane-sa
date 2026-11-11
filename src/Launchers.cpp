@@ -226,6 +226,13 @@ void load() {
                 launcher.prefixes =
                     settings.value(QStringLiteral("prefixes")).toStringList();
             }
+            // Kept only when it names a prefix still set up; one since removed
+            // falls back to the per-application prefix.
+            const QString defaultPrefix =
+                settings.value(QStringLiteral("defaultPrefix")).toString();
+            if (launcher.prefixes.contains(defaultPrefix)) {
+                launcher.defaultPrefix = defaultPrefix;
+            }
         }
         if (launcher.usesSteamLibraries) {
             launcher.libraryFolders =
@@ -432,6 +439,7 @@ void setLaunchers(const QVector<Launcher> &updated) {
         if (launcher.usesPrefixes) {
             settings.setValue(QStringLiteral("prefixesDir"), launcher.prefixesDir);
             settings.setValue(QStringLiteral("prefixes"), launcher.prefixes);
+            settings.setValue(QStringLiteral("defaultPrefix"), launcher.defaultPrefix);
         }
         if (launcher.usesSteamLibraries) {
             settings.setValue(QStringLiteral("libraryFolders"), launcher.libraryFolders);
@@ -505,6 +513,7 @@ QVector<LauncherChoice> launchersFor(const QString &path) {
             choice.label = label;
             choice.usesPrefixes = launcher->usesPrefixes;
             choice.prefixes = launcher->prefixes;
+            choice.defaultPrefix = launcher->defaultPrefix;
             choice.usesWindowScale = launcher->usesWindowScale;
             choice.usesDpiScale = launcher->usesDpiScale;
             choice.usesArguments = launcher->usesArguments;
@@ -563,6 +572,17 @@ void launcherForItem(const QString &path, const QString &id, const Launcher **la
     if (!runner) return;
     *launcherOut = launcher;
     *runnerOut = runner;
+}
+
+QString defaultPrefixFor(const QString &path, const QString &launcherId) {
+    const Launcher *launcher = nullptr;
+    const LauncherRunner *runner = nullptr;
+    launcherForItem(path, launcherId, &launcher, &runner);
+    if (!launcher || !launcher->usesPrefixes) return QString();
+    // Only a named prefix still set up can be the default; anything else,
+    // including a name since removed, means the per-application prefix.
+    if (!launcher->prefixes.contains(launcher->defaultPrefix)) return QString();
+    return launcher->defaultPrefix;
 }
 
 LauncherCommand launcherCommandFor(const Launcher &launcher, const LauncherRunner &runner,

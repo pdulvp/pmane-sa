@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QLocale>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -53,6 +54,12 @@ constexpr int kPrefixPathRole = Qt::UserRole + 3;
 // How many items run in the prefix a row stands for, so deleting one still in
 // use can warn about it.
 constexpr int kPrefixItemsRole = Qt::UserRole + 4;
+// Set on the top-level row that is the launcher's default prefix, shown with a
+// "(default)" marker in its name.
+constexpr int kPrefixDefaultRole = Qt::UserRole + 5;
+// The name a named row was typed with, kept apart from its displayed text so
+// the "(default)" marker never ends up in the saved name.
+constexpr int kPrefixTypedRole = Qt::UserRole + 6;
 
 // The columns of the prefixes table.
 constexpr int kPrefixName = 0;
@@ -298,6 +305,7 @@ void LaunchersDialog::buildLauncherPage() {
     m_prefixes->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_prefixes->setFrameShape(QFrame::NoFrame);
     m_prefixes->setUniformRowHeights(true);
+    m_prefixes->setContextMenuPolicy(Qt::CustomContextMenu);
     showAtMostFourRows(m_prefixes);
     prefixesLayout->addWidget(m_prefixes);
 
@@ -336,8 +344,29 @@ void LaunchersDialog::buildLauncherPage() {
     // folder listing have to be recomputed.
     connect(m_prefixes, &QTreeWidget::itemChanged, this,
             [this](QTreeWidgetItem *item, int column) {
-                if (column == kPrefixName && !item->parent()) refreshPrefixTable();
+                if (column != kPrefixName || item->parent()) return;
+                if (item->data(kPrefixName, kPrefixKindRole).toInt() !=
+                    static_cast<int>(PrefixRow::Named)) {
+                    return;
+                }
+                {
+                    // The edited text becomes the typed name the rebuild
+                    // keeps, so the "(default)" marker shown on the default
+                    // row never becomes part of the name.
+                    const QSignalBlocker blocker(m_prefixes);
+                    item->setData(kPrefixName, kPrefixTypedRole, item->text(kPrefixName));
+                }
+                // The default follows the row it is marked on: a rename is a
+                // different folder, and the marker stays on this one.
+                if (item->data(kPrefixName, kPrefixDefaultRole).toBool() &&
+                    m_editingLauncher >= 0 && m_editingLauncher < m_launchers.size()) {
+                    m_launchers[m_editingLauncher].defaultPrefix =
+                        prefixFolderName(typedNameOf(item));
+                }
+                refreshPrefixTable();
             });
+    connect(m_prefixes, &QTreeWidget::customContextMenuRequested, this,
+            &LaunchersDialog::showPrefixMenu);
     // The expanded rows are remembered rather than reset: a rebuild happens on
     // every rename and removal, and collapsing them each time would undo what
     // the user just expanded.
@@ -536,9 +565,36 @@ QStringList LaunchersDialog::typedPrefixes() const {
             static_cast<int>(PrefixRow::Named)) {
             continue;
         }
-        names << item->text(kPrefixName);
+        names << typedNameOf(item);
     }
     return names;
+}
+
+QString LaunchersDialog::typedNameOf(const QTreeWidgetItem *row) const {
+    const QVariant typed = row->data(kPrefixName, kPrefixTypedRole);
+    return typed.isValid() ? typed.toString() : row->text(kPrefixName);
+}
+
+void LaunchersDialog::showPrefixMenu(const QPoint &pos) {
+    QTreeWidgetItem *row = m_prefixes->itemAt(pos);
+    // Only a prefix row: a program listed under one is not a prefix, and a
+    // folder this application did not create is left alone.
+    if (!row || row->parent()) return;
+    const auto kind = static_cast<PrefixRow>(row->data(kPrefixName, kPrefixKindRole).toInt());
+    if (kind != PrefixRow::Fixed && kind != PrefixRow::Named) return;
+    if (m_editingLauncher < 0 || m_editingLauncher >= m_launchers.size()) return;
+
+    QMenu menu(this);
+    QAction *makeDefault = menu.addAction(tr("Use as default prefix"));
+    makeDefault->setCheckable(true);
+    makeDefault->setChecked(row->data(kPrefixName, kPrefixDefaultRole).toBool());
+    if (menu.exec(m_prefixes->viewport()->mapToGlobal(pos)) != makeDefault) return;
+
+    // The per-application row is what an empty default stands for; a named
+    // row is its typed name as a folder name, the same form the item stores.
+    m_launchers[m_editingLauncher].defaultPrefix =
+        kind == PrefixRow::Fixed ? QString() : prefixFolderName(typedNameOf(row));
+    refreshPrefixTable();
 }
 
 void LaunchersDialog::refreshPrefixTable() {
@@ -563,17 +619,28 @@ void LaunchersDialog::refreshPrefixTable() {
     const QSignalBlocker blocker(m_prefixes);
     m_prefixes->clear();
 
+    // The launcher's default prefix: empty means the per-application one,
+    // which is what the first row stands for.
+    const QString defaultPrefix = m_launchers[m_editingLauncher].defaultPrefix;
+    const bool perApplicationDefault = defaultPrefix.isEmpty();
+
     // How many items run in a prefix of their own, which is what the first row
     // stands for.
     int perApplication = 0;
     for (const PrefixUse &use : found) {
         if (use.kind == PrefixUse::PerApplication) perApplication += use.items();
     }
-    QTreeWidgetItem *automatic = addPrefixRow(
-        PrefixRow::Fixed, tr("Default (per application)"),
-        perApplication > 0 ? tr("%1 items").arg(perApplication) : tr("nothing"), QString(),
-        tr("What an item gets when it names no prefix: one of its own, under the "
-           "folder above, built the first time it runs."));
+    QTreeWidgetItem *automatic =
+        addPrefixRow(PrefixRow::Fixed,
+                     perApplicationDefault ? tr("Per application (default)")
+                                           : tr("Per application"),
+                     perApplication > 0 ? tr("%1 items").arg(perApplication) : tr("nothing"),
+                     QString(),
+                     tr("A prefix of its own per program, under the folder above, built "
+                        "the first time it runs. This is the default a new item gets "
+                        "unless another row is made the default from its right-click "
+                        "menu."));
+    automatic->setData(kPrefixName, kPrefixDefaultRole, perApplicationDefault);
 
     // Under it, the prefixes it stands for, one per program. Each is a separate
     // folder with a size of its own, and one whose program has left the desktop
@@ -643,9 +710,16 @@ void LaunchersDialog::refreshPrefixTable() {
             note = tr("No item on any screen runs in this prefix. Removing it takes it out "
                       "of the list, and can delete its folder with it.");
         }
+        // The default one is marked in its name; the typed name is kept apart
+        // so the marker never becomes part of the name.
+        const bool isDefault =
+            !defaultPrefix.isEmpty() && prefixFolderName(name) == defaultPrefix;
         QTreeWidgetItem *row =
-            addPrefixRow(PrefixRow::Named, name, used, use ? use->path : QString(), note);
+            addPrefixRow(PrefixRow::Named, isDefault ? tr("%1 (default)").arg(name) : name,
+                         used, use ? use->path : QString(), note);
         row->setData(kPrefixName, kPrefixItemsRole, use ? use->items() : 0);
+        row->setData(kPrefixName, kPrefixDefaultRole, isDefault);
+        row->setData(kPrefixName, kPrefixTypedRole, name);
         // What actually runs in it, which is what tells whether a shared prefix
         // is still needed.
         if (use) addPrefixPrograms(row, use->programs);
@@ -879,6 +953,10 @@ void LaunchersDialog::commitCurrentPage() {
                 prefixes << name;
             }
             launcher.prefixes = prefixes;
+            // The default has to be one of the named ones still listed: one
+            // removed or renamed away from falls back to the per-application
+            // prefix.
+            if (!prefixes.contains(launcher.defaultPrefix)) launcher.defaultPrefix.clear();
         }
 
         QVector<LauncherRunner> runners;

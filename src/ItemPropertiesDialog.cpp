@@ -202,6 +202,7 @@ ItemPropertiesDialog::ItemPropertiesDialog(QWidget *parent) : QDialog(parent) {
 
 void ItemPropertiesDialog::setItem(const ProgramItem &item) {
     m_item = item;
+    m_isNewItem = false;
     m_nameEdited = false;
     m_nameEdit->setText(item.name);
     m_commandEdit->setText(item.command);
@@ -313,11 +314,13 @@ void ItemPropertiesDialog::updatePrefixRow() {
     // selection, as the scaling list does.
     bool usesPrefixes = false;
     QStringList prefixes;
+    QString defaultPrefix;
     const QString selected = m_launcherCombo->currentData().toString();
     for (const LauncherChoice &choice : launchersFor(m_commandEdit->text().trimmed())) {
         if (choice.id == selected) {
             usesPrefixes = choice.usesPrefixes;
             prefixes = choice.prefixes;
+            defaultPrefix = choice.defaultPrefix;
             break;
         }
     }
@@ -325,12 +328,20 @@ void ItemPropertiesDialog::updatePrefixRow() {
     {
         const QSignalBlocker blocker(m_prefixCombo);
         m_prefixCombo->clear();
-        // An empty value means the per-program prefix, which is what nearly
-        // every item uses.
-        m_prefixCombo->addItem(tr("Default (per application)"), QString());
-        for (const QString &name : prefixes) m_prefixCombo->addItem(name, name);
+        // An empty value means the per-application prefix, which is what nearly
+        // every item uses. The launcher's default is marked, and is what a new
+        // item starts on; an existing item keeps its own choice, empty included.
+        m_prefixCombo->addItem(defaultPrefix.isEmpty() ? tr("Per application (default)")
+                                                       : tr("Per application"),
+                               QString());
+        for (const QString &name : prefixes) {
+            m_prefixCombo->addItem(name == defaultPrefix ? tr("%1 (default)").arg(name) : name,
+                                   name);
+        }
 
-        const int found = m_prefixCombo->findData(m_prefixName);
+        const QString wanted =
+            m_isNewItem && m_prefixName.isEmpty() ? defaultPrefix : m_prefixName;
+        const int found = m_prefixCombo->findData(wanted);
         if (found < 0 && !m_prefixName.isEmpty()) {
             // Named by the item but since removed from the launcher. Listed
             // anyway, so opening the dialog does not silently move the program

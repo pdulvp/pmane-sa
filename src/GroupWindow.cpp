@@ -6,6 +6,7 @@
 #include "ItemLauncher.h"
 #include "Ids.h"
 #include "ItemPropertiesDialog.h"
+#include "Launchers.h"
 #include "LaunchNotices.h"
 
 #include <QFileInfo>
@@ -149,6 +150,9 @@ void GroupWindow::onFilesDropped(const QStringList &paths) {
         ProgramItem item;
         item.name = QFileInfo(path).completeBaseName();
         item.command = path;
+        // A wine or Proton item starts in the launcher's default prefix, which
+        // is not necessarily the per-application one.
+        item.prefix = defaultPrefixFor(path);
         // The working directory is left to workingDirFor(): the file's own
         // folder for most items, and the folder itself for a folder item.
         addProgramItem(item);

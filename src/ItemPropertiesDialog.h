@@ -103,6 +103,10 @@ private:
     // gamescope's.
     static constexpr int kScaleModeRole = Qt::UserRole + 1;
 
+    // Whether the dialog is for an item that does not exist yet. A new item
+    // gets the launcher's default prefix; an existing one keeps what it has,
+    // an empty prefix meaning the per-application one.
+    bool m_isNewItem = true;
     // Whether the description was typed by the user rather than filled in
     // automatically. This is what marks the name as the user's, which discovery
     // then leaves alone, even when it happens to match the file name.

@@ -37,7 +37,9 @@ struct ProgramItem {
     QString core;
     // Which of the launcher's named wine prefixes it runs in. Empty, the usual
     // case, or a name since removed from the launcher, means the per-item
-    // prefix every program gets.
+    // prefix every program gets. A newly added item is set to the launcher's
+    // default prefix instead, which is empty unless another one was made the
+    // default in the launchers dialog.
     QString prefix;
     // Windows programs: run the program at this percentage of its own size,
     // inside gamescope. 100 means unscaled. Stored as a whole percentage so a

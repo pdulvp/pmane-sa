@@ -92,6 +92,12 @@ struct Launcher {
     // listed here: it has no name and is not removable from the dialog.
     QStringList prefixes;
 
+    // Which prefix a newly added item runs in: empty for the per-application
+    // one, else one of `prefixes`, stored the same way (as a folder name).
+    // Chosen from the right-click menu on a prefix row in the launchers
+    // dialog. An item that named one keeps it; only new items get this.
+    QString defaultPrefix;
+
     // Emulator cores by file type, as a version that had no core per item
     // wrote them: which core plays a .nes, which a .gba, and the folder they
     // are in. Read and never written now -- an item names its own core, out of
@@ -154,6 +160,9 @@ struct LauncherChoice {
     // The named prefixes of the launcher behind it, which an item can pick
     // instead of its own.
     QStringList prefixes;
+    // Which of those (or the per-application one, when empty) a new item for
+    // this launcher starts in.
+    QString defaultPrefix;
     // Whether an item run by it can be scaled, and whether wine's own scaling
     // is one of the available methods.
     bool usesWindowScale = false;
@@ -176,6 +185,12 @@ QVector<LauncherChoice> launchersFor(const QString &path);
 // claims the file.
 void launcherForItem(const QString &path, const QString &launcherId, const Launcher **launcher,
                      const LauncherRunner **runner);
+
+// The prefix a newly added item for `path` starts in: the default one of the
+// launcher that would run it, when that launcher uses prefixes. Empty when
+// the item gets the per-application prefix or the launcher uses no prefixes.
+// Existing items are never repointed: only an item being added calls this.
+QString defaultPrefixFor(const QString &path, const QString &launcherId = QString());
 
 // What it takes to start `path`: a program and its arguments, with the
 // placeholders filled in, wrapped in a shell if the runner needs one, and the

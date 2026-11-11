@@ -9,6 +9,7 @@
 class QFormLayout;
 class QLabel;
 class QLineEdit;
+class QPoint;
 class QPushButton;
 class QTableWidget;
 class QTreeWidget;
@@ -68,6 +69,11 @@ private:
     // The named prefixes as the tree holds them, blank rows included, which a
     // rebuild has to preserve.
     QStringList typedPrefixes() const;
+    // The name a named row was typed with, without the "(default)" marker the
+    // display adds to the default one.
+    QString typedNameOf(const QTreeWidgetItem *row) const;
+    // The right-click menu on a prefix row: make it the launcher's default.
+    void showPrefixMenu(const QPoint &pos);
     // Fills the size column, which means walking every prefix, so it runs on
     // request rather than automatically.
     void measurePrefixes();
@@ -112,7 +118,8 @@ private:
     QWidget *m_prefixesBox;
     QLineEdit *m_prefixesDir;
     // The prefixes an item can be pointed at: the per-item one first, then the
-    // named ones created by hand.
+    // named ones created by hand. The launcher's default one carries a
+    // "(default)" marker and is chosen from the right-click menu.
     QTreeWidget *m_prefixes;
     // Which prefixes were expanded, so a rebuild after a rename, a removal or
     // a size measurement does not collapse them.
