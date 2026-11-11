@@ -126,6 +126,15 @@ QImage decodeIconImage(const QByteArray &raw) {
         return img;
     }
 
+    // A whole image file, such as a .jpg or .bmp picked as an icon source: no
+    // container wraps it, so let Qt's image readers have the raw bytes. An
+    // .ico's raw DIB payload starts with its header size and matches no image
+    // magic, so it falls through to the DIB decoding below.
+    {
+        QImage img;
+        if (img.loadFromData(raw)) return img;
+    }
+
     const uchar *d = reinterpret_cast<const uchar *>(raw.constData());
     qint64 size = raw.size();
     Reader r{d, size};
@@ -589,8 +598,24 @@ void forEachIcon(const QString &path, PeIconExtractor::Source &source, const Slo
         return;
     }
 
-    source = PeIconExtractor::Source::Ico;
-    walkIcoIcons(r, d, visit);
+    // An .ico starts with a reserved 0 and a type of 1 (icon) or 2 (cursor).
+    if (size >= 6 && d[0] == 0 && d[1] == 0 && (d[2] == 1 || d[2] == 2) && d[3] == 0) {
+        source = PeIconExtractor::Source::Ico;
+        walkIcoIcons(r, d, visit);
+        return;
+    }
+
+    // Anything else that decodes as an image is a plain image file — a .png or
+    // the like — which holds one icon: the image itself.
+    QImage image;
+    if (!image.loadFromData(bytes)) return;
+    source = PeIconExtractor::Source::Image;
+    IconSlot slot;
+    slot.index = 0;
+    slot.width = image.width();
+    slot.bitCount = image.depth();
+    slot.payload = [&bytes] { return bytes; };
+    visit(slot);
 }
 
 } // namespace

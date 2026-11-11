@@ -15,7 +15,7 @@ class PeIconExtractor {
 public:
     // Where an icon came from. Legacy 16-bit (NE) and .ico artwork is flat and
     // low-colour, which is what the XP-style rendering is meant for.
-    enum class Source { None, Pe, Ne, Ico };
+    enum class Source { None, Pe, Ne, Ico, Image };
 
     // One of the icons a file holds, as listIcons() found it.
     struct IconInfo {
@@ -33,8 +33,9 @@ public:
     static QIcon extractIcoFile(const QString &icoPath);
 
     // Every distinct icon a file holds, in storage order: one per icon group in
-    // a PE/NE executable, a group being the same artwork at several sizes, and
-    // one per image in an .ico.
+    // a PE/NE executable, a group being the same artwork at several sizes, one
+    // per image in an .ico, and the one image of a plain image file such as a
+    // .png.
     static QVector<IconInfo> listIcons(const QString &path, Source *source = nullptr);
 
     // The icon listIcons() gave `index`. A negative index, or one the file no

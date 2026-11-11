@@ -11,8 +11,9 @@ class QListWidget;
 class QPushButton;
 
 // Progman's "Change Icon": the icons one file holds, laid out to pick from. An
-// .exe or .dll often embeds several, and an .ico carries one image per size and
-// colour depth.
+// .exe or .dll often embeds several, an .ico carries one image per size and
+// colour depth, and a plain image file such as a .png holds itself as its only
+// icon.
 class IconPickerDialog : public QDialog {
     Q_OBJECT
 public:

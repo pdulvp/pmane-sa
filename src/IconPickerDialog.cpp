@@ -6,6 +6,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QImageReader>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -34,7 +35,7 @@ IconPickerDialog::IconPickerDialog(QWidget *parent) : QDialog(parent) {
     const DialogChrome chrome = applyDialogChrome(this, tr("Change Icon"));
 
     m_pathEdit = new QLineEdit(this);
-    m_pathEdit->setPlaceholderText(tr("Program, library or .ico file"));
+    m_pathEdit->setPlaceholderText(tr("Program, library, .ico or image file"));
     auto *browseButton = new QPushButton(tr("Browse..."), this);
     browseButton->setAutoDefault(false);
 
@@ -175,11 +176,22 @@ bool IconPickerDialog::selectedIsLegacy() const {
 }
 
 void IconPickerDialog::browse() {
+    // The image formats this Qt build can read, so a .png or the like can be
+    // picked alongside executables and .ico files.
+    QStringList imagePatterns;
+    const QList<QByteArray> formats = QImageReader::supportedImageFormats();
+    for (const QByteArray &format : formats) {
+        const QString ext = QString::fromLatin1(format);
+        imagePatterns << QStringLiteral("*.") + ext << QStringLiteral("*.") + ext.toUpper();
+    }
+    const QString images = imagePatterns.join(QLatin1Char(' '));
+
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Select Icon Source"), m_pathEdit->text(),
-        tr("Icon sources (*.exe *.EXE *.dll *.DLL *.ico *.ICO);;"
+        tr("Icon sources (*.exe *.EXE *.dll *.DLL *.ico *.ICO %1);;"
            "Programs (*.exe *.EXE);;Libraries (*.dll *.DLL);;Icons (*.ico *.ICO);;"
-           "All Files (*)"));
+           "Images (%1);;All Files (*)")
+            .arg(images));
     if (path.isEmpty()) return;
 
     m_pathEdit->setText(path);
