@@ -260,6 +260,11 @@ void ItemPropertiesDialog::changeIcon() {
 }
 
 void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
+    // Blocked while the list is refilled: clearing it emits a change to no
+    // selection, which the change handler would read as a runner switch and
+    // reset the prefix over. The dependent rows are updated by the caller once
+    // the new selection is in place.
+    const QSignalBlocker blocker(m_launcherCombo);
     m_launcherCombo->clear();
     // Every launcher profile that accepts this kind of file. There is always at
     // least one, since a launcher keeps its shipped profile.
@@ -268,23 +273,23 @@ void ItemPropertiesDialog::populateLaunchers(const QString &selected) {
         m_launcherCombo->addItem(choice.label, choice.id);
     }
 
-    if (selected.isEmpty()) {
-        // Nothing chosen yet: the launcher's default, which is what would have
-        // started it anyway.
-        m_launcherCombo->setCurrentIndex(0);
-        return;
+    // Nothing chosen yet means the launcher's default, which is what would
+    // have started it anyway; a choice since deleted is listed anyway, so
+    // saving the dialog does not silently repoint the item.
+    int toSelect = 0;
+    if (!selected.isEmpty()) {
+        const int index = m_launcherCombo->findData(selected);
+        if (index >= 0) {
+            toSelect = index;
+        } else {
+            m_launcherCombo->addItem(tr("%1 (no longer set up)").arg(selected), selected);
+            toSelect = m_launcherCombo->count() - 1;
+        }
     }
-
-    const int index = m_launcherCombo->findData(selected);
-    if (index >= 0) {
-        m_launcherCombo->setCurrentIndex(index);
-        return;
-    }
-    // The profile the item was set up with has since been deleted, or the
-    // command now points at a file it does not accept. Listed anyway, so saving
-    // the dialog does not silently repoint the item.
-    m_launcherCombo->addItem(tr("%1 (no longer set up)").arg(selected), selected);
-    m_launcherCombo->setCurrentIndex(m_launcherCombo->count() - 1);
+    // Recorded before the selection is set, so the change handler does not
+    // read this as a runner switch and reset the prefix.
+    m_launcherChoice = m_launcherCombo->itemData(toSelect).toString();
+    m_launcherCombo->setCurrentIndex(toSelect);
 }
 
 void ItemPropertiesDialog::updateArgumentsRow() {
@@ -323,6 +328,14 @@ void ItemPropertiesDialog::updatePrefixRow() {
             defaultPrefix = choice.defaultPrefix;
             break;
         }
+    }
+    // Switching the runner moves the item to another launcher, whose prefixes
+    // are different ones: the prefix goes back to that launcher's default one
+    // — the per-application prefix when it has no named default — rather than
+    // keeping a prefix of the launcher it no longer runs under.
+    if (selected != m_launcherChoice) {
+        m_prefixName = prefixes.contains(defaultPrefix) ? defaultPrefix : QString();
+        m_launcherChoice = selected;
     }
 
     {

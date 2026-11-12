@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 #include <QSettings>
 
 namespace {
@@ -65,11 +66,14 @@ QVector<SavedItem> allItems(const OpenScreen &open) {
     return items;
 }
 
-// The prefix path of every item that runs in a prefix, counted by path. An item
-// is counted under its own launcher's prefixes folder, which need not be the
-// one being inspected: a folder is in use if anything points at it, wherever
-// that is configured.
-QHash<QString, QStringList> usageByPath(const OpenScreen &open) {
+// The prefix path of every item that runs in a prefix, counted by path, and
+// the paths items reference by a named prefix. An item is counted under its
+// own launcher's prefixes folder, which need not be the one being inspected:
+// a folder is in use if anything points at it, wherever that is configured,
+// since removing the folder removes it for every launcher sharing it. A path
+// in `namedTargets` is one some item names explicitly, so the folder is a
+// named prefix however it got there, not a per-application one.
+QHash<QString, QStringList> usageByPath(const OpenScreen &open, QSet<QString> *namedTargets) {
     QHash<QString, QStringList> counts;
     for (const SavedItem &item : allItems(open)) {
         const Launcher *launcher = nullptr;
@@ -78,7 +82,10 @@ QHash<QString, QStringList> usageByPath(const OpenScreen &open) {
         if (!launcher || !launcher->usesPrefixes) continue;
         const QString path =
             itemPrefixPath(item.command, launcher->prefixesDir, item.prefix, item.id);
-        if (!path.isEmpty()) counts[QDir::cleanPath(path)] << item.command;
+        if (path.isEmpty()) continue;
+        const QString clean = QDir::cleanPath(path);
+        counts[clean] << item.command;
+        if (!item.prefix.isEmpty()) namedTargets->insert(clean);
     }
     return counts;
 }
@@ -103,7 +110,8 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
     // Resolved as a launch resolves it, so an empty prefixes folder means this
     // application's own directory here too.
     const QString base = QDir::cleanPath(prefixesFolder(baseDir));
-    const QHash<QString, QStringList> counts = usageByPath(open);
+    QSet<QString> namedTargets;
+    const QHash<QString, QStringList> counts = usageByPath(open, &namedTargets);
 
     QStringList listed; // the paths the named ones used, so none is listed twice
     for (const QString &name : names) {
@@ -115,6 +123,8 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.name = folder;
         use.path = path;
         use.kind = PrefixUse::Named;
+        // Every item pointing at it, whichever launcher: the folder is shared
+        // and removing it removes it for all of them.
         use.programs = counts.value(path);
         // A prefix created in the dialog but not yet run in has nothing on
         // disk, which is not the same as being unused: an item may point at it.
@@ -140,6 +150,13 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         use.onDisk = true;
         use.programs = counts.value(path);
         use.program = prefixOwner(path).program;
+        // Pointed at by name by an item, so a named prefix however it got
+        // there: it reads by its own name, not as a per-application one.
+        if (namedTargets.contains(path)) {
+            use.kind = PrefixUse::Named;
+            result.append(use);
+            continue;
+        }
         // Treated as ours if it carries a marker, or if it has no marker but
         // holds a prefix something still runs in, which is how the ones created
         // before the markers existed appear.
@@ -160,7 +177,8 @@ QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
         PrefixUse use;
         use.name = QFileInfo(it.key()).fileName();
         use.path = it.key();
-        use.kind = PrefixUse::PerApplication;
+        use.kind = namedTargets.contains(it.key()) ? PrefixUse::Named
+                                                    : PrefixUse::PerApplication;
         use.programs = it.value();
         use.onDisk = false;
         result.append(use);

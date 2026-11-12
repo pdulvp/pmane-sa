@@ -93,6 +93,10 @@ private:
     // The chosen prefix, held separately from the combo box for the same reason
     // as the scale: the list is rebuilt whenever the launcher changes.
     QString m_prefixName;
+    // The launcher choice the prefix was picked under. Switching runner moves
+    // the item to another launcher with its own prefixes, so the prefix goes
+    // back to the per-application one.
+    QString m_launcherChoice;
     // The chosen core, held separately from its combo box for the same reason:
     // the list is rebuilt whenever the launcher changes.
     QString m_coreName;

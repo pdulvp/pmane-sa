@@ -16,7 +16,7 @@ struct PrefixUse {
     QString path;
 
     enum Kind {
-        Named,          // created by hand on the launcher, for items to share
+        Named,          // named by an item or listed on the launcher, for items to share
         PerApplication, // created for the one program its marker names
         Foreign,        // a folder this application did not create
     };
@@ -46,7 +46,10 @@ struct OpenScreen {
 
 // Everything in `baseDir`, with the items pointing at each one counted: the
 // named prefixes first, in the order `names` gives, whether or not they exist
-// yet, then whatever else the folder holds.
+// yet, then whatever else the folder holds. Items are counted across all
+// launchers: wine and Proton may share the folder, and removing a prefix
+// removes the whole folder for every launcher using it, so every item using
+// it is listed however it is configured.
 QVector<PrefixUse> prefixesIn(const QString &baseDir, const QStringList &names,
                               const OpenScreen &open);
 

@@ -72,6 +72,10 @@ private:
     // The name a named row was typed with, without the "(default)" marker the
     // display adds to the default one.
     QString typedNameOf(const QTreeWidgetItem *row) const;
+    // Whether a prefix folder name is already used by another launcher -- in
+    // its saved list, or as a folder on disk in the shared prefixes directory
+    // -- so it cannot be added under this launcher.
+    bool prefixNameTakenByOther(const QString &folder) const;
     // The right-click menu on a prefix row: make it the launcher's default.
     void showPrefixMenu(const QPoint &pos);
     // Fills the size column, which means walking every prefix, so it runs on

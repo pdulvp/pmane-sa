@@ -330,8 +330,14 @@ void LaunchersDialog::buildLauncherPage() {
     layout->addWidget(m_prefixesBox);
 
     connect(m_prefixAdd, &QPushButton::clicked, this, [this] {
-        QTreeWidgetItem *added =
-            addPrefixRow(PrefixRow::Named, QString(), tr("unused"), QString(), QString());
+        QTreeWidgetItem *added = nullptr;
+        {
+            // Blocked while the row is built: setting its kind role is a change
+            // on the name column too, and the rename handler would rebuild the
+            // table around the row still being constructed.
+            const QSignalBlocker blocker(m_prefixes);
+            added = addPrefixRow(PrefixRow::Named, QString(), tr("unused"), QString(), QString());
+        }
         m_prefixes->setCurrentItem(added);
         added->setSelected(true);
         m_prefixes->editItem(added, kPrefixName);
@@ -349,12 +355,32 @@ void LaunchersDialog::buildLauncherPage() {
                     static_cast<int>(PrefixRow::Named)) {
                     return;
                 }
+                // The name before this edit, so a rejected one is restored.
+                const QString previous = typedNameOf(item);
                 {
                     // The edited text becomes the typed name the rebuild
                     // keeps, so the "(default)" marker shown on the default
                     // row never becomes part of the name.
                     const QSignalBlocker blocker(m_prefixes);
                     item->setData(kPrefixName, kPrefixTypedRole, item->text(kPrefixName));
+                }
+                // The prefixes folder is shared between launchers, and a
+                // prefix folder belongs to the launcher using it: a name
+                // another launcher already has cannot be added here.
+                const QString folder = prefixFolderName(item->text(kPrefixName));
+                if (!folder.isEmpty() && folder != prefixFolderName(previous) &&
+                    prefixNameTakenByOther(folder)) {
+                    {
+                        const QSignalBlocker blocker(m_prefixes);
+                        item->setText(kPrefixName, previous);
+                        item->setData(kPrefixName, kPrefixTypedRole, previous);
+                    }
+                    refreshPrefixTable();
+                    QMessageBox::warning(this, tr("Prefix"),
+                                         tr("A prefix named '%1' is already used by another "
+                                            "launcher, so it cannot be added here.")
+                                             .arg(folder));
+                    return;
                 }
                 // The default follows the row it is marked on: a rename is a
                 // different folder, and the marker stays on this one.
@@ -511,6 +537,10 @@ QTreeWidgetItem *LaunchersDialog::addPrefixRow(PrefixRow kind, const QString &na
     row->setText(kPrefixUsed, used);
     row->setData(kPrefixName, kPrefixKindRole, static_cast<int>(kind));
     row->setData(kPrefixName, kPrefixPathRole, path);
+    // The typed name from the start, so a rejected rename of a row that was
+    // never named has an empty previous name to fall back to. Callers showing
+    // a marker, such as "(default)", set the role again with the plain name.
+    if (kind == PrefixRow::Named) row->setData(kPrefixName, kPrefixTypedRole, name);
     row->setTextAlignment(kPrefixSize, Qt::AlignRight | Qt::AlignVCenter);
     if (!path.isEmpty()) row->setToolTip(kPrefixName, path);
     if (!note.isEmpty()) row->setToolTip(kPrefixUsed, note);
@@ -575,6 +605,23 @@ QString LaunchersDialog::typedNameOf(const QTreeWidgetItem *row) const {
     return typed.isValid() ? typed.toString() : row->text(kPrefixName);
 }
 
+bool LaunchersDialog::prefixNameTakenByOther(const QString &folder) const {
+    if (m_editingLauncher < 0 || m_editingLauncher >= m_launchers.size()) return false;
+    const Launcher &launcher = m_launchers[m_editingLauncher];
+    // This launcher's own saved list: renaming within it is fine.
+    if (launcher.prefixes.contains(folder)) return false;
+    // Another launcher's saved list.
+    for (const Launcher &other : m_launchers) {
+        if (other.id != launcher.id && other.usesPrefixes && other.prefixes.contains(folder)) {
+            return true;
+        }
+    }
+    // A folder already on disk in the prefixes directory, used by another
+    // launcher or left over: taking the name here would claim that folder.
+    const QString base = prefixesFolder(m_prefixesDir->text().trimmed());
+    return QFileInfo::exists(base + QLatin1Char('/') + folder);
+}
+
 void LaunchersDialog::showPrefixMenu(const QPoint &pos) {
     QTreeWidgetItem *row = m_prefixes->itemAt(pos);
     // Only a prefix row: a program listed under one is not a prefix, and a
@@ -611,6 +658,8 @@ void LaunchersDialog::refreshPrefixTable() {
     OpenScreen open;
     open.name = m_openScreen;
     open.items = m_openItems;
+    // The whole folder, every launcher's items included: removing a prefix
+    // deletes the folder for all of them, so all must be listed here.
     const QVector<PrefixUse> found =
         prefixesIn(m_prefixesDir->text().trimmed(), names, open);
 
@@ -689,8 +738,23 @@ void LaunchersDialog::refreshPrefixTable() {
     }
 
     // The named ones in the order given, blank rows included: a row being typed
-    // must not disappear as it is edited.
-    for (const QString &name : names) {
+    // must not disappear as it is edited. Then any folder an item points at by
+    // name that this launcher's own list does not name -- the prefixes folder is
+    // shared with another launcher that lists it -- shown the same way, so the
+    // prefix reads by its own name here too, with what runs in it underneath.
+    QStringList displayNames = names;
+    for (const PrefixUse &use : found) {
+        if (use.kind != PrefixUse::Named) continue;
+        bool already = false;
+        for (const QString &typed : names) {
+            if (prefixFolderName(typed) == use.name) {
+                already = true;
+                break;
+            }
+        }
+        if (!already) displayNames << use.name;
+    }
+    for (const QString &name : displayNames) {
         const PrefixUse *use = nullptr;
         for (const PrefixUse &candidate : found) {
             if (candidate.kind == PrefixUse::Named && candidate.name == prefixFolderName(name)) {
