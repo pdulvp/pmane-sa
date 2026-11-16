@@ -4,6 +4,7 @@
 
 class CalculatorPane;
 class CalendarPane;
+class ChronometerPane;
 class ClockPane;
 class QMenuBar;
 class QSlider;
@@ -95,9 +96,11 @@ private:
     bool m_volumeMuted = false;
 
     // A calculator, beside the calendar: the same kind of pane from the same
-    // strip.
+    // strip. A chronometer beside the calculator, likewise.
     QToolButton *m_calculatorButton = nullptr;
     CalculatorPane *m_calculator = nullptr;
+    QToolButton *m_chronometerButton = nullptr;
+    ChronometerPane *m_chronometer = nullptr;
 
     // The time and the date read as one thing but open different panes, so they
     // are two buttons: the clock face drops out of the time, the month out of

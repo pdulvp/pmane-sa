@@ -18,6 +18,7 @@ struct KioskSettings {
     bool showCalendar = true;   // the clock, and the month it opens
     bool showVolume = true;     // the speaker and its slider
     bool showCalculator = true; // the calculator pane
+    bool showChronometer = true; // the chronometer pane, beside the calculator
     bool showSearch = true;     // the magnifier, which hands over to the shell
 };
 

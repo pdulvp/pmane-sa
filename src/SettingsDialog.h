@@ -47,5 +47,6 @@ private:
     QToolButton *m_calendar;
     QToolButton *m_volume;
     QToolButton *m_calculator;
+    QToolButton *m_chronometer;
     QToolButton *m_search;
 };

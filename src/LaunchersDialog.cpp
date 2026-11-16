@@ -22,6 +22,7 @@
 #include <QRegularExpression>
 #include <QSignalBlocker>
 #include <QTableWidget>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
@@ -375,7 +376,7 @@ void LaunchersDialog::buildLauncherPage() {
                         item->setText(kPrefixName, previous);
                         item->setData(kPrefixName, kPrefixTypedRole, previous);
                     }
-                    refreshPrefixTable();
+                    schedulePrefixRefresh();
                     QMessageBox::warning(this, tr("Prefix"),
                                          tr("A prefix named '%1' is already used by another "
                                             "launcher, so it cannot be added here.")
@@ -389,7 +390,7 @@ void LaunchersDialog::buildLauncherPage() {
                     m_launchers[m_editingLauncher].defaultPrefix =
                         prefixFolderName(typedNameOf(item));
                 }
-                refreshPrefixTable();
+                schedulePrefixRefresh();
             });
     connect(m_prefixes, &QTreeWidget::customContextMenuRequested, this,
             &LaunchersDialog::showPrefixMenu);
@@ -642,6 +643,18 @@ void LaunchersDialog::showPrefixMenu(const QPoint &pos) {
     m_launchers[m_editingLauncher].defaultPrefix =
         kind == PrefixRow::Fixed ? QString() : prefixFolderName(typedNameOf(row));
     refreshPrefixTable();
+}
+
+void LaunchersDialog::schedulePrefixRefresh() {
+    // Called from the itemChanged handler, where a rebuild now would clear the
+    // tree and delete the row whose change Qt is still emitting. The rebuild
+    // runs once the signal is done; several changes in a row rebuild once.
+    if (m_prefixRefreshPending) return;
+    m_prefixRefreshPending = true;
+    QTimer::singleShot(0, this, [this] {
+        m_prefixRefreshPending = false;
+        refreshPrefixTable();
+    });
 }
 
 void LaunchersDialog::refreshPrefixTable() {

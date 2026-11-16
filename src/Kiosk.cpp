@@ -24,6 +24,8 @@ KioskSettings *loaded() {
         store.value(QStringLiteral("showVolume"), defaults.showVolume).toBool();
     settings.showCalculator =
         store.value(QStringLiteral("showCalculator"), defaults.showCalculator).toBool();
+    settings.showChronometer =
+        store.value(QStringLiteral("showChronometer"), defaults.showChronometer).toBool();
     settings.showSearch =
         store.value(QStringLiteral("showSearch"), defaults.showSearch).toBool();
     store.endGroup();
@@ -43,6 +45,7 @@ void setKioskSettings(const KioskSettings &settings) {
     store.setValue(QStringLiteral("showCalendar"), settings.showCalendar);
     store.setValue(QStringLiteral("showVolume"), settings.showVolume);
     store.setValue(QStringLiteral("showCalculator"), settings.showCalculator);
+    store.setValue(QStringLiteral("showChronometer"), settings.showChronometer);
     store.setValue(QStringLiteral("showSearch"), settings.showSearch);
     store.endGroup();
 }

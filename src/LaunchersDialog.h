@@ -66,6 +66,11 @@ private:
     // prefixes folder, so used and unused follow the current items rather than
     // those present when the dialog opened.
     void refreshPrefixTable();
+    // A rebuild asked for from the itemChanged handler is deferred until that
+    // signal has been delivered: the rebuild clears the tree, which would
+    // delete the row the signal is about while Qt is still emitting it.
+    void schedulePrefixRefresh();
+    bool m_prefixRefreshPending = false;
     // The named prefixes as the tree holds them, blank rows included, which a
     // rebuild has to preserve.
     QStringList typedPrefixes() const;

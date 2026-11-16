@@ -50,6 +50,10 @@ SettingsDialog::SettingsDialog(bool useDesktopWallpaper, bool autostart,
     m_calculator = tile({QStringLiteral("accessories-calculator-symbolic"),
                          QStringLiteral("accessories-calculator")},
                         tr("Calculator"), kiosk.showCalculator);
+    m_chronometer = tile({QStringLiteral("chronometer-symbolic"), QStringLiteral("chronometer"),
+                          QStringLiteral("preferences-system-time-symbolic"),
+                          QStringLiteral("appointment-new-symbolic")},
+                         tr("Chronometer"), kiosk.showChronometer);
     m_search = tile({QStringLiteral("system-search-symbolic"),
                      QStringLiteral("edit-find-symbolic"), QStringLiteral("system-search")},
                     tr("Search"), kiosk.showSearch);
@@ -59,6 +63,7 @@ SettingsDialog::SettingsDialog(bool useDesktopWallpaper, bool autostart,
     tiles->addWidget(m_calendar);
     tiles->addWidget(m_volume);
     tiles->addWidget(m_calculator);
+    tiles->addWidget(m_chronometer);
     tiles->addWidget(m_search);
     tiles->addStretch();
 
@@ -183,6 +188,7 @@ KioskSettings SettingsDialog::kiosk() const {
     settings.showCalendar = m_calendar->isChecked();
     settings.showVolume = m_volume->isChecked();
     settings.showCalculator = m_calculator->isChecked();
+    settings.showChronometer = m_chronometer->isChecked();
     settings.showSearch = m_search->isChecked();
     return settings;
 }

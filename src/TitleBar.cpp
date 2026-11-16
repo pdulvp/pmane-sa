@@ -2,6 +2,7 @@
 
 #include "CalculatorPane.h"
 #include "CalendarPane.h"
+#include "ChronometerPane.h"
 #include "ClockPane.h"
 #include "DesktopShell.h"
 #include "Kiosk.h"
@@ -135,6 +136,10 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
     // Beside the date, both being quick references rather than applications.
     m_calculatorButton = captionButton(this, QStyle::SP_FileDialogDetailedView);
     m_calculatorButton->setToolTip(tr("Calculator"));
+    // The chronometer next to it; the icon is set in applyPalette(), which is
+    // where the strip's text colour is known.
+    m_chronometerButton = captionButton(this, QStyle::SP_BrowserReload);
+    m_chronometerButton->setToolTip(tr("Chronometer"));
 
     // The time and the date, each opening its own pane: the dial drops out of
     // the time and the month out of the date, as the desktop's own clock opens
@@ -180,6 +185,7 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
         layout->addSpacing(kVolumeMargin);
     }
     layout->addWidget(m_calculatorButton);
+    layout->addWidget(m_chronometerButton);
     // The space the clock used to carry in its own margins: a button's padding
     // is what its hover panel hugs, so the room around the pair belongs to the
     // layout instead.
@@ -223,6 +229,15 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent) {
             m_calculator->hide();
         } else {
             m_calculator->popUpAt(m_calculatorButton);
+        }
+    });
+
+    connect(m_chronometerButton, &QToolButton::clicked, this, [this] {
+        if (!m_chronometer) m_chronometer = new ChronometerPane(this);
+        if (m_chronometer->isVisible()) {
+            m_chronometer->hide();
+        } else {
+            m_chronometer->popUpAt(m_chronometerButton);
         }
     });
 
@@ -285,6 +300,10 @@ void TitleBar::applyKioskSettings() {
         // that button.
         if (!kiosk.showCalculator && m_calculator) m_calculator->hide();
     }
+    if (m_chronometerButton) {
+        m_chronometerButton->setVisible(kiosk.showChronometer);
+        if (!kiosk.showChronometer && m_chronometer) m_chronometer->hide();
+    }
     // The one setting governs the whole reading of the clock, the time and the
     // date together, as it did when they were a single label.
     m_clock->setVisible(kiosk.showCalendar);
@@ -325,6 +344,15 @@ void TitleBar::applyPalette(const QPalette &palette) {
                                        QStringLiteral("accessories-calculator")},
                                       ink);
         if (!sums.isNull()) m_calculatorButton->setIcon(sums);
+    }
+    if (m_chronometerButton) {
+        m_chronometerButton->setPalette(palette);
+        const QIcon watch = tintedIcon({QStringLiteral("chronometer-symbolic"),
+                                        QStringLiteral("chronometer"),
+                                        QStringLiteral("preferences-system-time-symbolic"),
+                                        QStringLiteral("appointment-new-symbolic")},
+                                       ink);
+        if (!watch.isNull()) m_chronometerButton->setIcon(watch);
     }
     if (m_volumeButton) {
         m_volumeButton->setPalette(palette);
